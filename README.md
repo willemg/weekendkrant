@@ -19,7 +19,13 @@ De kernprincipes zijn:
 5. kwaliteitscontrole eindig houden: geen oneindige regressielussen;
 6. de hele keten auditeerbaar maken.
 
-Zie de documenten onder `docs/` voor de huidige ontwerpafspraken.
+Zie de ontwerpdocumentatie:
+
+- [Architectuur](docs/architecture.md)
+- [Rollen: Sherlock, Ariadne, Leonardo, Striktland en Minos](docs/roles.md)
+- [Token- en kostenstrategie](docs/token-and-cost-strategy.md)
+- [Audit trail en kwaliteitslabels](docs/audit-trail.md)
+- [Redactionele principes](docs/editorial-principles.md)
 
 ## Status
 
