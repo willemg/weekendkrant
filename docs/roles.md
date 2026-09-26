@@ -4,19 +4,29 @@
 
 Sherlock is een actieve ChatGPT-taak.
 
-### Verantwoordelijkheden
+Sherlocks precieze contract ligt **nog niet vast**. De eerste fase van het project is bewust observerend: gedurende enkele weken laten we Sherlock verzamelen en bekijken we wat een actieve taak in de praktijk betrouwbaar kan afleveren, hoeveel materiaal dat oplevert, hoe consequent de bronverwijzingen en samenvattingen zijn en hoeveel structuur zonder extra complexiteit haalbaar blijkt.
+
+Pas op basis van die echte oogst leggen we het definitieve invoercontract voor Ariadne en de rest van de keten vast.
+
+### Voorlopige verantwoordelijkheden
 
 - periodiek het web afzoeken naar nieuwe ontwikkelingen;
 - werken over een vaste maar uitbreidbare lijst interessegebieden;
-- een eerste lichte triage uitvoeren;
-- per relevante vondst de bron bewaren;
-- de bron compact en feitelijk samenvatten;
-- de vondst aan een vooraf bepaald onderwerp koppelen;
-- output naar GitHub schrijven.
+- een eerste lichte triage proberen uit te voeren;
+- per relevante vondst de oorspronkelijke bron bewaren;
+- waar haalbaar de bron compact en feitelijk samenvatten;
+- waar haalbaar een eenvoudige onderwerpindeling bewaren;
+- de oogst naar GitHub schrijven.
+
+Deze lijst beschrijft de gewenste richting, niet een reeds bewezen betrouwbaar protocol.
 
 ### Onderzoeksgebieden
 
-Sherlocks onderzoeksbrief neemt de inhoudelijke scope over die vandaag verspreid zit over de vijf actieve nieuwstaken. Hij zoekt niet alleen naar losse gebeurtenissen, maar vooral naar ontwikkelingen die structureel iets kunnen veranderen.
+De inhoudelijke scope hieronder is het **zoekterrein**, niet een verplicht uitvoerschema. Sherlock hoeft niet in één run alle hieronder beschreven redactionele taken perfect uit te voeren. De bestaande vijf actieve nieuwstaken vormen voorlopig vooral onze bron voor welke onderwerpen en signalen interessant zijn.
+
+Tijdens de observatiefase onderzoeken we welke onderdelen een actieve taak werkelijk betrouwbaar kan combineren. Als bijvoorbeeld brede zoekdekking, compacte samenvatting en cross-domain signalering samen te veel blijken, vereenvoudigen we Sherlock in plaats van Ariadne afhankelijk te maken van fragiele output.
+
+Sherlock zoekt niet alleen naar losse gebeurtenissen, maar vooral naar ontwikkelingen die structureel iets kunnen veranderen.
 
 #### Democratie, governance en collectieve besluitvorming
 
@@ -69,7 +79,7 @@ De huidige taken bevatten naast de drie inhoudelijke domeinen ook een expliciete
 - meerdere onafhankelijke gebeurtenissen die samen een structurele verschuiving kunnen vormen;
 - nieuwe informatie die een eerder signaal verzwakt, corrigeert of juist versterkt.
 
-Sherlock hoeft daar nog geen eindinterpretatie van te maken. Hij moet zulke mogelijke verbindingen alleen zichtbaar genoeg bewaren zodat Leonardo ze later kan onderzoeken.
+Sherlock hoeft daar nog geen eindinterpretatie van te maken. Cross-domain signalering is bovendien voorlopig een **nice-to-have**: als dit de betrouwbaarheid van verzamelen en bronvast samenvatten aantast, laten we die taak volledig aan Leonardo over.
 
 #### Selectieprincipe
 
@@ -89,7 +99,7 @@ Belangrijke beweringen moeten zoveel mogelijk terug te voeren zijn op primaire o
 
 Sherlock moet nog geen weekendartikel schrijven en geen brede syntheses maken. Hoe meer interpretatie Sherlock toevoegt, hoe groter het risico dat latere agents een vroege inferentie als feit behandelen.
 
-De output moet daarom vooral bestaan uit compacte, afzonderlijke bronfiches.
+De output moet uiteindelijk bruikbaar genoeg zijn om deterministisch door Ariadne verwerkt te worden, maar het precieze formaat wordt pas gekozen nadat we meerdere weken echte Sherlock-output hebben gezien. We ontwerpen Ariadne dus **naar de feitelijke output van Sherlock**, niet andersom.
 
 ## Ariadne — de draadlegger
 
