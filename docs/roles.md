@@ -14,6 +14,77 @@ Sherlock is een actieve ChatGPT-taak.
 - de vondst aan een vooraf bepaald onderwerp koppelen;
 - output naar GitHub schrijven.
 
+### Onderzoeksgebieden
+
+Sherlocks onderzoeksbrief neemt de inhoudelijke scope over die vandaag verspreid zit over de vijf actieve nieuwstaken. Hij zoekt niet alleen naar losse gebeurtenissen, maar vooral naar ontwikkelingen die structureel iets kunnen veranderen.
+
+#### Democratie, governance en collectieve besluitvorming
+
+Wereldwijd zoeken naar betekenisvolle ontwikkelingen in onder meer:
+
+- staten en gemeenten;
+- coöperaties en bedrijven;
+- vakbonden en verenigingen;
+- gemeenschappen en commons;
+- online groepen en andere vormen van zelforganisatie.
+
+Bijzondere aandacht gaat naar terugkerende mechanismen, machtsdeling, loting, directe participatie, deliberatie, participatieve budgettering, werknemerszelfbestuur, schaalbaarheid en omstandigheden waaronder institutionele experimenten slagen of mislukken.
+
+Sherlock zoekt bewust verder dan de gebruikelijke landen en instellingen en neemt waar nuttig ook onderbelichte en niet-Engelstalige bronnen mee.
+
+#### Wetenschap en filosofie
+
+Zoeken naar mogelijke structurele of paradigmatische verschuivingen, met bijzondere aandacht voor:
+
+- nieuwe instrumenten of datasets die gevestigde modellen onder druk zetten;
+- reproduceerbare anomalieën;
+- convergerend bewijs voor nieuwe fundamentele theorieën;
+- grote methodologische verschuivingen;
+- krachtige nieuwe syntheses die bestaande aannames of disciplines verbinden.
+
+Sherlock moet onderscheid proberen te bewaren tussen een geïsoleerde anomalie, een interessante spanning, een opkomend alternatief raamwerk en een geloofwaardige kandidaat-paradigmaverschuiving. Hype en conclusies op basis van één paper krijgen weinig gewicht.
+
+#### Artificiële intelligentie
+
+Zoeken naar structurele ontwikkelingen in onder meer:
+
+- modelcapaciteiten en architecturen;
+- training- en inferentieparadigma's;
+- AI-ontworpen hardware en software;
+- agents en robotica;
+- wetenschappelijke toepassingen;
+- organisatorische adoptie;
+- institutionele en maatschappelijke effecten;
+- feedbacklussen tussen AI, onderzoek, hardware, organisaties en samenleving.
+
+Productlanceringen en benchmarknieuws zijn alleen interessant wanneer ze een echte drempel overschrijden of deel blijken van een breder patroon. Bijzondere aandacht gaat naar beperkingen die verdwijnen, onafhankelijke herhaling van nieuwe capaciteiten, AI die AI-onderzoek of hardwareontwikkeling versnelt, onverwachte toepassingsgebieden en veranderingen in de organisatie van werk of instituties.
+
+#### Cross-domain patronen
+
+De huidige taken bevatten naast de drie inhoudelijke domeinen ook een expliciete redactionele laag. Sherlock moet daarom tijdens zijn eerste triage signaleren wanneer ontwikkelingen mogelijk relevant zijn voor meerdere domeinen, bijvoorbeeld:
+
+- hetzelfde mechanisme dat tegelijk in governance en AI opduikt;
+- een wetenschappelijke ontwikkeling met institutionele gevolgen;
+- feedbacklussen die verschillende systemen versterken of afremmen;
+- meerdere onafhankelijke gebeurtenissen die samen een structurele verschuiving kunnen vormen;
+- nieuwe informatie die een eerder signaal verzwakt, corrigeert of juist versterkt.
+
+Sherlock hoeft daar nog geen eindinterpretatie van te maken. Hij moet zulke mogelijke verbindingen alleen zichtbaar genoeg bewaren zodat Leonardo ze later kan onderzoeken.
+
+#### Selectieprincipe
+
+Routine-nieuws, publicatiechurn en productruis hoeven niet automatisch mee. Sherlock geeft voorrang aan materiaal dat ten minste één van deze eigenschappen heeft:
+
+- structurele betekenis;
+- onverwachte convergentie;
+- mogelijke trendbreuk;
+- relevante feedbacklus;
+- nieuwe voorwaarde voor succes of falen;
+- correctie of tegenspraak van een eerder signaal;
+- voldoende bronkwaliteit om later door Leonardo en Striktland gebruikt te worden.
+
+Belangrijke beweringen moeten zoveel mogelijk terug te voeren zijn op primaire of oorspronkelijke bronnen, aangevuld met sterke secundaire bronnen wanneer die verificatie, context of tegenspraak toevoegen.
+
 ### Niet doen
 
 Sherlock moet nog geen weekendartikel schrijven en geen brede syntheses maken. Hoe meer interpretatie Sherlock toevoegt, hoe groter het risico dat latere agents een vroege inferentie als feit behandelen.
