@@ -78,3 +78,16 @@ GitHub dient als:
 - menselijk inspecteerbare bron van waarheid.
 
 De Raspberry Pi kan Ariadne via cron uitvoeren, maar GitHub blijft de gedeelde werkruimte.
+
+## Eerste implementatiestap: weekvoorbereiding
+
+`ariadne.py` bereidt uitsluitend Sherlocks werkruimte voor. Het vaste technische
+padcontract is `ingress/<ISO-jaar>_W<week>/` op branch
+`ingress/<ISO-jaar>_W<week>` (twee cijfers voor de week).
+Een `.gitkeep` maakt de lege map versieerbaar. Dit legt het inhoudelijke
+bronfichecontract niet vast: dat blijft onderdeel van de observatiefase.
+
+De stap hergebruikt bestaande weekbranches en overschrijft geen oogst of auditrecord.
+Het voorbereidingsrecord bewaart het uitgangscommit. Git-commit en push gebeuren
+apart, na inspectie. Synchronisatie, fichevalidatie, verwerkingstatus, bundeling,
+tokenmeting en redactionele modelcalls vallen buiten deze eerste implementatie.

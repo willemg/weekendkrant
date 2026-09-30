@@ -29,4 +29,35 @@ Zie de ontwerpdocumentatie:
 
 ## Status
 
-Deze repository bevat voorlopig alleen ontwerpdocumentatie. Er is nog geen implementatie.
+De eerste implementatiestap is Ariadnes **lokale weekvoorbereiding**: een ISO-weekbranch,
+een ingressmap en een herhaalbaar auditrecord. De overige architectuur blijft ontwerp;
+bronfiches verwerken, draden vlechten en modelcalls zijn nog niet geïmplementeerd.
+
+## Weekwerkruimte voorbereiden
+
+Python 3.9 of nieuwer, Git en een lokale clone volstaan; er zijn geen Python-dependencies.
+Voer vanuit de repositoryroot uit (na opname van deze implementatie):
+
+```bash
+git fetch origin
+python3 ariadne.py --date 2026-09-30
+```
+
+Dit selecteert of maakt lokaal `ingress/2026_W40`, met `ingress/2026_W40/.gitkeep`
+en `audit/2026_W40/ingress-preparation.json`. De datum is expliciet: geef de lokale
+kalenderdatum mee; ISO-weekjaar en weeknummer worden daaruit afgeleid.
+Een bestaande lokale weekbranch krijgt voorrang, vervolgens een reeds opgehaalde
+remote weekbranch. Een nieuwe branch begint op lokale `main`; werk die vooraf bij.
+Bij branchwissel moet de werkboom schoon zijn. Herhalen op dezelfde weekbranch
+bewaart oogst en auditrecord. Gebruik één schrijver per clone.
+
+Bekijk daarna de wijzigingen, commit de voorbereidingsbestanden en push de weekbranch
+als Sherlock de werkruimte op GitHub moet kunnen gebruiken. Het script doet zelf geen
+fetch, commit, push, PR of merge en wijzigt `main` niet.
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+Zie [de afbakening van deze stap](docs/architecture.md#eerste-implementatiestap-weekvoorbereiding)
+en [het voorbereidingsrecord](docs/audit-trail.md#weekvoorbereiding-schema-1).
