@@ -67,3 +67,23 @@ Het audit trail is niet alleen debugging-informatie. Het maakt zichtbaar:
 - welke oorspronkelijke bronnen bij een claim horen.
 
 Daarmee wordt bronprovenance een structureel onderdeel van Weekendkrant.
+
+## Weekvoorbereiding (schema 1)
+
+De eerste implementatie schrijft `audit/<jaar>_W<week>/ingress-preparation.json`:
+
+```json
+{
+  "schema_version": 1,
+  "week": "2026_W40",
+  "branch": "ingress/2026_W40",
+  "ingress_path": "ingress/2026_W40",
+  "base_commit": "<volledige SHA van het uitgangscommit op de weekbranch>"
+}
+```
+
+Dit registreert alleen de technische voorbereiding, geen verwerkte fiches,
+bronverificatie of claimkwaliteitslabels. Het record krijgt geen kloktijd, zodat
+herhaald uitvoeren dezelfde inhoud oplevert. Na commit maakt Git de wijziging
+en het tijdstip traceerbaar. Een bestaand passend record blijft behouden,
+ook na latere oogstcommits; een afwijkend record wordt geweigerd.
