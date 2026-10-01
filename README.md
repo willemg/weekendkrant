@@ -59,7 +59,8 @@ Bij branchwissel moet de werkboom schoon zijn. Herhalen op dezelfde weekbranch
 bewaart oogst en auditrecord. Gebruik één schrijver per clone.
 
 Runtime-meldingen verschijnen in `/home/weekendkrant/logs/ariadne.log`, met
-automatische rotatie (5 MiB, drie reservebestanden), in plaats van op stdout.
+automatische rotatie (1 MiB, vier reservebestanden; circa 5 MiB totaal).
+Het JSON-resultaat blijft als gestructureerde CLI-output op stdout verschijnen.
 De uitvoerende gebruiker moet de logmap kunnen aanmaken of erin kunnen schrijven;
 zie [de loggingconfiguratie](docs/architecture.md#logging).
 

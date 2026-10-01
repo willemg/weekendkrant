@@ -13,12 +13,12 @@ LOG_FORMAT = '%(asctime)s %(levelname)s %(name)s %(message)s'
 logger = logging.getLogger(__name__)
 
 
-def configure_logging(log_path=None):
+def configure_logging(log_path=None, level=logging.INFO):
     log_path = LOG_PATH if log_path is None else Path(log_path)
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    handler = RotatingFileHandler(log_path, maxBytes=5 * 1024 * 1024,
-                                  backupCount=3, encoding='utf-8')
-    logging.basicConfig(level=logging.INFO, format=LOG_FORMAT,
+    handler = RotatingFileHandler(log_path, maxBytes=1024 * 1024,
+                                  backupCount=4, encoding='utf-8')
+    logging.basicConfig(level=level, format=LOG_FORMAT,
                         handlers=[handler], force=True)
 
 
@@ -111,11 +111,15 @@ def main():
     try:
         result = prepare_week(args.repo, args.date)
     except Exception:
+        # Unattended entrypoint: ook onverwachte runtimefouten krijgen traceback
+        # en exitcode 1. SystemExit en KeyboardInterrupt worden niet onderschept.
         logger.exception('Weekvoorbereiding mislukt: repo=%s datum=%s',
                          args.repo, args.date)
         parser.exit(1)
     logger.info('Weekvoorbereiding voltooid: week=%s branch=%s ingress=%s base_commit=%s',
                 result['week'], result['branch'], result['ingress_path'], result['base_commit'])
+    # Gestructureerde CLI-resultaatoutput, geen runtime-diagnostiek.
+    print(json.dumps(result, indent=2, sort_keys=True))
 
 
 if __name__ == '__main__':

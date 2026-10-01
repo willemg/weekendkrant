@@ -1,6 +1,7 @@
 from contextlib import redirect_stderr, redirect_stdout
 from datetime import date
 import io
+import json
 import logging
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -53,6 +54,17 @@ class LoggingTests(unittest.TestCase):
             self.assertIn(level + ' future_ariadne_module', content)
         self.assertFalse(module.handlers)
 
+    def test_debug_is_available_when_explicitly_configured(self):
+        module = logging.getLogger('future_ariadne_debug_module')
+        ariadne.configure_logging(self.path)
+        module.debug('Verborgen bij INFO')
+        self.assertNotIn('Verborgen bij INFO', self.path.read_text())
+        ariadne.configure_logging(self.path, level=logging.DEBUG)
+        module.debug('Diagnostiek bij DEBUG')
+        content = self.path.read_text()
+        self.assertIn('DEBUG future_ariadne_debug_module Diagnostiek bij DEBUG', content)
+        self.assertNotIn('Verborgen bij INFO', content)
+
     def test_rotation_bounds_archives_and_reconfiguration_does_not_duplicate(self):
         ariadne.configure_logging(self.path)
         first = logging.getLogger().handlers[0]
@@ -62,16 +74,17 @@ class LoggingTests(unittest.TestCase):
         self.assertIsNone(first.stream)
         handler = handlers[0]
         self.assertIsInstance(handler, RotatingFileHandler)
-        self.assertEqual(handler.maxBytes, 5 * 1024 * 1024)
-        self.assertEqual(handler.backupCount, 3)
+        self.assertEqual(handler.maxBytes, 1024 * 1024)
+        self.assertEqual(handler.backupCount, 4)
         handler.maxBytes = 180  # Force real rollover without writing megabytes.
         for number in range(20):
             logging.getLogger('rotation').info('Record %s %s', number, 'x' * 60)
         self.assertEqual({path.name for path in self.path.parent.iterdir()},
-                         {'ariadne.log', 'ariadne.log.1', 'ariadne.log.2', 'ariadne.log.3'})
+                         {'ariadne.log', 'ariadne.log.1', 'ariadne.log.2',
+                          'ariadne.log.3', 'ariadne.log.4'})
         self.assertIn('Record 19', self.path.read_text())
 
-    def test_entrypoint_logs_lifecycle_without_console_output(self):
+    def test_entrypoint_preserves_json_stdout_and_logs_lifecycle_only_to_file(self):
         result = {'week': '2026_W40', 'branch': 'ingress/2026_W40',
                   'ingress_path': 'ingress/2026_W40', 'base_commit': 'abc123'}
         stdout, stderr = io.StringIO(), io.StringIO()
@@ -84,17 +97,22 @@ class LoggingTests(unittest.TestCase):
         self.assertIn('INFO ariadne Weekvoorbereiding voltooid', content)
         for value in result.values():
             self.assertIn(value, content)
-        self.assertEqual(stdout.getvalue(), '')
+        self.assertEqual(stdout.getvalue(), json.dumps(result, indent=2, sort_keys=True) + '\n')
         self.assertEqual(stderr.getvalue(), '')
 
     def test_entrypoint_logs_expected_and_unexpected_exceptions_with_traceback(self):
+        # Ook onverwachte runtimefouten worden aan de unattended grens afgehandeld.
         for error in (ValueError('Ongeldig auditrecord'), OSError('Schijffout'),
                       RuntimeError('Onverwachte fout')):
+            stdout, stderr = io.StringIO(), io.StringIO()
             with self.subTest(error=error), patch.object(
                     ariadne, 'prepare_week', side_effect=error), \
+                    redirect_stdout(stdout), redirect_stderr(stderr), \
                     self.assertRaises(SystemExit) as stopped:
                 self.run_main()
             self.assertEqual(stopped.exception.code, 1)
+            self.assertEqual(stdout.getvalue(), '')
+            self.assertEqual(stderr.getvalue(), '')
             content = self.path.read_text()
             self.assertIn('ERROR ariadne Weekvoorbereiding mislukt', content)
             self.assertIn(self.tmp.name, content)

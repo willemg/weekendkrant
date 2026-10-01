@@ -105,13 +105,19 @@ Python-loghandler beheerd zodat de opslag begrensd blijft. Cron hoeft daarom gee
 eigen parallelle logarchieven op te bouwen.
 
 De weekvoorbereiding schrijft naar `/home/weekendkrant/logs/ariadne.log` met een
-`RotatingFileHandler`: maximaal 5 MiB per bestand en drie reservebestanden
-(`.1` tot `.3`, samen circa 20 MiB). De map wordt zo nodig aangemaakt; de
+`RotatingFileHandler`: maximaal 1 MiB per bestand en vier reservebestanden
+(`.1` tot `.4`, samen circa 5 MiB). De map wordt zo nodig aangemaakt; de
 uitvoerende gebruiker moet er schrijfrechten hebben. Het standaardniveau is `INFO`.
+Dezelfde centrale configuratie kan expliciet met `configure_logging(level=logging.DEBUG)`
+op `DEBUG` worden ingesteld; er is nog geen CLI-optie voor het niveau.
 Ieder record bevat tijdstip, niveau, loggernaam en bericht, in UTF-8.
-Start en succes worden gelogd; runtime-fouten krijgen context en stacktrace en
-leiden tot exitcode 1. Als de logging niet kan worden geïnitialiseerd, wordt de
+Start en succes worden gelogd; zowel verwachte als onverwachte runtime-fouten
+uit de weekvoorbereiding worden bewust aan het unattended entrypoint afgehandeld
+met context, stacktrace en exitcode 1. `SystemExit` en `KeyboardInterrupt`
+vallen buiten deze exceptiongrens. Als de logging niet kan worden geïnitialiseerd, wordt de
 fout via Python `logging` naar stderr geschreven en stopt Ariadne vóór voorbereiding.
+Het JSON-resultaat blijft na succes op stdout verschijnen als gestructureerde
+CLI-output; lifecycle- en diagnoseberichten lopen uitsluitend via logging.
 CLI-help en argumentfouten blijven door `argparse` afgehandeld.
 
 ## Eerste implementatiestap: weekvoorbereiding
