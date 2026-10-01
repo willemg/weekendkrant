@@ -103,19 +103,24 @@ De output moet uiteindelijk bruikbaar genoeg zijn om deterministisch door Ariadn
 
 ## Ariadne — de draadlegger
 
-Ariadne is geen agent maar een deterministisch script, waarschijnlijk gestart via cron op een Raspberry Pi.
+Ariadne is geen agent maar een deterministisch script, bedoeld om via cron op een Raspberry Pi te draaien.
 
 De eerste geïmplementeerde stap is alleen [lokale weekvoorbereiding](architecture.md#eerste-implementatiestap-weekvoorbereiding). De onderstaande verantwoordelijkheden beschrijven het verdere ontwerp.
 
 ### Verantwoordelijkheden
 
+- de wekelijkse Sherlock-werkruimte voorbereiden vóór Sherlock die nodig heeft;
 - repository synchroniseren;
 - nieuwe Sherlock-output herkennen;
 - mechanisch groeperen per onderwerp;
 - tokenaantal meten met bijvoorbeeld `tiktoken`;
-- draden maken;
+- lokale draden maken;
 - garanderen dat de volledige input voor Leonardo nooit groter wordt dan 35.000 tokens;
-- verwerkingsstatus administreren.
+- verwerkingsstatus en provenance in een lokale SQLite-database administreren.
+
+Tijdens de observatiefase zijn Ariadnes draden afgeleide werkproducten. Ze hoeven niet
+terug naar GitHub en moeten uit dezelfde ingress reproduceerbaar opnieuw opgebouwd
+kunnen worden.
 
 ### Niet doen
 
@@ -125,7 +130,8 @@ Ariadne mag niet:
 - relevantie beoordelen;
 - semantisch dedupliceren;
 - verbanden leggen;
-- bronnen interpreteren.
+- bronnen interpreteren;
+- ontbrekende metadata raden.
 
 Ariadne vlecht draden; ze denkt niet.
 
