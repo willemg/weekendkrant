@@ -85,6 +85,20 @@ onder meer welke ingressfiches in welke draad terechtkwamen en welke verwerkings
 werd uitgevoerd. De database is operationele staat, geen vervanging voor de
 versioneerbare bronfiches op GitHub.
 
+Het vaste pad voor Ariadnes toekomstige SQLite-verwerkingsdatabase op `bibib` is
+`/home/weekendkrant/weekendkrant.sqlite3`. De runtime-indeling is:
+
+| Pad | Inhoud |
+| --- | --- |
+| `/home/weekendkrant/app/` | Git-repository met versieerbare code, tests en documentatie, plus de lokale `.venv`. |
+| `/home/weekendkrant/logs/` | Roterende diagnostische runtime-logs, waaronder `ariadne.log`. |
+| `/home/weekendkrant/weekendkrant.sqlite3` | Ariadnes persistente lokale verwerkingsstaat. |
+
+De database staat bewust buiten de Git-working tree en wordt niet naar GitHub
+gecommit. Ze is geen logbestand en hoort daarom ook niet onder `logs/`.
+Dit legt alleen het toekomstige runtimepad vast; de database en het schema zijn
+nog niet geïmplementeerd.
+
 De Raspberry Pi kan Ariadne via cron uitvoeren. Weekvoorbereiding en verwerking zijn
 afzonderlijke deterministische taken; het exacte cronritme wordt pas vastgelegd nadat
 de observatiefase voldoende praktijkgegevens heeft opgeleverd.
@@ -183,5 +197,6 @@ lokale Leonardo-inputs van maken. Daarbij gelden voorlopig deze invarianten:
 - verwerking en provenance worden in SQLite geregistreerd;
 - geen bundel wordt automatisch naar GitHub teruggeschreven tijdens de observatiefase.
 
-Het precieze lokale pad, databaseschema en cronritme blijven implementatiedetails
-totdat ze in een afzonderlijke, testbare stap worden vastgelegd.
+Het lokale pad voor bundels, het databaseschema en het dagelijkse cronritme blijven
+implementatiedetails totdat ze in een afzonderlijke, testbare stap worden vastgelegd.
+Het databasepad ligt hierboven al vast.
