@@ -95,6 +95,8 @@ class RuntimeGitTests(unittest.TestCase):
         self.remote = Path(self.tmp.name) / 'origin.git'
         self.run_git(Path(self.tmp.name), 'init', '--bare', '-b', 'main', str(self.remote))
         self.run_git(Path(self.tmp.name), 'clone', str(self.remote), str(self.root))
+        # Oudere Git-versies kunnen een lege clone op master laten beginnen.
+        self.git('checkout', '-b', 'main')
         self.git('config', 'user.name', 'Test')
         self.git('config', 'user.email', 'test@example.invalid')
         (self.root / 'README.md').write_text('Initial\n')
