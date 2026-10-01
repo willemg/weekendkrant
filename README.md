@@ -29,8 +29,8 @@ Zie de ontwerpdocumentatie:
 
 ## Status
 
-De eerste implementatiestap is Ariadnes **lokale weekvoorbereiding**: een ISO-weekbranch,
-een ingressmap en een herhaalbaar auditrecord. Bronfiches verwerken, draden vlechten
+De geïmplementeerde taak is Ariadnes **wekelijkse weekvoorbereiding op origin**:
+een ISO-weekbranch, een ingressmap en een herhaalbaar auditrecord. Bronfiches verwerken, draden vlechten
 en modelcalls zijn nog niet geïmplementeerd.
 
 De eerstvolgende Ariadne-fase blijft bewust observerend. Sherlocks bronfiches blijven
@@ -57,17 +57,35 @@ Een ontbrekende venv/interpreter geeft een shellfout en een niet-nul exitcode.
 Voer vanuit de repositoryroot uit:
 
 ```bash
-git fetch origin
-./start_ariadne.sh --date 2026-10-04
+./start_ariadne.sh prepare-week --date 2026-10-04
 ```
 
-Dit selecteert of maakt lokaal `ingress/2026_W40`, met `ingress/2026_W40/.gitkeep`
-en `audit/2026_W40/ingress-preparation.json`. De datum is expliciet: geef de lokale
-kalenderdatum mee; ISO-weekjaar en weeknummer worden daaruit afgeleid.
-Een bestaande lokale weekbranch krijgt voorrang, vervolgens een reeds opgehaalde
-remote weekbranch. Een nieuwe branch begint op lokale `main`; werk die vooraf bij.
-Bij branchwissel moet de werkboom schoon zijn. Herhalen op dezelfde weekbranch
-bewaart oogst en auditrecord. Gebruik één schrijver per clone.
+Dit bereidt `ingress/2026_W40` voor, met `ingress/2026_W40/.gitkeep`
+en `audit/2026_W40/ingress-preparation.json`, en pusht de branch naar `origin`.
+`--date` gebruikt exact de opgegeven kalenderdatum en de bijbehorende ISO-week.
+De wekelijkse zondagavondtaak gebruikt in plaats daarvan:
+
+```bash
+/home/weekendkrant/app/start_ariadne.sh prepare-week --next-week
+```
+
+`--next-week` bepaalt de actuele datum expliciet in `Europe/Brussels` en kiest
+de maandag van de eerstvolgende ISO-week. `--date` en `--next-week` zijn wederzijds
+exclusief; één van beide is verplicht. De oude aanroep zonder subcommand vervalt.
+
+De taak vereist een schone werkboom, haalt `origin` op en werkt lokale `main`
+uitsluitend fast-forward bij tot `origin/main`. Nieuwe weekbranches beginnen op
+die actuele `main`; bestaande lokale of remote weekbranches worden veilig hergebruikt.
+Ariadne commit alleen de twee voorbereidingsbestanden indien nodig en pusht de
+weekbranch met upstream. Git-identiteit en niet-interactieve lees-/schrijfauthenticatie
+voor `origin` moeten vooraf zijn ingesteld. Alleen een geslaagde push geldt als succes.
+
+Herhalen bewaart oogst en auditrecord en maakt geen nutteloze extra commit.
+Een vuile werkboom, conflicterende metadata, divergente of lokaal vooruitgelopen
+`main`, of een weekremote die vooruitloopt/divergeert leidt tot stoppen.
+Er is geen force-push, reset, automatische conflictmerge of weggooien van lokale
+wijzigingen. Gebruik één schrijver per clone. Bij een pushfout blijft een gemaakte
+commit lokaal behouden; na herstel van de fout kan dezelfde taak opnieuw worden uitgevoerd.
 
 Runtime-meldingen verschijnen in `/home/weekendkrant/logs/ariadne.log`, met
 automatische rotatie (1 MiB, vier reservebestanden; circa 5 MiB totaal).
@@ -75,9 +93,10 @@ Het JSON-resultaat blijft als gestructureerde CLI-output op stdout verschijnen.
 De uitvoerende gebruiker moet de logmap kunnen aanmaken of erin kunnen schrijven;
 zie [de loggingconfiguratie](docs/architecture.md#logging).
 
-Bekijk daarna de wijzigingen, commit de voorbereidingsbestanden en push de weekbranch
-als Sherlock de werkruimte op GitHub moet kunnen gebruiken. Het script doet zelf geen
-fetch, commit, push, PR of merge en wijzigt `main` niet.
+Na merge voeren we `prepare-week --next-week` eerst één keer handmatig op `bibib`
+uit en controleren we dat de doelbranch werkelijk op GitHub staat. Pas na die
+geslaagde preflight wordt de echte crontab geïnstalleerd; deze PR bevat geen cron-entry.
+Dagelijkse verwerking, `weave`, SQLite en tokenmeting zijn nog niet geïmplementeerd.
 
 ```bash
 ./start_tests.sh
