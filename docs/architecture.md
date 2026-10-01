@@ -89,6 +89,23 @@ De Raspberry Pi kan Ariadne via cron uitvoeren. Weekvoorbereiding en verwerking 
 afzonderlijke deterministische taken; het exacte cronritme wordt pas vastgelegd nadat
 de observatiefase voldoende praktijkgegevens heeft opgeleverd.
 
+## Kalender- en tijdzonecontract
+
+Voor alle weekgebonden pipelinebeslissingen is `Europe/Brussels` de canonieke
+kalenderzone. Sherlock en Ariadne moeten de lokale datum en daaruit het ISO-weekjaar
+en weeknummer in deze zone bepalen.
+
+De weekidentiteit heeft altijd vorm `YYYY_Www` en wordt gebruikt voor zowel branch
+`ingress/YYYY_Www` als map `ingress/YYYY_Www/`. De overgang naar een nieuwe dag
+of ISO-week gebeurt dus op lokale Belgische middernacht, inclusief de geldende
+zomer- of wintertijd. UTC of de toevallige standaardtijdzone van een uitvoeromgeving
+mag niet worden gebruikt om de actuele week te kiezen.
+
+Een expliciet meegegeven kalenderdatum blijft toegestaan voor reproduceerbare tests,
+herstel en handmatige uitvoering. Wanneer Ariadne later zelf de actuele datum bepaalt
+voor unattended cronuitvoering, moet ook dat expliciet volgens `Europe/Brussels`
+gebeuren en niet impliciet via de hostomgeving.
+
 ## Logging
 
 Alle runtime-logging van Ariadne loopt vanaf het begin via Python `logging`.
