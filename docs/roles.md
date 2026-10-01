@@ -16,7 +16,10 @@ Pas op basis van die echte oogst leggen we het definitieve invoercontract voor A
 - per relevante vondst de oorspronkelijke bron bewaren;
 - waar haalbaar de bron compact en feitelijk samenvatten;
 - waar haalbaar een eenvoudige onderwerpindeling bewaren;
-- de oogst naar GitHub schrijven.
+- de oogst naar GitHub schrijven;
+- voor datum, ISO-week, ingressbranch en ingressmap uitsluitend de kalenderzone
+  `Europe/Brussels` gebruiken; UTC of een impliciete omgevingstijdzone bepaalt nooit
+  welke week actief is.
 
 Deze lijst beschrijft de gewenste richting, niet een reeds bewezen betrouwbaar protocol.
 
