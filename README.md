@@ -58,6 +58,11 @@ remote weekbranch. Een nieuwe branch begint op lokale `main`; werk die vooraf bi
 Bij branchwissel moet de werkboom schoon zijn. Herhalen op dezelfde weekbranch
 bewaart oogst en auditrecord. Gebruik één schrijver per clone.
 
+Runtime-meldingen verschijnen in `/home/weekendkrant/logs/ariadne.log`, met
+automatische rotatie (5 MiB, drie reservebestanden), in plaats van op stdout.
+De uitvoerende gebruiker moet de logmap kunnen aanmaken of erin kunnen schrijven;
+zie [de loggingconfiguratie](docs/architecture.md#logging).
+
 Bekijk daarna de wijzigingen, commit de voorbereidingsbestanden en push de weekbranch
 als Sherlock de werkruimte op GitHub moet kunnen gebruiken. Het script doet zelf geen
 fetch, commit, push, PR of merge en wijzigt `main` niet.

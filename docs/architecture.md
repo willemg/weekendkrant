@@ -104,6 +104,16 @@ De logbestanden staan buiten de Git-repository, onder
 Python-loghandler beheerd zodat de opslag begrensd blijft. Cron hoeft daarom geen
 eigen parallelle logarchieven op te bouwen.
 
+De weekvoorbereiding schrijft naar `/home/weekendkrant/logs/ariadne.log` met een
+`RotatingFileHandler`: maximaal 5 MiB per bestand en drie reservebestanden
+(`.1` tot `.3`, samen circa 20 MiB). De map wordt zo nodig aangemaakt; de
+uitvoerende gebruiker moet er schrijfrechten hebben. Het standaardniveau is `INFO`.
+Ieder record bevat tijdstip, niveau, loggernaam en bericht, in UTF-8.
+Start en succes worden gelogd; runtime-fouten krijgen context en stacktrace en
+leiden tot exitcode 1. Als de logging niet kan worden geïnitialiseerd, wordt de
+fout via Python `logging` naar stderr geschreven en stopt Ariadne vóór voorbereiding.
+CLI-help en argumentfouten blijven door `argparse` afgehandeld.
+
 ## Eerste implementatiestap: weekvoorbereiding
 
 `ariadne.py` bereidt uitsluitend Sherlocks werkruimte voor. Het vaste technische

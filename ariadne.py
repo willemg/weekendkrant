@@ -2,8 +2,24 @@
 import argparse
 from datetime import date
 import json
+import logging
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 import subprocess
+
+
+LOG_PATH = Path('/home/weekendkrant/logs/ariadne.log')
+LOG_FORMAT = '%(asctime)s %(levelname)s %(name)s %(message)s'
+logger = logging.getLogger(__name__)
+
+
+def configure_logging(log_path=None):
+    log_path = LOG_PATH if log_path is None else Path(log_path)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    handler = RotatingFileHandler(log_path, maxBytes=5 * 1024 * 1024,
+                                  backupCount=3, encoding='utf-8')
+    logging.basicConfig(level=logging.INFO, format=LOG_FORMAT,
+                        handlers=[handler], force=True)
 
 
 def week_name(day):
@@ -85,10 +101,21 @@ def main():
                         help='Lokale kalenderdatum YYYY-MM-DD; ISO-week wordt afgeleid.')
     args = parser.parse_args()
     try:
+        configure_logging()
+    except OSError:
+        # Als het bestand niet beschikbaar is, blijft de fout via logging zichtbaar.
+        logging.basicConfig(level=logging.INFO, format=LOG_FORMAT, force=True)
+        logger.exception('Logging initialiseren mislukt: logbestand=%s', LOG_PATH)
+        parser.exit(1)
+    logger.info('Weekvoorbereiding gestart: repo=%s datum=%s', args.repo, args.date)
+    try:
         result = prepare_week(args.repo, args.date)
-    except (ValueError, OSError) as error:
-        parser.exit(1, f'Ariadne: {error}\n')
-    print(json.dumps(result, indent=2, sort_keys=True))
+    except Exception:
+        logger.exception('Weekvoorbereiding mislukt: repo=%s datum=%s',
+                         args.repo, args.date)
+        parser.exit(1)
+    logger.info('Weekvoorbereiding voltooid: week=%s branch=%s ingress=%s base_commit=%s',
+                result['week'], result['branch'], result['ingress_path'], result['base_commit'])
 
 
 if __name__ == '__main__':
