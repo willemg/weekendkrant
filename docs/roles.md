@@ -108,7 +108,7 @@ De output moet uiteindelijk bruikbaar genoeg zijn om deterministisch door Ariadn
 
 Ariadne is geen agent maar een deterministisch script, bedoeld om via cron op een Raspberry Pi te draaien.
 
-De eerste geïmplementeerde stap is alleen [lokale weekvoorbereiding](architecture.md#eerste-implementatiestap-weekvoorbereiding). De onderstaande verantwoordelijkheden beschrijven het verdere ontwerp.
+De geïmplementeerde taak is [wekelijkse weekvoorbereiding op origin](architecture.md#eerste-implementatiestap-weekvoorbereiding). De onderstaande verantwoordelijkheden beschrijven het verdere ontwerp.
 
 ### Verantwoordelijkheden
 

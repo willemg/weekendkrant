@@ -32,7 +32,7 @@ class LoggingTests(unittest.TestCase):
 
     def run_main(self):
         with patch.object(ariadne, 'LOG_PATH', self.path, create=True), patch(
-                'sys.argv', ['ariadne.py', '--repo', self.tmp.name,
+                'sys.argv', ['ariadne.py', 'prepare-week', '--repo', self.tmp.name,
                              '--date', '2026-09-30']):
             ariadne.main()
 
@@ -88,7 +88,7 @@ class LoggingTests(unittest.TestCase):
         result = {'week': '2026_W40', 'branch': 'ingress/2026_W40',
                   'ingress_path': 'ingress/2026_W40', 'base_commit': 'abc123'}
         stdout, stderr = io.StringIO(), io.StringIO()
-        with patch.object(ariadne, 'prepare_week', return_value=result) as prepare, \
+        with patch.object(ariadne, 'prepare_week_runtime', return_value=result) as prepare, \
                 redirect_stdout(stdout), redirect_stderr(stderr):
             self.run_main()
         prepare.assert_called_once_with(Path(self.tmp.name), date(2026, 9, 30))
@@ -106,7 +106,7 @@ class LoggingTests(unittest.TestCase):
                       RuntimeError('Onverwachte fout')):
             stdout, stderr = io.StringIO(), io.StringIO()
             with self.subTest(error=error), patch.object(
-                    ariadne, 'prepare_week', side_effect=error), \
+                    ariadne, 'prepare_week_runtime', side_effect=error), \
                     redirect_stdout(stdout), redirect_stderr(stderr), \
                     self.assertRaises(SystemExit) as stopped:
                 self.run_main()
@@ -124,7 +124,7 @@ class LoggingTests(unittest.TestCase):
     def test_logging_setup_failure_stops_before_preparation_and_logs_to_stderr(self):
         self.path.parent.write_text('Geen map')
         stderr = io.StringIO()
-        with patch.object(ariadne, 'prepare_week', return_value={}) as prepare, \
+        with patch.object(ariadne, 'prepare_week_runtime', return_value={}) as prepare, \
                 redirect_stderr(stderr), self.assertRaises(SystemExit) as stopped:
             self.run_main()
         self.assertEqual(stopped.exception.code, 1)

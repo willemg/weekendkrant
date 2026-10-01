@@ -102,9 +102,10 @@ zomer- of wintertijd. UTC of de toevallige standaardtijdzone van een uitvoeromge
 mag niet worden gebruikt om de actuele week te kiezen.
 
 Een expliciet meegegeven kalenderdatum blijft toegestaan voor reproduceerbare tests,
-herstel en handmatige uitvoering. Wanneer Ariadne later zelf de actuele datum bepaalt
-voor unattended cronuitvoering, moet ook dat expliciet volgens `Europe/Brussels`
-gebeuren en niet impliciet via de hostomgeving.
+herstel en handmatige uitvoering. `prepare-week --next-week` bepaalt de actuele
+datum met `zoneinfo` expliciet in `Europe/Brussels` en kiest de maandag van de
+eerstvolgende ISO-week, onafhankelijk van de hosttimezone. `--date` blijft exact
+de opgegeven datum gebruiken; beide opties zijn wederzijds exclusief en één is verplicht.
 
 ## Logging
 
@@ -146,9 +147,28 @@ Een `.gitkeep` maakt de lege map versieerbaar. Dit legt het inhoudelijke
 bronfichecontract niet vast: dat blijft onderdeel van de observatiefase.
 
 De stap hergebruikt bestaande weekbranches en overschrijft geen oogst of auditrecord.
-Het voorbereidingsrecord bewaart het uitgangscommit. Git-commit en push gebeuren
-apart, na inspectie. Synchronisatie, fichevalidatie, verwerkingstatus, bundeling,
-tokenmeting en redactionele modelcalls vallen buiten deze eerste implementatie.
+Het voorbereidingsrecord bewaart het uitgangscommit; het JSON-schema blijft ongewijzigd.
+Het subcommand `prepare-week` voert de wekelijkse Git-workflow zelfstandig uit:
+schone werkboom controleren, `fetch origin`, `main` uitsluitend fast-forward gelijk
+maken aan `origin/main`, weekbranch selecteren/aanmaken, voorbereiding valideren,
+alleen `.gitkeep` en het week-auditrecord committen indien nodig, en de weekbranch
+naar `origin` pushen met upstream. Een nieuwe branch start op de bijgewerkte `main`.
+
+Bestaande lokale weekhistory krijgt voorrang; bij een alleen remote bestaande
+weekbranch wordt een lokale trackingbranch gemaakt. Bestaande oogst blijft intact.
+Een weekremote die vooruitloopt of divergeert, lokaal vooruitgelopen/divergente
+`main`, een vuile werkboom of conflicterende metadata leidt tot veilig stoppen.
+Er is geen reset, force-push, automatische conflictmerge of commit van weekbestanden
+op `main`. Herhaling maakt geen extra commit; push bevestigt telkens remote succes.
+Een pushfout wordt met traceback gelogd en stopt niet-nul; de lokale commit blijft
+beschikbaar voor een volgende poging. Git-identiteit en unattended authenticatie
+zijn installatievoorwaarden. Eén schrijver per clone blijft vereist.
+
+De beoogde zondagavondaanroep is
+`/home/weekendkrant/app/start_ariadne.sh prepare-week --next-week`.
+De crontab wordt pas na merge en een geslaagde handmatige preflight op `bibib`
+geïnstalleerd. Deze stap bevat geen cronconfiguratie. Fichevalidatie, verwerkingstatus,
+dagelijkse `weave`, SQLite, bundeling, tokenmeting en modelcalls blijven buiten scope.
 
 ## Volgende Ariadne-fase: lokale bundeling
 
