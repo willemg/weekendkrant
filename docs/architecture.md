@@ -89,6 +89,21 @@ De Raspberry Pi kan Ariadne via cron uitvoeren. Weekvoorbereiding en verwerking 
 afzonderlijke deterministische taken; het exacte cronritme wordt pas vastgelegd nadat
 de observatiefase voldoende praktijkgegevens heeft opgeleverd.
 
+## Logging
+
+Alle runtime-logging van Ariadne loopt vanaf het begin via Python `logging`.
+Productiecode schrijft geen ad-hoc `print()`-diagnostiek. Logrecords gebruiken
+duidelijke niveaus zoals `DEBUG`, `INFO`, `WARNING`, `ERROR` en `CRITICAL`.
+
+De loggingconfiguratie wordt centraal opgezet door het entrypoint; afzonderlijke
+modules vragen alleen een logger op via `logging.getLogger(__name__)`. Exceptions
+worden met stacktrace gelogd wanneer dat nuttig is voor diagnose.
+
+De logbestanden staan buiten de Git-repository, onder
+`/home/weekendkrant/logs/`, analoog aan Mail Sorter. Ze worden via een roterende
+Python-loghandler beheerd zodat de opslag begrensd blijft. Cron hoeft daarom geen
+eigen parallelle logarchieven op te bouwen.
+
 ## Eerste implementatiestap: weekvoorbereiding
 
 `ariadne.py` bereidt uitsluitend Sherlocks werkruimte voor. Het vaste technische
