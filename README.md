@@ -43,11 +43,22 @@ bijgehouden.
 ## Weekwerkruimte voorbereiden
 
 Python 3.9 of nieuwer, Git en een lokale clone volstaan; er zijn geen Python-dependencies.
-Voer vanuit de repositoryroot uit (na opname van deze implementatie):
+De installatie staat onder `/home/weekendkrant/app`. Maak daar eenmalig de venv aan:
+
+```bash
+cd /home/weekendkrant/app
+python3 -m venv .venv
+```
+
+Normale gebruikers en toekomstige cronjobs starten Ariadne via `start_ariadne.sh`.
+Beide uitvoerscripts gaan eerst naar de vaste repositoryroot en gebruiken rechtstreeks
+`/home/weekendkrant/app/.venv/bin/python`; handmatig activeren van `.venv` is niet nodig.
+Een ontbrekende venv/interpreter geeft een shellfout en een niet-nul exitcode.
+Voer vanuit de repositoryroot uit:
 
 ```bash
 git fetch origin
-python3 ariadne.py --date 2026-09-30
+./start_ariadne.sh --date 2026-10-04
 ```
 
 Dit selecteert of maakt lokaal `ingress/2026_W40`, met `ingress/2026_W40/.gitkeep`
@@ -69,7 +80,7 @@ als Sherlock de werkruimte op GitHub moet kunnen gebruiken. Het script doet zelf
 fetch, commit, push, PR of merge en wijzigt `main` niet.
 
 ```bash
-python3 -m unittest discover -s tests -v
+./start_tests.sh
 ```
 
 Zie [de afbakening van deze stap](docs/architecture.md#eerste-implementatiestap-weekvoorbereiding)
