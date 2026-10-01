@@ -30,8 +30,15 @@ Zie de ontwerpdocumentatie:
 ## Status
 
 De eerste implementatiestap is Ariadnes **lokale weekvoorbereiding**: een ISO-weekbranch,
-een ingressmap en een herhaalbaar auditrecord. De overige architectuur blijft ontwerp;
-bronfiches verwerken, draden vlechten en modelcalls zijn nog niet geïmplementeerd.
+een ingressmap en een herhaalbaar auditrecord. Bronfiches verwerken, draden vlechten
+en modelcalls zijn nog niet geïmplementeerd.
+
+De eerstvolgende Ariadne-fase blijft bewust observerend. Sherlocks bronfiches blijven
+op de wekelijkse ingressbranch staan; Ariadne zal daar lokaal reproduceerbare
+Leonardo-inputs van maximaal 35.000 tokens uit afleiden. Die afgeleide draden hoeven
+tijdens deze proefperiode niet terug naar GitHub: ze mogen lokaal opnieuw opgebouwd
+en weggegooid worden. Verwerkingsstatus en provenance worden lokaal in SQLite
+bijgehouden.
 
 ## Weekwerkruimte voorbereiden
 

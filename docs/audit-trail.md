@@ -6,6 +6,24 @@ De krant moet intern kunnen reconstrueren hoe een relevante feitelijke claim tot
 
 Daarom krijgt iedere claim provenance: welke bronfiches eraan gekoppeld waren, welk model ze schreef, welke controle erop gebeurde en of een herschrijving nodig was.
 
+## Twee auditlagen
+
+Weekendkrant maakt onderscheid tussen twee soorten auditinformatie:
+
+1. **versioneerbare bootstrapinformatie** die nodig is om een wekelijkse Git-werkruimte
+   reproduceerbaar voor te bereiden;
+2. **operationele verwerkingsaudit** van Ariadne en latere pipeline-stappen.
+
+Het bestaande `ingress-preparation.json` blijft voor de eerste categorie in Git.
+Voor de tweede categorie wordt een lokale SQLite-database gebruikt. Die database kan
+bijvoorbeeld vastleggen welke ingressfiches gezien of verwerkt zijn, uit welke fiches
+een draad bestaat, hoeveel tokens ervoor werden gemeten en welke pipeline-stap werd
+uitgevoerd.
+
+Tijdens de observatiefase is deze database lokale operationele staat en wordt ze niet
+naar GitHub gecommit. Het definitieve schema wordt pas samen met de bundelimplementatie
+vastgelegd.
+
 ## Minimale kwaliteitslabels
 
 ### verified_first_pass

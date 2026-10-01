@@ -38,7 +38,11 @@ Daarom stopt de standaardketen na maximaal één Minos-herschrijving.
 
 ## Menselijke inspectie blijft mogelijk
 
-GitHub bewaart de bronfiches, dossiers en auditinformatie. Bij uitzonderlijke, verrassende of twijfelachtige claims moet het gemakkelijk zijn om terug te gaan naar de oorspronkelijke bronnen.
+GitHub bewaart de bronfiches en versioneerbare publicatieartefacten. Ariadnes lokale
+SQLite-audit bewaart de operationele provenance van de deterministische verwerking.
+Bij uitzonderlijke, verrassende of twijfelachtige claims moet het gemakkelijk zijn om
+van een afgeleid resultaat terug te gaan naar de gebruikte bronfiches en hun
+oorspronkelijke bronnen.
 
 ## Kwaliteit boven snelheid
 
@@ -47,5 +51,9 @@ Weekendkrant hoeft geen breaking-newsmachine te zijn. Het weekendritme laat toe 
 ## Architectuur mag klein beginnen
 
 Nieuwe automatisering wordt alleen toegevoegd wanneer een concrete behoefte aantoonbaar bestaat. Vermijd preventief complexe databases, semantische zoeklagen, workflow-engines en extra agents.
+
+Een lokale SQLite-database voor verwerkingsaudit is een bewuste uitzondering: daar is
+een concrete behoefte aan herstartbare status, provenance en inspecteerbaarheid zonder
+afgeleide runtimegegevens in Git te moeten bewaren.
 
 Het doel is geen veelkoppige hydra, maar een reeks eenvoudige componenten met duidelijke verantwoordelijkheden.
