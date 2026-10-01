@@ -116,7 +116,9 @@ De eerste geïmplementeerde stap is alleen [lokale weekvoorbereiding](architectu
 - tokenaantal meten met bijvoorbeeld `tiktoken`;
 - lokale draden maken;
 - garanderen dat de volledige input voor Leonardo nooit groter wordt dan 35.000 tokens;
-- verwerkingsstatus en provenance in een lokale SQLite-database administreren.
+- verwerkingsstatus en provenance in een lokale SQLite-database administreren;
+- alle runtime-informatie via de centrale Python-`logging`configuratie schrijven,
+  met levels en rotatie naar `/home/weekendkrant/logs/`.
 
 Tijdens de observatiefase zijn Ariadnes draden afgeleide werkproducten. Ze hoeven niet
 terug naar GitHub en moeten uit dezelfde ingress reproduceerbaar opnieuw opgebouwd
