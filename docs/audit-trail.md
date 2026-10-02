@@ -39,7 +39,8 @@ claimkwaliteitslabels en van het Git-bootstraprecord. De statusnamen zijn `succe
 De zondagavondjob leest deze gestructureerde status om onvolledige dagen te herkennen;
 logbestanden dienen voor diagnose en worden hiervoor niet geparseerd. Dagfouten en
 ontbrekende records blokkeren de voorbereiding van de volgende week niet. Een
-weekovergang wist of verhelpt de fouten niet, en start geen inhaalverwerking van
+weekovergang verhelpt fouten niet; retentie verwijdert uitsluitend records ouder
+dan de aflopende week plus zeven voorgaande ISO-weken, en start geen inhaalverwerking van
 vorige weken.
 
 ## Minimale kwaliteitslabels
@@ -128,7 +129,7 @@ ook na latere oogstcommits; een afwijkend record wordt geweigerd.
 
 - `days`: één record per lokale datum, met ISO-week, status, remote commit-SHA,
   SHA-256 van het afsluitmanifest en eventuele foutmelding.
-- `attempts`: blijvende historie van afgeronde pogingen, met status, fout en UTC-tijd.
+- `attempts`: historie van afgeronde pogingen binnen de bewaartermijn, met status, fout en UTC-tijd.
   Een herhaling van een geslaagde dag voegt geen poging toe. Een herstelde fout
   blijft hier zichtbaar, ook wanneer de actuele dagstatus daarna succes wordt.
 - `threads`: absoluut lokaal pad, dag, topic, deelnummer, inhoudshash, gemeten
@@ -141,7 +142,7 @@ worden de draadbestanden via een tijdelijk bestand, fsync en atomische rename
 gepubliceerd en worden alle provenance en de successtatus vastgelegd. Pas na de
 commit is de dag succesvol. Een fout rolt de volledige transactie terug en schrijft
 afzonderlijk `processing_error`; een ontbrekende melding na de deadline schrijft
-`timeout`. Foutpogingen blijven bewaard. Buiten Git staan zowel database als draden.
+`timeout`. Foutpogingen blijven binnen de bewaartermijn bewaard. Buiten Git staan zowel database als draden.
 
 Bestandssysteem en SQLite vormen samen geen enkele atomische transactie. Een crash
 of fout tijdens schrijven kan daarom losse afgeleide bestanden achterlaten, maar
@@ -154,3 +155,17 @@ ook dat als onvolledig. Eerdere succesvolle dagen worden nooit verwijderd.
 Een geslaagde dag is idempotent en wordt niet opnieuw verwerkt; handmatig verwijderen
 van succesvolle output wordt niet automatisch hersteld. Bewaar de database en
 succesvolle draden samen. Deze PR biedt geen herstel- of inhaalcommando voor oude dagen.
+
+## Wekelijkse retentie
+
+Na rapportage bewaart de zondagjob acht Belgische ISO-weken: de aflopende week en
+zeven voorgaande weken. De ondergrens is de maandag van de aflopende week minus
+zeven weken; records met een eerdere `day` vervallen, inclusief fouten en pogingen.
+`sources`, `threads`, `attempts` en `days` worden in die volgorde in één transactie
+opgeruimd, met foreign keys actief. Na commit volgt `VACUUM` buiten de transactie.
+Een fout tijdens verwijderen rolt alles terug. Een VACUUM-fout verandert de reeds
+gecommitte retentie niet en wordt als runtimefout gemeld.
+
+Lokale draadbestanden blijven staan als opstartartefacten. Vervallen provenance
+betekent dat die bestanden niet meer als actieve verwerkingsoutput gelden.
+Er wordt geen oude week opnieuw verwerkt om provenance te reconstrueren.

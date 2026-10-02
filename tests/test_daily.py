@@ -36,15 +36,15 @@ class DailyTests(weekly.RuntimeGitFixture):
         for name, topic, body in items:
             path = f'ingress/2026_W41/{name}'
             data = f'WEEKENDKRANT-INGRESS-1\ntopic: {topic}\ndate: 2026-10-05\n\n{body}'.encode()
-            (self.root / path).write_bytes(data)
+            (self.weekroot / path).write_bytes(data)
             files.append({'path': path, 'sha256': hashlib.sha256(data).hexdigest()})
-        marker = self.root / 'ingress/2026_W41/closed/2026-10-05.json'
+        marker = self.weekroot / 'ingress/2026_W41/closed/2026-10-05.json'
         marker.parent.mkdir(exist_ok=True)
         marker.write_text(json.dumps({'schema_version': 1, 'date': '2026-10-05',
                                      'week': '2026_W41', 'files': files}))
-        self.git('add', 'ingress')
-        self.git('commit', '-m', 'Afgesloten oogst')
-        self.git('push')
+        self.week_git('add', 'ingress')
+        self.week_git('commit', '-m', 'Afgesloten oogst')
+        self.week_git('push')
         return marker
 
     def run_daily(self, **kwargs):
@@ -95,31 +95,31 @@ class DailyTests(weekly.RuntimeGitFixture):
 
     def test_daily_invalid_hash_is_processing_error(self):
         self.publish()
-        path = self.root / 'ingress/2026_W41/ingress_0001.md'
+        path = self.weekroot / 'ingress/2026_W41/ingress_0001.md'
         path.write_text(path.read_text() + 'Late wijziging')
-        self.git('add', 'ingress'); self.git('commit', '-m', 'Late wijziging'); self.git('push')
+        self.week_git('add', 'ingress'); self.week_git('commit', '-m', 'Late wijziging'); self.week_git('push')
         with self.assertRaises(ValueError):
             self.run_daily()
         self.assertEqual(self.status(), 'processing_error')
         self.assertFalse(self.output.exists())
 
     def test_daily_remote_fast_forward(self):
-        old = self.git('rev-parse', 'HEAD')
+        old = self.week_git('rev-parse', 'HEAD')
         self.publish([])
-        target = self.git('rev-parse', 'HEAD')
-        self.git('switch', 'main')
+        target = self.week_git('rev-parse', 'HEAD')
+        self.git('worktree', 'remove', str(self.weekroot))
         self.git('branch', '-f', self.branch, old)
         self.run_daily()
-        self.assertEqual(self.git('rev-parse', 'HEAD'), target)
+        self.assertEqual(self.week_git('rev-parse', 'HEAD'), target)
 
     def test_daily_dirty_and_ahead_refused(self):
         self.publish([])
-        (self.root / 'local').write_text('keep')
+        (self.weekroot / 'local').write_text('keep')
         with self.assertRaises(ValueError): self.run_daily()
-        self.git('add', 'local'); self.git('commit', '-m', 'Local')
-        head = self.git('rev-parse', 'HEAD')
+        self.week_git('add', 'local'); self.week_git('commit', '-m', 'Local')
+        head = self.week_git('rev-parse', 'HEAD')
         with self.assertRaises(ValueError): self.run_daily()
-        self.assertEqual(self.git('rev-parse', 'HEAD'), head)
+        self.assertEqual(self.week_git('rev-parse', 'HEAD'), head)
 
     def test_daily_output_failure_never_success(self):
         self.publish()
@@ -143,16 +143,16 @@ class DailyTests(weekly.RuntimeGitFixture):
         with patch.object(ariadne, 'DB_PATH', self.db):
             ariadne.prepare_week_runtime(self.root, date(2026, 10, 12), report_day=self.day)
         self.assertEqual(self.status(), 'timeout')
-        self.assertEqual(self.remote_ref('ingress/2026_W42'), self.git('rev-parse', 'HEAD'))
+        self.assertEqual(self.remote_ref('ingress/2026_W42'), self.week_git('rev-parse', 'HEAD'))
 
     def commit_ingress(self):
-        self.git('add', 'ingress')
-        self.git('commit', '-m', 'Wijziging oogst')
-        self.git('push')
+        self.week_git('add', 'ingress')
+        self.week_git('commit', '-m', 'Wijziging oogst')
+        self.week_git('push')
 
     def test_daily_late_extra_fiche_refused(self):
         self.publish([])
-        (self.root / 'ingress/2026_W41/ingress_0002.md').write_text(
+        (self.weekroot / 'ingress/2026_W41/ingress_0002.md').write_text(
             'WEEKENDKRANT-INGRESS-1\ntopic: 1\ndate: 2026-10-05\n\nLate bron')
         self.commit_ingress()
         with self.assertRaises(ValueError): self.run_daily()
@@ -172,10 +172,10 @@ class DailyTests(weekly.RuntimeGitFixture):
 
     def test_daily_remote_only_branch(self):
         self.publish([])
-        self.git('switch', 'main')
+        self.git('worktree', 'remove', str(self.weekroot))
         self.git('branch', '-d', self.branch)
         self.run_daily()
-        self.assertEqual(self.git('branch', '--show-current'), self.branch)
+        self.assertEqual(self.week_git('branch', '--show-current'), self.branch)
 
     def test_daily_divergence_preserves_both_histories(self):
         self.publish([])
@@ -185,12 +185,12 @@ class DailyTests(weekly.RuntimeGitFixture):
         self.run_git(other, 'add', 'remote')
         self.run_git(other, 'commit', '-m', 'Remote')
         self.run_git(other, 'push')
-        (self.root / 'local').write_text('keep local')
-        self.git('add', 'local'); self.git('commit', '-m', 'Local')
-        before = self.git('rev-parse', 'HEAD')
+        (self.weekroot / 'local').write_text('keep local')
+        self.week_git('add', 'local'); self.week_git('commit', '-m', 'Local')
+        before = self.week_git('rev-parse', 'HEAD')
         remote = self.remote_ref(self.branch)
         with self.assertRaises(ValueError): self.run_daily()
-        self.assertEqual(self.git('rev-parse', 'HEAD'), before)
+        self.assertEqual(self.week_git('rev-parse', 'HEAD'), before)
         self.assertEqual(self.remote_ref(self.branch), remote)
 
     def test_daily_deadline_includes_fetch_and_never_sleeps_past_it(self):
@@ -220,8 +220,8 @@ class DailyTests(weekly.RuntimeGitFixture):
         first = {p: p.read_bytes() for p in self.output.rglob('*.txt')}
         path = 'ingress/2026_W41/ingress_0002.md'
         data = b'WEEKENDKRANT-INGRESS-1\ntopic: 2\ndate: 2026-10-06\n\nNext day'
-        (self.root / path).write_bytes(data)
-        (self.root / 'ingress/2026_W41/closed/2026-10-06.json').write_text(json.dumps({
+        (self.weekroot / path).write_bytes(data)
+        (self.weekroot / 'ingress/2026_W41/closed/2026-10-06.json').write_text(json.dumps({
             'schema_version': 1, 'date': '2026-10-06', 'week': '2026_W41',
             'files': [{'path': path, 'sha256': hashlib.sha256(data).hexdigest()}]}))
         self.commit_ingress()
@@ -258,22 +258,22 @@ class DailyTests(weekly.RuntimeGitFixture):
 
     def test_daily_deleted_remote_branch_cannot_use_stale_tracking_ref(self):
         self.publish([])
-        self.git('push', 'origin', '--delete', self.branch)
+        self.week_git('push', 'origin', '--delete', self.branch)
         # Simulate the stale tracking ref left by deletion from another clone.
-        self.git('update-ref', 'refs/remotes/origin/' + self.branch,
-                 self.git('rev-parse', 'HEAD'))
+        self.week_git('update-ref', 'refs/remotes/origin/' + self.branch,
+                 self.week_git('rev-parse', 'HEAD'))
         with self.assertRaises(TimeoutError): self.run_daily()
         self.assertEqual(self.status(), 'timeout')
 
     def test_daily_only_current_week_even_if_other_branch_checked_out(self):
         self.publish([])
-        old_head = self.git('rev-parse', 'HEAD')
+        old_head = self.week_git('rev-parse', 'HEAD')
         clock = FakeClock()
         with self.assertRaises(TimeoutError):
             daily.run_daily(self.root, self.db, self.output,
                             now=datetime(2026, 10, 12, 8, tzinfo=timezone.utc),
                             monotonic=clock, sleep=clock.sleep)
-        self.assertEqual(self.git('rev-parse', 'HEAD'), old_head)
+        self.assertEqual(self.week_git('rev-parse', 'HEAD'), old_head)
         with sqlite3.connect(self.db) as db:
             self.assertEqual(db.execute('SELECT day,status FROM days').fetchall(),
                              [('2026-10-12', 'timeout')])

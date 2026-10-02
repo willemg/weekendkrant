@@ -127,6 +127,7 @@ Geïmplementeerd zijn de wekelijkse weekvoorbereiding en de
   gereedmelding, met tien minuten slaap tussen controles;
 - de dagoogst uitsluitend na die gereedmelding verwerken;
 - nieuwe Sherlock-output herkennen;
+- fichetopic valideren tegen de vaste catalogus `1`, `2`, `3`, `4`;
 - mechanisch groeperen per onderwerp;
 - tokenaantal meten met `tiktoken==0.12.0`, encoding `cl100k_base`;
 - lokale draden maken;
@@ -140,8 +141,10 @@ Geïmplementeerd zijn de wekelijkse weekvoorbereiding en de
 Tijdens de observatiefase zijn Ariadnes draden afgeleide werkproducten. Ze hoeven niet
 terug naar GitHub en moeten uit dezelfde ingress reproduceerbaar opnieuw opgebouwd
 kunnen worden.
-Dagelijkse verwerking en weekvoorbereiding mogen niet gelijktijdig aan dezelfde
-clone werken. Na een weekovergang haalt Ariadne geen oude weken in; late aanvullingen
+Dagelijkse verwerking en weekvoorbereiding delen een slot en starten steeds uit
+`app` op `main`; één aparte beheerde weekworktree bevat de ingressbranch.
+Er zijn maximaal twee geregistreerde worktrees. De wekelijkse SQLite-retentie
+bewaart de aflopende Belgische ISO-week plus de zeven voorgaande weken. Na een weekovergang haalt Ariadne geen oude weken in; late aanvullingen
 blijven op de oude branch staan.
 
 ### Niet doen

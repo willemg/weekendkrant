@@ -94,6 +94,7 @@ class RuntimeGitFixture(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name) / 'work'
         self.remote = Path(self.tmp.name) / 'origin.git'
+        self.weekroot = self.root.parent / 'weekworktree'
         self.run_git(Path(self.tmp.name), 'init', '--bare', '-b', 'main', str(self.remote))
         self.run_git(Path(self.tmp.name), 'clone', str(self.remote), str(self.root))
         # Oudere Git-versies kunnen een lege clone op master laten beginnen.
@@ -114,6 +115,9 @@ class RuntimeGitFixture(unittest.TestCase):
 
     def git(self, *args):
         return self.run_git(self.root, *args)
+
+    def week_git(self, *args):
+        return self.run_git(self.weekroot, *args)
 
     def prepare(self):
         return ariadne.prepare_week_runtime(self.root, self.day)
@@ -141,12 +145,12 @@ class RuntimeGitTests(RuntimeGitFixture):
     def test_new_week_commits_only_preparation_and_pushes_with_upstream(self):
         result = self.prepare()
         self.assertEqual(result['base_commit'], self.base)
-        self.assertEqual(self.git('show', '--pretty=', '--name-only', 'HEAD').splitlines(), self.paths)
-        self.assertEqual(self.git('log', '-1', '--format=%s'), 'Bereid ingress week 2026_W41 voor')
-        self.assertEqual(self.remote_ref(self.branch), self.git('rev-parse', 'HEAD'))
-        self.assertEqual(self.git('rev-parse', '--abbrev-ref', '@{upstream}'), 'origin/' + self.branch)
-        self.assertEqual(self.git('rev-parse', 'main'), self.base)
-        self.assertEqual(self.git('status', '--porcelain'), '')
+        self.assertEqual(self.week_git('show', '--pretty=', '--name-only', 'HEAD').splitlines(), self.paths)
+        self.assertEqual(self.week_git('log', '-1', '--format=%s'), 'Bereid ingress week 2026_W41 voor')
+        self.assertEqual(self.remote_ref(self.branch), self.week_git('rev-parse', 'HEAD'))
+        self.assertEqual(self.week_git('rev-parse', '--abbrev-ref', '@{upstream}'), 'origin/' + self.branch)
+        self.assertEqual(self.week_git('rev-parse', 'main'), self.base)
+        self.assertEqual(self.week_git('status', '--porcelain'), '')
 
     def test_dirty_tree_is_rejected_before_fetch_or_switch(self):
         for staged in (False, True):
@@ -172,12 +176,12 @@ class RuntimeGitTests(RuntimeGitFixture):
 
     def test_untracked_work_on_week_branch_is_refused_before_fetch(self):
         self.prepare()
-        path = self.root / 'ingress/2026_W41/ingress_0001.md'
+        path = self.weekroot / 'ingress/2026_W41/ingress_0001.md'
         path.write_text('Uncommitted harvest\n')
         with patch.object(ariadne, '_git', wraps=ariadne._git) as git, self.assertRaises(ValueError):
             self.prepare()
         self.assertNotIn('fetch', [call.args[1] for call in git.call_args_list])
-        self.assertEqual(self.git('branch', '--show-current'), self.branch)
+        self.assertEqual(self.week_git('branch', '--show-current'), self.branch)
         self.assertEqual(path.read_text(), 'Uncommitted harvest\n')
 
     def test_divergent_main_fails_without_discarding_local_commit(self):
@@ -221,19 +225,19 @@ class RuntimeGitTests(RuntimeGitFixture):
         self.assertTrue(decisions)
         self.assertLess(fetch, min(decisions))
         self.assertEqual(result['base_commit'], head)
-        self.assertEqual((self.root / 'sherlock.md').read_text(), 'Existing harvest\n')
+        self.assertEqual((self.weekroot / 'sherlock.md').read_text(), 'Existing harvest\n')
 
     def test_repeat_is_idempotent_with_existing_sherlock_files(self):
         first = self.prepare()
-        (self.root / 'ingress/2026_W41/ingress_0001.md').write_text('Harvest\n')
-        self.git('add', 'ingress/2026_W41/ingress_0001.md')
-        self.git('commit', '-m', 'Sherlock')
-        self.git('push')
-        head = self.git('rev-parse', 'HEAD')
+        (self.weekroot / 'ingress/2026_W41/ingress_0001.md').write_text('Harvest\n')
+        self.week_git('add', 'ingress/2026_W41/ingress_0001.md')
+        self.week_git('commit', '-m', 'Sherlock')
+        self.week_git('push')
+        head = self.week_git('rev-parse', 'HEAD')
         self.assertEqual(self.prepare(), first)
-        self.assertEqual(self.git('rev-parse', 'HEAD'), head)
+        self.assertEqual(self.week_git('rev-parse', 'HEAD'), head)
         self.assertEqual(self.remote_ref(self.branch), head)
-        self.assertEqual((self.root / 'ingress/2026_W41/ingress_0001.md').read_text(), 'Harvest\n')
+        self.assertEqual((self.weekroot / 'ingress/2026_W41/ingress_0001.md').read_text(), 'Harvest\n')
 
     def test_local_only_week_is_reused_without_reset(self):
         self.git('switch', '-c', self.branch)
@@ -243,19 +247,19 @@ class RuntimeGitTests(RuntimeGitFixture):
         head = self.git('rev-parse', 'HEAD')
         self.git('switch', 'main')
         self.assertEqual(self.prepare()['base_commit'], head)
-        self.assertEqual((self.root / 'sherlock.md').read_text(), 'Local harvest\n')
+        self.assertEqual((self.weekroot / 'sherlock.md').read_text(), 'Local harvest\n')
 
     def test_conflicting_audit_is_preserved_and_not_pushed(self):
         self.prepare()
-        audit = self.root / self.paths[0]
+        audit = self.weekroot / self.paths[0]
         audit.write_text('{"week": "wrong"}\n')
-        self.git('add', self.paths[0])
-        self.git('commit', '-m', 'Conflicting metadata')
-        head = self.git('rev-parse', 'HEAD')
+        self.week_git('add', self.paths[0])
+        self.week_git('commit', '-m', 'Conflicting metadata')
+        head = self.week_git('rev-parse', 'HEAD')
         remote = self.remote_ref(self.branch)
         with self.assertRaises(ValueError):
             self.prepare()
-        self.assertEqual(self.git('rev-parse', 'HEAD'), head)
+        self.assertEqual(self.week_git('rev-parse', 'HEAD'), head)
         self.assertEqual(self.remote_ref(self.branch), remote)
         self.assertEqual(audit.read_text(), '{"week": "wrong"}\n')
 
@@ -268,19 +272,19 @@ class RuntimeGitTests(RuntimeGitFixture):
         self.run_git(other, 'commit', '-m', 'Remote harvest')
         self.run_git(other, 'push')
         remote = self.remote_ref(self.branch)
-        (self.root / 'local-harvest.md').write_text('Local harvest\n')
-        self.git('add', 'local-harvest.md')
-        self.git('commit', '-m', 'Local harvest')
-        local = self.git('rev-parse', 'HEAD')
+        (self.weekroot / 'local-harvest.md').write_text('Local harvest\n')
+        self.week_git('add', 'local-harvest.md')
+        self.week_git('commit', '-m', 'Local harvest')
+        local = self.week_git('rev-parse', 'HEAD')
         with self.assertRaises(ValueError):
             self.prepare()
-        self.assertEqual(self.git('rev-parse', self.branch), local)
+        self.assertEqual(self.week_git('rev-parse', self.branch), local)
         self.assertEqual(self.remote_ref(self.branch), remote)
-        self.assertEqual(self.git('show', self.branch + ':local-harvest.md'), 'Local harvest')
+        self.assertEqual(self.week_git('show', self.branch + ':local-harvest.md'), 'Local harvest')
 
-    def test_week_remote_ahead_is_refused_without_reset_or_merge(self):
+    def test_week_remote_ahead_fast_forwards_without_touching_main(self):
         self.prepare()
-        local = self.git('rev-parse', 'HEAD')
+        local = self.week_git('rev-parse', 'HEAD')
         other = self.other_clone()
         self.run_git(other, 'switch', self.branch)
         (other / 'sherlock.md').write_text('New remote harvest\n')
@@ -288,9 +292,8 @@ class RuntimeGitTests(RuntimeGitFixture):
         self.run_git(other, 'commit', '-m', 'Sherlock')
         self.run_git(other, 'push')
         remote = self.remote_ref(self.branch)
-        with self.assertRaises(ValueError):
-            self.prepare()
-        self.assertEqual(self.git('rev-parse', self.branch), local)
+        self.prepare()
+        self.assertEqual(self.week_git('rev-parse', self.branch), remote)
         self.assertEqual(self.remote_ref(self.branch), remote)
         self.assertEqual(self.run_git(self.remote, 'show', self.branch + ':sherlock.md'),
                          'New remote harvest')
@@ -310,8 +313,8 @@ class RuntimeGitTests(RuntimeGitFixture):
         self.assertIn('Traceback (most recent call last)', content)
         self.assertIn('Push rejected for test', content)
         self.assertIn(str(self.root), content)
-        head = self.git('rev-parse', 'HEAD')
+        head = self.week_git('rev-parse', 'HEAD')
         hook.unlink()
         self.prepare()
-        self.assertEqual(self.git('rev-parse', 'HEAD'), head)
+        self.assertEqual(self.week_git('rev-parse', 'HEAD'), head)
         self.assertEqual(self.remote_ref(self.branch), head)

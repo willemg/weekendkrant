@@ -18,7 +18,7 @@ Behoud voor iedere fiche het bestaande UTF-8-formaat met LF-regeleinden:
 
 ```text
 WEEKENDKRANT-INGRESS-1
-topic: <numeriek onderwerpnummer>
+topic: <1, 2, 3 of 4 uit de vaste Sherlock-catalogus>
 date: <lokale datum YYYY-MM-DD>
 
 <volledige fiche met bronlinks>

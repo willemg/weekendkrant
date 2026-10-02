@@ -13,7 +13,7 @@ import tempfile
 import time
 from zoneinfo import ZoneInfo
 
-from ariadne import _git, _has_ref, clone_lock, week_name
+from ariadne import _git, _has_ref, clone_lock, week_name, inspect_worktrees, ensure_week_worktree
 
 DB_PATH = Path('/home/weekendkrant/weekendkrant.sqlite3')
 OUTPUT_PATH = Path('/home/weekendkrant/draden')
@@ -48,7 +48,7 @@ def parse_fiche(data):
     header = text.split('\n\n', 1)[0].splitlines()
     if len(header) != 3 or header[0] != 'WEEKENDKRANT-INGRESS-1':
         raise ValueError('Ongeldige ficheheader')
-    if not re.fullmatch(r'topic: [0-9]+', header[1]):
+    if not re.fullmatch(r'topic: [1-4]', header[1]):
         raise ValueError('Ongeldig numeriek topic in fiche')
     if not re.fullmatch(r'date: \d{4}-\d{2}-\d{2}', header[2]):
         raise ValueError('Ongeldige lokale date in fiche')
@@ -220,22 +220,17 @@ def write_thread(path, data):
 
 def outside_repo(root, path):
     path = Path(path).resolve()
-    if path == root or root in path.parents:
-        raise ValueError('Operationele staat moet buiten de Git-working tree staan')
+    for worktree in (root, (root.parent / 'weekworktree').resolve()):
+        if path == worktree or worktree in path.parents:
+            raise ValueError('Operationele staat moet buiten beide Git-working trees staan')
     return path
 
 
-def sync_week(root, week, commit):
-    if _git(root, 'status', '--porcelain'):
-        raise ValueError('Vuile werkboom')
-    branch = f'ingress/{week}'
-    if _has_ref(root, f'refs/heads/{branch}'):
-        if _git(root, 'merge-base', branch, commit) != _git(root, 'rev-parse', branch):
-            raise ValueError('Weekbranch lokaal vooruit of divergent')
-        _git(root, 'switch', branch)
-        _git(root, 'merge', '--ff-only', commit)
-    else:
-        _git(root, 'switch', '-c', branch, '--track', f'origin/{branch}')
+def sync_week(root, day, commit):
+    worktree = ensure_week_worktree(root, day)
+    if _git(worktree, 'rev-parse', 'HEAD') != commit:
+        raise ValueError('Weekworktree wijkt af van de gefetchte commit')
+    return worktree
 
 
 def run_daily(root, db_path=DB_PATH, output=OUTPUT_PATH, now=None,
@@ -248,8 +243,10 @@ def run_daily(root, db_path=DB_PATH, output=OUTPUT_PATH, now=None,
     logger.info('Dagverwerking gestart: datum=%s week=%s zone=Europe/Brussels', day, week)
     with clone_lock(root):
         db = database(db_path)
+        previous = None
         try:
             previous = db.execute('SELECT status FROM days WHERE day=?', (str(day),)).fetchone()
+            inspect_worktrees(root)
             if previous and previous[0] == 'success':
                 logger.info('Dag al geslaagd: %s', day)
                 return {'date': str(day), 'week': week, 'status': 'success'}
@@ -260,11 +257,14 @@ def run_daily(root, db_path=DB_PATH, output=OUTPUT_PATH, now=None,
                 if remaining <= 0:
                     raise TimeoutError(f'Geen geldige gereedmelding binnen drie uur: {day}')
                 _git(root, 'fetch', '--prune', 'origin', timeout=remaining)
+                if monotonic() >= deadline:
+                    raise TimeoutError(f'Wachtdeadline bereikt: {day}')
                 ref = f'refs/remotes/origin/ingress/{week}'
                 harvest = None
                 if _has_ref(root, ref):
                     commit = _git(root, 'rev-parse', ref)
-                    harvest = closed_harvest(root, commit, day)
+                    worktree = sync_week(root, day, commit)
+                    harvest = closed_harvest(worktree, commit, day)
                 if monotonic() >= deadline:
                     raise TimeoutError(f'Wachtdeadline bereikt: {day}')
                 if harvest is not None:
@@ -272,7 +272,6 @@ def run_daily(root, db_path=DB_PATH, output=OUTPUT_PATH, now=None,
                 logger.info('Gereedmelding ontbreekt: datum=%s; volgende controle over tien minuten', day)
                 sleep(max(0, min(600, deadline - monotonic())))
             manifest, fiches = harvest
-            sync_week(root, week, commit)
             threads = weave(fiches, week, day)
             with db:
                 status(db, day, 'success', commit, manifest)
@@ -292,7 +291,11 @@ def run_daily(root, db_path=DB_PATH, output=OUTPUT_PATH, now=None,
         except Exception as error:
             state = 'timeout' if isinstance(error, (TimeoutError, subprocess.TimeoutExpired)) else 'processing_error'
             with db:
-                status(db, day, state, error=str(error))
+                if previous and previous[0] == 'success':
+                    db.execute('INSERT INTO attempts(day,status,error) VALUES (?,?,?)',
+                               (str(day), state, str(error)))
+                else:
+                    status(db, day, state, error=str(error))
             logger.exception('Dagverwerking mislukt: datum=%s status=%s', day, state)
             raise
         finally:
@@ -310,5 +313,21 @@ def week_report(db_path, day):
             if not row or row[0] != 'success':
                 result.append({'date': target, 'status': row[0] if row else 'missing'})
         return result
+    finally:
+        db.close()
+
+
+def prune_history(db_path, report_day):
+    """Keep the reported Belgian ISO-week and the seven preceding ISO-weeks."""
+    cutoff = report_day - timedelta(days=report_day.weekday(), weeks=7)
+    db = database(db_path)
+    try:
+        with db:
+            for table in ('sources', 'threads', 'attempts', 'days'):
+                db.execute(f'DELETE FROM {table} WHERE day < ?', (str(cutoff),))
+        # VACUUM cannot run within a transaction. Also retries a previous failed vacuum.
+        db.execute('VACUUM')
+        logger.info('SQLite-retentie voltooid: bewaard vanaf %s (acht ISO-weken)', cutoff)
+        return cutoff
     finally:
         db.close()

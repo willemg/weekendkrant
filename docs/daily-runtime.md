@@ -57,7 +57,8 @@ date: 2026-10-05
 De volledige oorspronkelijke fiche, inclusief bronlinks.
 ```
 
-`topic` bevat uitsluitend cijfers (nul toegestaan), `date` een geldige lokale
+`topic` is exact één van `1`, `2`, `3`, `4` uit Sherlocks vaste catalogus; nul,
+onbekende nummers en afwijkende schrijfwijzen zoals `01` worden geweigerd. `date` is een geldige lokale
 kalenderdatum in de betreffende ISO-week. De drie headerregels staan in deze
 volgorde, zonder dubbele velden. Ariadne raadt geen metadata. Tijdens validatie
 worden alle fiches in de weeksnapshot op geldig formaat gecontroleerd, maar alleen
@@ -88,11 +89,32 @@ een tweede Ariadne stopt zonder Git-wijzigingen. Het slotbestand mag blijven sta
 de kernel laat het slot bij afsluiten of crash vrij. Ook gekoppelde Git-worktrees
 delen dit slot. Andere schrijvers moeten deze clone ongemoeid laten.
 
-Een vuile werkboom wordt vóór fetch geweigerd. Zodra de oogst geldig is, wordt de
-huidige weekbranch uitsluitend fast-forward bijgewerkt naar de gevalideerde commit.
-Een ontbrekende lokale weekbranch wordt als trackingbranch aangemaakt. Een lokale
-voorsprong of divergentie stopt de taak. Geen reset, force-push of conflictmerge.
-De dagelijkse taak wijzigt `main` niet en pusht niets.
+`/home/weekendkrant/app` moet op `main` blijven staan. De runtime weigert een
+andere app-branch en verwijst naar de migratie hieronder. Alleen de afzonderlijke
+`/home/weekendkrant/weekworktree` bevat de weekbranch. Beide taken worden altijd
+met code, startscripts en venv uit `app` gestart; voer nooit scripts uit de
+weekworktree uit. Bestaande ingressbranches krijgen geen rebase of codemerge.
+
+Vóór fetch worden registratie en werkbomen gecontroleerd met
+`git worktree list --porcelain -z` en `git status`. Maximaal twee geregistreerde
+worktrees zijn toegestaan, uitsluitend de twee vaste paden. Onverwachte extra
+worktrees worden niet opgeruimd: de taak stopt duidelijk. Ook een vergrendelde,
+ontbrekende of verkeerd gekoppelde weekworktree wordt niet verwijderd.
+
+De actuele weekbranch wordt in de weekworktree uitsluitend fast-forward gevolgd.
+Een ontbrekende lokale weekbranch wordt een trackingbranch. Dagelijkse verwerking
+weigert lokale voorsprong en divergentie. Zij kan een al bestaande huidige
+remoteweek zelf aankoppelen, zonder eerst op zondagavond te moeten wachten.
+Een geslaagde herhaling blijft een no-op, maar controleert wel beide werkbomen en
+het aantal geregistreerde worktrees. Een fout bij die controle wist eerder
+succes en provenance niet; de mislukte poging wordt apart geregistreerd.
+
+De zondagavondjob verwijdert vóór een weekwissel alleen de beheerde schone
+weekworktree, via `git worktree remove` zonder force. Ook untracked en genegeerde
+bestanden tellen als lokale wijzigingen en blijven behouden bij weigering.
+Branches en commits blijven bestaan. Een juiste worktree wordt gecontroleerd en
+hergebruikt. Worktrees delen de Git-objectdatabase; het is geen volledige tweede
+clone. Alle controles, verwijdering en creatie vallen onder hetzelfde slot.
 
 ## Lokale draden en tokens
 
@@ -127,18 +149,98 @@ Een geldige lege oogst is succes met nul draden en nul bronnen.
 Bij `prepare-week --next-week` rapporteert de weekjob alle zeven dagen van de
 aflopende ISO-week: `timeout`, `processing_error` en ontbrekende records worden
 als waarschuwingen gelogd. Zij blokkeren de volgende branch niet. De dagrecords en
-poginghistoriek blijven behouden. Een gewone Git-fout of onleesbare database blijft
+poginghistoriek blijven binnen de achtwekenretentie behouden. Een gewone Git-fout of onleesbare database blijft
 wel een runtimefout. Oude branches en late aanvullingen worden niet gewijzigd.
+
+## Acht Belgische ISO-weken bewaren
+
+Na het weekrapport en vóór de volgende weekvoorbereiding verwijdert de zondagjob
+alle SQLite-records van vóór de maandag van de aflopende week minus zeven weken.
+Dat bewaart de gerapporteerde week plus zeven voorgaande ISO-weken. Bijvoorbeeld:
+rapport op 10 januari 2021 (2021_W01) bewaart vanaf maandag 16 november 2020
+(2020_W47), inclusief 2020_W53. Het criterium gebruikt lokale kalenderdatums,
+geen getalberekening op `YYYY_Www` en geen 56 dagen vanaf zondag.
+
+Verwijdervolgorde in één transactie: `sources`, `threads`, `attempts`, `days`.
+Ook foutstatussen en losse oude pogingen vervallen. Daarna voert de runtime buiten
+de transactie `VACUUM` uit. Een verwijderfout rolt alle verwijderingen terug; een
+VACUUM-fout wordt gelogd en stopt de job, terwijl de al gecommitte verwijderingen
+geldig blijven. Een volgende uitvoering kan VACUUM opnieuw uitvoeren.
+
+Draadbestanden worden niet opgeruimd. Bestanden waarvan de provenance door retentie
+vervallen is, gelden niet automatisch als actieve output. De pipeline gebruikt
+uitsluitend de bewaarde registratie van succesvolle dagen. Geen inhaalverwerking.
+
+## Migratie van bibib na merge
+
+De bestaande `app` kan nog op `ingress/2026_W41` staan. Voer als `weekendkrant`
+onderstaand blok uit. Het stopt bij lokale wijzigingen, extra worktrees,
+slotbezetting of een `main` die niet fast-forward tot `origin/main` kan komen.
+Er worden geen wijzigingen weggegooid. Plan dit buiten een lopende Ariadne-run.
+
+```bash
+bash <<'SH'
+set -euo pipefail
+cd /home/weekendkrant/app
+exec 9>"$(git rev-parse --git-common-dir)/ariadne.lock"
+flock -n 9 || { echo 'Ariadne is actief; migratie gestopt.' >&2; exit 1; }
+if [ -n "$(git status --porcelain)" ]; then
+    echo 'Vuile app-werkboom: bewaar wijzigingen vóór migratie.' >&2
+    exit 1
+fi
+git worktree list --porcelain
+.venv/bin/python - <<'PYCODE'
+import subprocess
+raw = subprocess.check_output(['git', 'worktree', 'list', '--porcelain', '-z'], text=True)
+paths = [field[9:] for field in raw.split('\0') if field.startswith('worktree ')]
+allowed = {'/home/weekendkrant/app', '/home/weekendkrant/weekworktree'}
+if not 1 <= len(paths) <= 2 or not set(paths) <= allowed:
+    raise SystemExit('Onverwachte worktrees; controleer handmatig, niets opgeruimd.')
+PYCODE
+git fetch origin
+git merge-base --is-ancestor main origin/main || {
+    echo 'Lokale main loopt vooruit of divergeert; migratie gestopt.' >&2
+    exit 1
+}
+git switch main
+git merge --ff-only origin/main
+SH
+```
+
+Ga alleen verder als het migratieblok slaagt. Bereid de tokenizer en tests voor
+zoals hieronder. Koppel daarna veilig de **bestaande huidige** Belgische week aan,
+zonder push, weekrapport of retentie:
+
+```bash
+cd /home/weekendkrant/app
+.venv/bin/python - <<'PYCODE'
+from pathlib import Path
+from ariadne import clone_lock, inspect_worktrees, ensure_week_worktree, _git
+from daily import local_day
+root = Path('/home/weekendkrant/app')
+with clone_lock(root):
+    inspect_worktrees(root)
+    _git(root, 'fetch', 'origin')
+    print(ensure_week_worktree(root, local_day()))
+PYCODE
+git worktree list --porcelain
+git branch --show-current
+./start_ariadne.sh daily --help
+```
+
+Verwacht `app` op `main` en precies één `weekworktree` op de actuele ingressbranch.
+Een vuile weekworktree wordt niet vervangen; bewaar of commit de wijzigingen
+eerst bewust. De dagelijkse taak voert dezelfde aankoppeling automatisch uit
+wanneer ze nog ontbreekt. Start vervolgens de echte dagelijkse handmatige test.
 
 ## Handmatig controleren op bibib — vóór croninstallatie
 
-Voer na merge uit als gebruiker `weekendkrant`, met een schone werkboom:
+Voer na de geslaagde migratie uit als gebruiker `weekendkrant`:
 
 ```bash
 cd /home/weekendkrant/app
 git status --short
-git switch main
-git pull --ff-only origin main
+git branch --show-current
 .venv/bin/python -m pip install -r requirements.txt
 export TIKTOKEN_CACHE_DIR=/home/weekendkrant/.cache/tiktoken
 .venv/bin/python -c 'import tiktoken; print(tiktoken.get_encoding("cl100k_base").name)'
@@ -193,7 +295,8 @@ git status --short
 ```
 
 De tweede dagelijkse aanroep meldt `success` zonder extra provenance of output.
-`git status` blijft schoon. De weekvoorbereiding kan daarna handmatig worden
+`git status` blijft schoon en `git branch --show-current` blijft `main`. Controleer
+ook `git worktree list --porcelain`: maximaal twee registraties. De weekvoorbereiding kan daarna handmatig worden
 getest met de bestaande `./start_ariadne.sh prepare-week --next-week`; dat commando
 **pusht werkelijk** de volgende weekbranch. De tests dekken deze overgang eerst met
 een tijdelijke lokale remote en een mislukte dag.

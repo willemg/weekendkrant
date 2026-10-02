@@ -37,6 +37,12 @@ en provenance in SQLite. Er zijn geen modelcalls.
 Zie [dagelijkse runtime en handmatige controles voor bibib](docs/daily-runtime.md)
 en [de exacte aanvulling voor Sherlock](docs/sherlock-dagafsluiting.md).
 De dagelijkse cronregel is alleen gedocumenteerd, nog niet geïnstalleerd.
+`/home/weekendkrant/app` blijft op `main`; alleen
+`/home/weekendkrant/weekworktree` bevat een ingressbranch. Er zijn maximaal twee
+geregistreerde worktrees. Beide taken starten altijd de code en venv uit `app`.
+Volg bij een bestaande installatie eerst de
+[veilige migratie na merge](docs/daily-runtime.md#migratie-van-bibib-na-merge).
+SQLite bewaart de aflopende Belgische ISO-week plus de zeven voorgaande weken.
 
 ## Weekwerkruimte voorbereiden
 
@@ -75,14 +81,20 @@ exclusief; één van beide is verplicht. De oude aanroep zonder subcommand verva
 
 De taak vereist een schone werkboom, haalt `origin` op en werkt lokale `main`
 uitsluitend fast-forward bij tot `origin/main`. Nieuwe weekbranches beginnen op
-die actuele `main`; bestaande lokale of remote weekbranches worden veilig hergebruikt.
+die actuele `main`; bestaande lokale of remote weekbranches worden veilig hergebruikt
+in de afzonderlijke weekworktree. Vóór een weekwissel wordt alleen die beheerde,
+schone worktree via Git verwijderd. Branches en oogst blijven behouden. Extra
+worktrees, lokale wijzigingen (ook genegeerde weekbestanden) of vergrendelde
+worktrees leiden tot veilig stoppen.
 Ariadne commit alleen de twee voorbereidingsbestanden indien nodig en pusht de
 weekbranch met upstream. Git-identiteit en niet-interactieve lees-/schrijfauthenticatie
 voor `origin` moeten vooraf zijn ingesteld. Alleen een geslaagde push geldt als succes.
 
 Herhalen bewaart oogst en auditrecord en maakt geen nutteloze extra commit.
 Een vuile werkboom, conflicterende metadata, divergente of lokaal vooruitgelopen
-`main`, of een weekremote die vooruitloopt/divergeert leidt tot stoppen.
+`main`, of divergente weekhistory leidt tot stoppen. Een vooruitgelopen weekremote
+wordt uitsluitend fast-forward gevolgd; een lokale voorbereidingscommit na een
+mislukte push kan bij weekvoorbereiding opnieuw worden gepusht.
 Er is geen force-push, reset, automatische conflictmerge of weggooien van lokale
 wijzigingen. Gebruik één schrijver per clone. Bij een pushfout blijft een gemaakte
 commit lokaal behouden; na herstel van de fout kan dezelfde taak opnieuw worden uitgevoerd.
@@ -105,7 +117,7 @@ Dagelijks handmatig starten:
 
 Dit kiest vandaag in `Europe/Brussels`, wacht maximaal drie uur op Sherlock en
 verwerkt alleen de expliciet afgesloten dag. Succes, timeout en verwerkingsfouten
-blijven in SQLite bewaard. De zondagavondjob rapporteert onvolledige dagen zonder
+blijven binnen de achtwekenretentie in SQLite bewaard. De zondagavondjob rapporteert onvolledige dagen zonder
 de volgende weekvoorbereiding te blokkeren. Beide taken gebruiken hetzelfde slot.
 Volg eerst de [preflight](docs/daily-runtime.md#handmatig-controleren-op-bibib--vóór-croninstallatie),
 inclusief tokenizer-cache en de handmatige workflowtest.
