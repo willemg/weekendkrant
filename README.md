@@ -93,10 +93,20 @@ Het JSON-resultaat blijft als gestructureerde CLI-output op stdout verschijnen.
 De uitvoerende gebruiker moet de logmap kunnen aanmaken of erin kunnen schrijven;
 zie [de loggingconfiguratie](docs/architecture.md#logging).
 
-Na merge voeren we `prepare-week --next-week` eerst één keer handmatig op `bibib`
-uit en controleren we dat de doelbranch werkelijk op GitHub staat. Pas na die
-geslaagde preflight wordt de echte crontab geïnstalleerd; deze PR bevat geen cron-entry.
-Dagelijkse verwerking, `weave`, SQLite en tokenmeting zijn nog niet geïmplementeerd.
+De handmatige preflight van `prepare-week --next-week` op `bibib` is geslaagd;
+de weekbranch staat op GitHub en de wekelijkse cronjob is ingesteld voor zondag
+om 22:00 Belgische tijd. Zie [het weekritme](docs/architecture.md#zondagavond-en-overgang-naar-de-volgende-week).
+
+Voor de nog te implementeren dagelijkse taak is afgesproken: één cronstart om
+10:00 Belgische tijd, waarna Ariadne zelf elke tien minuten op Sherlocks expliciete
+gereedmelding voor die dag controleert, maximaal drie uur. Ze verwerkt uitsluitend
+een afgesloten dagoogst en bewaart succes of fouten in SQLite. Dagfouten zijn
+leesbaar voor de weekjob, maar blokkeren de volgende weekvoorbereiding niet.
+Vorige weken worden niet ingehaald. Zie
+[het dagafsluitingscontract](docs/architecture.md#dagafsluiting-en-dagelijkse-uitvoering-afgesproken-ontwerp).
+Dagelijkse verwerking, gereedmeldingen, de gedeelde vergrendeling, `weave`, SQLite
+en tokenmeting zijn nog niet geïmplementeerd; ook Sherlocks actieve taak moet nog
+aan het gereedmeldingscontract worden aangepast.
 
 ```bash
 ./start_tests.sh

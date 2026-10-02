@@ -17,11 +17,17 @@ Pas op basis van die echte oogst leggen we het definitieve invoercontract voor A
 - waar haalbaar de bron compact en feitelijk samenvatten;
 - waar haalbaar een eenvoudige onderwerpindeling bewaren;
 - de oogst naar GitHub schrijven;
+- als laatste een expliciete gereedmelding voor de lokale datum publiceren,
+  uitsluitend nadat alle dagoogst succesvol is gepusht; ook een lege oogst afsluiten;
+- na die gereedmelding voor de afgesloten datum niets meer toevoegen;
 - voor datum, ISO-week, ingressbranch en ingressmap uitsluitend de kalenderzone
   `Europe/Brussels` gebruiken; UTC of een impliciete omgevingstijdzone bepaalt nooit
   welke week actief is.
 
 Deze lijst beschrijft de gewenste richting, niet een reeds bewezen betrouwbaar protocol.
+De gereedmelding is een nieuwe afspraak: het formaat en de aanpassing van de actieve
+Sherlock-taak zijn nog te implementeren. Zie
+[dagafsluiting en dagelijkse uitvoering](architecture.md#dagafsluiting-en-dagelijkse-uitvoering-afgesproken-ontwerp).
 
 ### Onderzoeksgebieden
 
@@ -114,18 +120,26 @@ De geïmplementeerde taak is [wekelijkse weekvoorbereiding op origin](architectu
 
 - de wekelijkse Sherlock-werkruimte voorbereiden vóór Sherlock die nodig heeft;
 - repository synchroniseren;
+- dagelijks vanaf 10:00 Belgische tijd maximaal drie uur zelf pollen op Sherlocks
+  gereedmelding, met tien minuten slaap tussen controles;
+- de dagoogst uitsluitend na die gereedmelding verwerken;
 - nieuwe Sherlock-output herkennen;
 - mechanisch groeperen per onderwerp;
 - tokenaantal meten met bijvoorbeeld `tiktoken`;
 - lokale draden maken;
 - garanderen dat de volledige input voor Leonardo nooit groter wordt dan 35.000 tokens;
 - verwerkingsstatus en provenance in een lokale SQLite-database administreren;
+- dagfouten voor de weekjob leesbaar bewaren, zonder de voorbereiding van de volgende
+  week door een onvolledige oogst te blokkeren;
 - alle runtime-informatie via de centrale Python-`logging`configuratie schrijven,
   met levels en rotatie naar `/home/weekendkrant/logs/`.
 
 Tijdens de observatiefase zijn Ariadnes draden afgeleide werkproducten. Ze hoeven niet
 terug naar GitHub en moeten uit dezelfde ingress reproduceerbaar opnieuw opgebouwd
 kunnen worden.
+Dagelijkse verwerking en weekvoorbereiding mogen niet gelijktijdig aan dezelfde
+clone werken. Na een weekovergang haalt Ariadne geen oude weken in; late aanvullingen
+blijven op de oude branch staan.
 
 ### Niet doen
 
