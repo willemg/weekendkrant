@@ -99,9 +99,76 @@ gecommit. Ze is geen logbestand en hoort daarom ook niet onder `logs/`.
 Dit legt alleen het toekomstige runtimepad vast; de database en het schema zijn
 nog niet geïmplementeerd.
 
-De Raspberry Pi kan Ariadne via cron uitvoeren. Weekvoorbereiding en verwerking zijn
-afzonderlijke deterministische taken; het exacte cronritme wordt pas vastgelegd nadat
-de observatiefase voldoende praktijkgegevens heeft opgeleverd.
+De Raspberry Pi voert weekvoorbereiding en dagelijkse verwerking als afzonderlijke
+deterministische taken uit. De wekelijkse voorbereiding is geïmplementeerd; de
+afspraken voor dagelijkse verwerking hieronder zijn nog te implementeren.
+
+## Dagafsluiting en dagelijkse uitvoering (afgesproken ontwerp)
+
+Sherlock start momenteel dagelijks rond 08:00 in `Europe/Brussels`, met een flexibel
+starttijdstip. Dat is geen gegarandeerde eindtijd. Ariadne mag de dagoogst pas
+verwerken nadat Sherlock expliciet heeft gemeld dat hij voor die datum klaar is.
+
+Sherlock publiceert de gereedmelding op de bijbehorende weekbranch als laatste,
+nadat alle fiches van die dag succesvol zijn gepusht. De melding noemt de lokale
+datum en geldt ook voor een dag zonder geselecteerde fiches. Na die melding mag
+Sherlock voor die datum niets meer toevoegen. Bij een onvolledige of mislukte
+publicatie geeft hij geen gereedmelding. Het bestandsformaat en pad van deze melding
+worden in de implementatiestap vastgelegd; het is geen inhoudelijke bronfiche.
+
+De dagelijkse cronjob start Ariadne één keer om **10:00 Belgische tijd**. Het proces
+controleert meteen de gereedmelding voor die dag op de actuele remote weekbranch.
+Ontbreekt de melding, dan slaapt Ariadne tien minuten en haalt daarna de remote
+stand opnieuw op voor de volgende controle. Dit herhaalt ze gedurende maximaal
+drie uur vanaf de start. Er komen geen afzonderlijke cronaanroepen elke tien minuten.
+
+Zodra de geldige gereedmelding beschikbaar is, synchroniseert Ariadne de weekbranch
+veilig via fast-forward en verwerkt ze de afgesloten dagoogst. Een reeds succesvol
+verwerkte dag wordt niet dubbel verwerkt. Een vuile werkboom of conflicterende
+Git-history mag niet met reset, force-push of automatische conflictmerge worden
+opgelost. De huidige week volgt uit de Belgische kalender, niet uit de branch
+waarop de clone toevallig achterbleef na weekvoorbereiding.
+
+Bij een start om 10:00 eindigt het wachten uiterlijk om 13:00. Dat begrenst alleen
+het wachten: verwerking die net vóór de deadline begint, kan later eindigen.
+Zonder gereedmelding wordt niets verwerkt. Bij het verstrijken van de wachttijd
+registreert Ariadne de fout voor de betreffende datum in SQLite, schrijft ze een
+diagnostische melding via de bestaande logging en stopt ze met een niet-nul exitcode.
+Ook succesvolle verwerking en verwerkingsfouten krijgen een persistente dagstatus;
+zie [de operationele dagstatus](audit-trail.md#operationele-dagstatus-afgesproken-ontwerp).
+
+Dagelijkse verwerking en wekelijkse voorbereiding gebruiken dezelfde vergrendeling,
+zodat nooit twee Ariadne-processen tegelijk aan dezelfde clone werken. Het mechanisme
+wordt samen met de dagelijkse runtime geïmplementeerd.
+
+## Zondagavond en overgang naar de volgende week
+
+Op `bibib` is na de geslaagde handmatige preflight de volgende wekelijkse cronjob
+ingesteld, met de hosttimezone `Europe/Brussels`:
+
+```cron
+0 22 * * 0 /home/weekendkrant/app/start_ariadne.sh prepare-week --next-week >/dev/null
+```
+
+De weekjob start dus zondag om **22:00**, ruim na het dagelijkse wachtvenster.
+De afgesproken uitbreiding leest de dagstatussen van de aflopende week uit SQLite.
+Een timeout, verwerkingsfout of ontbrekend dagrecord maakt zichtbaar dat de oogst
+niet aantoonbaar compleet is. Een ontbrekend dagrecord kan ook betekenen dat de
+dagelijkse job helemaal niet heeft gedraaid. De weekjob leest hiervoor geen logtekst.
+
+Een onvolledige dagoogst verandert de normale weekvoorbereiding niet en blokkeert
+nooit het aanmaken en pushen van de volgende weekbranch. De foutstatus blijft
+bewaard en wordt niet als opgelost gemarkeerd. Gewone Git- en runtimefouten blijven
+wel redenen om veilig te stoppen.
+
+Bij een ontbrekende gereedmelding kan Sherlock nog op de oude weekbranch schrijven.
+Ariadne mag daarom geen afsluitende wijzigingen aan die branch forceren, oogst
+overschrijven of de branch verwijderen. De nieuwe week voorbereiden is geen bewijs
+dat de oude oogst compleet is.
+
+Na de weekovergang gaat de dagelijkse Ariadne uitsluitend verder met de nieuwe
+actuele week. Er is **geen inhaalverwerking van vorige weken**: eventuele late
+aanvullingen blijven op de oude branch staan en de fout blijft geregistreerd.
 
 ## Kalender- en tijdzonecontract
 
@@ -178,10 +245,11 @@ Een pushfout wordt met traceback gelogd en stopt niet-nul; de lokale commit blij
 beschikbaar voor een volgende poging. Git-identiteit en unattended authenticatie
 zijn installatievoorwaarden. Eén schrijver per clone blijft vereist.
 
-De beoogde zondagavondaanroep is
+De zondagavondaanroep is
 `/home/weekendkrant/app/start_ariadne.sh prepare-week --next-week`.
-De crontab wordt pas na merge en een geslaagde handmatige preflight op `bibib`
-geïnstalleerd. Deze stap bevat geen cronconfiguratie. Fichevalidatie, verwerkingstatus,
+De crontab is na merge en een geslaagde handmatige preflight op `bibib`
+geïnstalleerd zoals hierboven beschreven. De code bevat geen croninstallatie.
+Fichevalidatie, verwerkingsstatus,
 dagelijkse `weave`, SQLite, bundeling, tokenmeting en modelcalls blijven buiten scope.
 
 ## Volgende Ariadne-fase: lokale bundeling
@@ -197,6 +265,6 @@ lokale Leonardo-inputs van maken. Daarbij gelden voorlopig deze invarianten:
 - verwerking en provenance worden in SQLite geregistreerd;
 - geen bundel wordt automatisch naar GitHub teruggeschreven tijdens de observatiefase.
 
-Het lokale pad voor bundels, het databaseschema en het dagelijkse cronritme blijven
-implementatiedetails totdat ze in een afzonderlijke, testbare stap worden vastgelegd.
-Het databasepad ligt hierboven al vast.
+Het lokale pad voor bundels, het databaseschema, het gereedmeldingsformaat en de
+dagelijkse CLI-aanroep worden in een afzonderlijke, testbare stap vastgelegd.
+Het databasepad en het dagelijkse start- en wachtpatroon liggen hierboven al vast.

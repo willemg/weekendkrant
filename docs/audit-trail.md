@@ -24,6 +24,26 @@ Tijdens de observatiefase is deze database lokale operationele staat en wordt ze
 naar GitHub gecommit. Het definitieve schema wordt pas samen met de bundelimplementatie
 vastgelegd.
 
+## Operationele dagstatus (afgesproken ontwerp)
+
+De dagelijkse Ariadne bewaart per lokale datum en ISO-week een operationele status
+in `/home/weekendkrant/weekendkrant.sqlite3`. Deze registratie staat los van
+claimkwaliteitslabels en van het Git-bootstraprecord. Het concrete SQLite-schema
+en de technische statusnamen zijn nog te implementeren.
+
+| Uitkomst | Betekenis |
+| --- | --- |
+| Geslaagd | Sherlock meldde klaar en Ariadne verwerkte de afgesloten oogst succesvol; ook een expliciet afgesloten lege oogst kan slagen. |
+| Wachttijd verstreken | Na maximaal drie uur wachten was er geen geldige gereedmelding; de dagoogst is niet verwerkt. |
+| Verwerking mislukt | De gereedmelding was beschikbaar, maar de verwerking slaagde niet. |
+| Geen dagrecord | Er is geen bewijs van succesvolle verwerking; mogelijk startte de dagelijkse job niet. |
+
+De zondagavondjob leest deze gestructureerde status om onvolledige dagen te herkennen;
+logbestanden dienen voor diagnose en worden hiervoor niet geparseerd. Dagfouten en
+ontbrekende records blokkeren de voorbereiding van de volgende week niet. Een
+weekovergang wist of verhelpt de fouten niet, en start geen inhaalverwerking van
+vorige weken.
+
 ## Minimale kwaliteitslabels
 
 ### verified_first_pass
