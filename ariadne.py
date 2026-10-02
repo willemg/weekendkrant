@@ -1,5 +1,7 @@
-"""Deterministische, lokale voorbereiding van Sherlocks weekwerkruimte."""
+"""Deterministische weekvoorbereiding en dagelijkse verwerking voor Ariadne."""
 import argparse
+from contextlib import contextmanager
+import fcntl
 from datetime import date, datetime, timedelta
 import json
 import logging
@@ -9,6 +11,8 @@ from pathlib import Path
 import subprocess
 from zoneinfo import ZoneInfo
 
+
+DB_PATH = Path('/home/weekendkrant/weekendkrant.sqlite3')
 
 LOG_PATH = Path('/home/weekendkrant/logs/ariadne.log')
 LOG_FORMAT = '%(asctime)s %(levelname)s %(name)s %(message)s'
@@ -38,9 +42,9 @@ def next_week_date(now=None):
     return today + timedelta(days=7 - today.weekday())
 
 
-def _git(root, *args):
+def _git(root, *args, timeout=None):
     result = subprocess.run(['git', '-C', str(root), *args], text=True,
-                            capture_output=True,
+                            capture_output=True, timeout=timeout,
                             env=dict(os.environ, GIT_TERMINAL_PROMPT='0'))
     if result.returncode:
         raise ValueError(f'git {" ".join(args)}: {result.stderr.strip()}')
@@ -106,7 +110,36 @@ def prepare_week(root, day):
     return record
 
 
-def prepare_week_runtime(root, day):
+@contextmanager
+def clone_lock(root):
+    root = Path(root).resolve()
+    if Path(_git(root, 'rev-parse', '--show-toplevel')).resolve() != root:
+        raise ValueError('Gebruik de repositoryroot.')
+    common = Path(_git(root, 'rev-parse', '--git-common-dir'))
+    if not common.is_absolute():
+        common = root / common
+    with (common / 'ariadne.lock').open('a') as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as error:
+            raise ValueError('Een andere Ariadne-taak gebruikt deze clone.') from error
+        try:
+            yield
+        finally:
+            fcntl.flock(lock, fcntl.LOCK_UN)
+
+
+def prepare_week_runtime(root, day, report_day=None):
+    with clone_lock(root):
+        if report_day is not None:
+            from daily import week_report
+            for missing in week_report(DB_PATH, report_day):
+                logger.warning('Onvolledige aflopende week: datum=%s status=%s',
+                               missing['date'], missing['status'])
+        return _prepare_week_runtime(root, day)
+
+
+def _prepare_week_runtime(root, day):
     root = Path(root).resolve()
     if Path(_git(root, 'rev-parse', '--show-toplevel')).resolve() != root:
         raise ValueError('Gebruik de repositoryroot.')
@@ -155,6 +188,8 @@ def main():
                        help='Lokale kalenderdatum YYYY-MM-DD; ISO-week wordt afgeleid.')
     dates.add_argument('--next-week', action='store_true',
                        help='Eerstvolgende ISO-week volgens Europe/Brussels.')
+    daily_parser = commands.add_parser('daily', help='Verwerk de afgesloten dagoogst van vandaag.')
+    daily_parser.add_argument('--repo', type=Path, default=Path.cwd())
     args = parser.parse_args()
     try:
         configure_logging()
@@ -163,13 +198,25 @@ def main():
         logging.basicConfig(level=logging.INFO, format=LOG_FORMAT, force=True)
         logger.exception('Logging initialiseren mislukt: logbestand=%s', LOG_PATH)
         parser.exit(1)
+    if args.command == 'daily':
+        from daily import run_daily
+        try:
+            result = run_daily(args.repo)
+        except Exception:
+            logger.exception('Dagelijkse taak mislukt: repo=%s', args.repo)
+            parser.exit(1)
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return
     logger.info('Weekvoorbereiding gestart: taak=prepare-week repo=%s', args.repo)
     day = args.date
     try:
         day = next_week_date() if args.next_week else day
         logger.info('Lokale datum gekozen: datum=%s doelweek=%s zone=Europe/Brussels',
                     day, week_name(day))
-        result = prepare_week_runtime(args.repo, day)
+        if args.next_week:
+            result = prepare_week_runtime(args.repo, day, report_day=day - timedelta(days=7))
+        else:
+            result = prepare_week_runtime(args.repo, day)
     except Exception:
         # Unattended entrypoint: ook onverwachte runtimefouten krijgen traceback
         # en exitcode 1. SystemExit en KeyboardInterrupt worden niet onderschept.

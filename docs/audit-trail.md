@@ -21,15 +21,13 @@ een draad bestaat, hoeveel tokens ervoor werden gemeten en welke pipeline-stap w
 uitgevoerd.
 
 Tijdens de observatiefase is deze database lokale operationele staat en wordt ze niet
-naar GitHub gecommit. Het definitieve schema wordt pas samen met de bundelimplementatie
-vastgelegd.
+naar GitHub gecommit. Het operationele schema voor dagelijkse bundeling staat hieronder.
 
 ## Operationele dagstatus (afgesproken ontwerp)
 
 De dagelijkse Ariadne bewaart per lokale datum en ISO-week een operationele status
 in `/home/weekendkrant/weekendkrant.sqlite3`. Deze registratie staat los van
-claimkwaliteitslabels en van het Git-bootstraprecord. Het concrete SQLite-schema
-en de technische statusnamen zijn nog te implementeren.
+claimkwaliteitslabels en van het Git-bootstraprecord. De statusnamen zijn `success`, `timeout` en `processing_error`.
 
 | Uitkomst | Betekenis |
 | --- | --- |
@@ -125,3 +123,34 @@ bronverificatie of claimkwaliteitslabels. Het record krijgt geen kloktijd, zodat
 herhaald uitvoeren dezelfde inhoud oplevert. Na commit maakt Git de wijziging
 en het tijdstip traceerbaar. Een bestaand passend record blijft behouden,
 ook na latere oogstcommits; een afwijkend record wordt geweigerd.
+
+## Dagelijkse SQLite-tabellen
+
+- `days`: één record per lokale datum, met ISO-week, status, remote commit-SHA,
+  SHA-256 van het afsluitmanifest en eventuele foutmelding.
+- `attempts`: blijvende historie van afgeronde pogingen, met status, fout en UTC-tijd.
+  Een herhaling van een geslaagde dag voegt geen poging toe. Een herstelde fout
+  blijft hier zichtbaar, ook wanneer de actuele dagstatus daarna succes wordt.
+- `threads`: absoluut lokaal pad, dag, topic, deelnummer, inhoudshash, gemeten
+  tokens, tokenizer en gereserveerde tokens.
+- `sources`: per dag en bronpad de exacte SHA-256, gekoppelde draad en positie.
+  De `days.commit_sha` legt vast uit welke Git-snapshot de bytes kwamen.
+
+Alle draden worden eerst deterministisch gepland. Binnen één SQLite-transactie
+worden de draadbestanden via een tijdelijk bestand, fsync en atomische rename
+gepubliceerd en worden alle provenance en de successtatus vastgelegd. Pas na de
+commit is de dag succesvol. Een fout rolt de volledige transactie terug en schrijft
+afzonderlijk `processing_error`; een ontbrekende melding na de deadline schrijft
+`timeout`. Foutpogingen blijven bewaard. Buiten Git staan zowel database als draden.
+
+Bestandssysteem en SQLite vormen samen geen enkele atomische transactie. Een crash
+of fout tijdens schrijven kan daarom losse afgeleide bestanden achterlaten, maar
+geen succesvol dagrecord met gedeeltelijke provenance. Alleen bestanden die via
+`threads` bij een succesvolle dag geregistreerd zijn, zijn gepubliceerde output.
+Een herhaling overschrijft eventuele losse bestanden deterministisch. Bij hard
+procesverlies vóór foutregistratie kan een dagrecord ontbreken; de weekjob meldt
+ook dat als onvolledig. Eerdere succesvolle dagen worden nooit verwijderd.
+
+Een geslaagde dag is idempotent en wordt niet opnieuw verwerkt; handmatig verwijderen
+van succesvolle output wordt niet automatisch hersteld. Bewaar de database en
+succesvolle draden samen. Deze PR biedt geen herstel- of inhaalcommando voor oude dagen.

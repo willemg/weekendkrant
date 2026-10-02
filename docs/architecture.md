@@ -85,7 +85,7 @@ onder meer welke ingressfiches in welke draad terechtkwamen en welke verwerkings
 werd uitgevoerd. De database is operationele staat, geen vervanging voor de
 versioneerbare bronfiches op GitHub.
 
-Het vaste pad voor Ariadnes toekomstige SQLite-verwerkingsdatabase op `bibib` is
+Het vaste pad voor Ariadnes SQLite-verwerkingsdatabase op `bibib` is
 `/home/weekendkrant/weekendkrant.sqlite3`. De runtime-indeling is:
 
 | Pad | Inhoud |
@@ -96,12 +96,11 @@ Het vaste pad voor Ariadnes toekomstige SQLite-verwerkingsdatabase op `bibib` is
 
 De database staat bewust buiten de Git-working tree en wordt niet naar GitHub
 gecommit. Ze is geen logbestand en hoort daarom ook niet onder `logs/`.
-Dit legt alleen het toekomstige runtimepad vast; de database en het schema zijn
-nog niet geïmplementeerd.
+Het concrete schema staat in de auditdocumentatie; lokale draden staan onder
+`/home/weekendkrant/draden/`.
 
 De Raspberry Pi voert weekvoorbereiding en dagelijkse verwerking als afzonderlijke
-deterministische taken uit. De wekelijkse voorbereiding is geïmplementeerd; de
-afspraken voor dagelijkse verwerking hieronder zijn nog te implementeren.
+deterministische taken uit. Beide taken zijn geïmplementeerd; zie het [dagelijkse runtimecontract](daily-runtime.md).
 
 ## Dagafsluiting en dagelijkse uitvoering (afgesproken ontwerp)
 
@@ -113,8 +112,9 @@ Sherlock publiceert de gereedmelding op de bijbehorende weekbranch als laatste,
 nadat alle fiches van die dag succesvol zijn gepusht. De melding noemt de lokale
 datum en geldt ook voor een dag zonder geselecteerde fiches. Na die melding mag
 Sherlock voor die datum niets meer toevoegen. Bij een onvolledige of mislukte
-publicatie geeft hij geen gereedmelding. Het bestandsformaat en pad van deze melding
-worden in de implementatiestap vastgelegd; het is geen inhoudelijke bronfiche.
+publicatie geeft hij geen gereedmelding. Het bestand is `ingress/YYYY_Www/closed/YYYY-MM-DD.json`: een versie-1-manifest
+met datum, week en exacte fichepaden plus SHA-256-hashes. Zie
+[het concrete contract](daily-runtime.md#sherlocks-afsluitcontract-versie-1). Het is geen bronfiche.
 
 De dagelijkse cronjob start Ariadne één keer om **10:00 Belgische tijd**. Het proces
 controleert meteen de gereedmelding voor die dag op de actuele remote weekbranch.
@@ -138,8 +138,8 @@ Ook succesvolle verwerking en verwerkingsfouten krijgen een persistente dagstatu
 zie [de operationele dagstatus](audit-trail.md#operationele-dagstatus-afgesproken-ontwerp).
 
 Dagelijkse verwerking en wekelijkse voorbereiding gebruiken dezelfde vergrendeling,
-zodat nooit twee Ariadne-processen tegelijk aan dezelfde clone werken. Het mechanisme
-wordt samen met de dagelijkse runtime geïmplementeerd.
+zodat nooit twee Ariadne-processen tegelijk aan dezelfde clone werken. Het Linux-`flock` staat in de gemeenschappelijke Git-map en blijft gedurende
+de hele taak vastgehouden. Een tweede proces stopt direct.
 
 ## Zondagavond en overgang naar de volgende week
 
@@ -151,7 +151,7 @@ ingesteld, met de hosttimezone `Europe/Brussels`:
 ```
 
 De weekjob start dus zondag om **22:00**, ruim na het dagelijkse wachtvenster.
-De afgesproken uitbreiding leest de dagstatussen van de aflopende week uit SQLite.
+De geïmplementeerde uitbreiding leest de dagstatussen van de aflopende week uit SQLite.
 Een timeout, verwerkingsfout of ontbrekend dagrecord maakt zichtbaar dat de oogst
 niet aantoonbaar compleet is. Een ontbrekend dagrecord kan ook betekenen dat de
 dagelijkse job helemaal niet heeft gedraaid. De weekjob leest hiervoor geen logtekst.
@@ -221,7 +221,7 @@ CLI-help en argumentfouten blijven door `argparse` afgehandeld.
 
 ## Eerste implementatiestap: weekvoorbereiding
 
-`ariadne.py` bereidt uitsluitend Sherlocks werkruimte voor. Het vaste technische
+Het subcommand `prepare-week` bereidt Sherlocks werkruimte voor. Het vaste technische
 padcontract is `ingress/<ISO-jaar>_W<week>/` op branch
 `ingress/<ISO-jaar>_W<week>` (twee cijfers voor de week).
 Een `.gitkeep` maakt de lege map versieerbaar. Dit legt het inhoudelijke
@@ -249,13 +249,13 @@ De zondagavondaanroep is
 `/home/weekendkrant/app/start_ariadne.sh prepare-week --next-week`.
 De crontab is na merge en een geslaagde handmatige preflight op `bibib`
 geïnstalleerd zoals hierboven beschreven. De code bevat geen croninstallatie.
-Fichevalidatie, verwerkingsstatus,
-dagelijkse `weave`, SQLite, bundeling, tokenmeting en modelcalls blijven buiten scope.
+De dagelijkse verwerking is inmiddels toegevoegd als afzonderlijk subcommand `daily`.
+Modelcalls blijven buiten scope.
 
-## Volgende Ariadne-fase: lokale bundeling
+## Dagelijkse lokale bundeling
 
-De volgende deterministische stap mag Sherlocks bestaande ingress lezen en daar
-lokale Leonardo-inputs van maken. Daarbij gelden voorlopig deze invarianten:
+De dagelijkse deterministische stap leest Sherlocks bestaande ingress en maakt daar
+lokale draden met gereserveerde ruimte voor Leonardo-context van. Daarbij gelden voorlopig deze invarianten:
 
 - bundelen gebeurt mechanisch op basis van expliciete metadata, niet op semantische interpretatie;
 - dezelfde input en dezelfde Ariadne-versie leveren dezelfde bundels op;
@@ -265,6 +265,6 @@ lokale Leonardo-inputs van maken. Daarbij gelden voorlopig deze invarianten:
 - verwerking en provenance worden in SQLite geregistreerd;
 - geen bundel wordt automatisch naar GitHub teruggeschreven tijdens de observatiefase.
 
-Het lokale pad voor bundels, het databaseschema, het gereedmeldingsformaat en de
-dagelijkse CLI-aanroep worden in een afzonderlijke, testbare stap vastgelegd.
-Het databasepad en het dagelijkse start- en wachtpatroon liggen hierboven al vast.
+Het [dagelijkse runtimecontract](daily-runtime.md) legt bundelpaden, manifest,
+SQLite-transacties, tokenizer, foutgedrag en concrete controlecommando’s vast.
+De dagelijkse cronregel blijft voorlopig documentatie; eerst handmatig testen.

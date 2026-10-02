@@ -29,25 +29,25 @@ Zie de ontwerpdocumentatie:
 
 ## Status
 
-De geïmplementeerde taak is Ariadnes **wekelijkse weekvoorbereiding op origin**:
-een ISO-weekbranch, een ingressmap en een herhaalbaar auditrecord. Bronfiches verwerken, draden vlechten
-en modelcalls zijn nog niet geïmplementeerd.
+Geïmplementeerd zijn Ariadnes wekelijkse voorbereiding en dagelijkse deterministische
+verwerking van Sherlocks afgesloten oogst. De dagelijkse taak pollt de remote,
+valideert het afsluitmanifest, maakt lokale thematische draden en registreert status
+en provenance in SQLite. Er zijn geen modelcalls.
 
-De eerstvolgende Ariadne-fase blijft bewust observerend. Sherlocks bronfiches blijven
-op de wekelijkse ingressbranch staan; Ariadne zal daar lokaal reproduceerbare
-Leonardo-inputs van maximaal 35.000 tokens uit afleiden. Die afgeleide draden hoeven
-tijdens deze proefperiode niet terug naar GitHub: ze mogen lokaal opnieuw opgebouwd
-en weggegooid worden. Verwerkingsstatus en provenance worden lokaal in SQLite
-bijgehouden.
+Zie [dagelijkse runtime en handmatige controles voor bibib](docs/daily-runtime.md)
+en [de exacte aanvulling voor Sherlock](docs/sherlock-dagafsluiting.md).
+De dagelijkse cronregel is alleen gedocumenteerd, nog niet geïnstalleerd.
 
 ## Weekwerkruimte voorbereiden
 
-Python 3.9 of nieuwer, Git en een lokale clone volstaan; er zijn geen Python-dependencies.
+Python 3.9 of nieuwer, Git en een lokale clone zijn vereist. Dagelijkse verwerking
+gebruikt daarnaast de vastgelegde tokenizer uit `requirements.txt`.
 De installatie staat onder `/home/weekendkrant/app`. Maak daar eenmalig de venv aan:
 
 ```bash
 cd /home/weekendkrant/app
 python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
 ```
 
 Normale gebruikers en toekomstige cronjobs starten Ariadne via `start_ariadne.sh`.
@@ -97,16 +97,18 @@ De handmatige preflight van `prepare-week --next-week` op `bibib` is geslaagd;
 de weekbranch staat op GitHub en de wekelijkse cronjob is ingesteld voor zondag
 om 22:00 Belgische tijd. Zie [het weekritme](docs/architecture.md#zondagavond-en-overgang-naar-de-volgende-week).
 
-Voor de nog te implementeren dagelijkse taak is afgesproken: één cronstart om
-10:00 Belgische tijd, waarna Ariadne zelf elke tien minuten op Sherlocks expliciete
-gereedmelding voor die dag controleert, maximaal drie uur. Ze verwerkt uitsluitend
-een afgesloten dagoogst en bewaart succes of fouten in SQLite. Dagfouten zijn
-leesbaar voor de weekjob, maar blokkeren de volgende weekvoorbereiding niet.
-Vorige weken worden niet ingehaald. Zie
-[het dagafsluitingscontract](docs/architecture.md#dagafsluiting-en-dagelijkse-uitvoering-afgesproken-ontwerp).
-Dagelijkse verwerking, gereedmeldingen, de gedeelde vergrendeling, `weave`, SQLite
-en tokenmeting zijn nog niet geïmplementeerd; ook Sherlocks actieve taak moet nog
-aan het gereedmeldingscontract worden aangepast.
+Dagelijks handmatig starten:
+
+```bash
+./start_ariadne.sh daily
+```
+
+Dit kiest vandaag in `Europe/Brussels`, wacht maximaal drie uur op Sherlock en
+verwerkt alleen de expliciet afgesloten dag. Succes, timeout en verwerkingsfouten
+blijven in SQLite bewaard. De zondagavondjob rapporteert onvolledige dagen zonder
+de volgende weekvoorbereiding te blokkeren. Beide taken gebruiken hetzelfde slot.
+Volg eerst de [preflight](docs/daily-runtime.md#handmatig-controleren-op-bibib--vóór-croninstallatie),
+inclusief tokenizer-cache en de handmatige workflowtest.
 
 ```bash
 ./start_tests.sh

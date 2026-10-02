@@ -60,7 +60,8 @@ class DateAndCliTests(unittest.TestCase):
                 patch.object(ariadne, 'prepare_week_runtime', return_value=result) as run, \
                 redirect_stdout(io.StringIO()) as stdout:
             ariadne.main()
-        run.assert_called_once_with(Path.cwd(), date(2026, 10, 5))
+        run.assert_called_once_with(Path.cwd(), date(2026, 10, 5),
+                                    report_day=date(2026, 9, 28))
         self.assertEqual(stdout.getvalue(), json.dumps(result, indent=2, sort_keys=True) + '\n')
 
     def test_cli_explicit_date_uses_its_own_week_without_clock(self):
@@ -87,7 +88,7 @@ class DateAndCliTests(unittest.TestCase):
             self.assertIn('--next-week', stderr.getvalue())
 
 
-class RuntimeGitTests(unittest.TestCase):
+class RuntimeGitFixture(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
@@ -135,6 +136,8 @@ class RuntimeGitTests(unittest.TestCase):
         self.run_git(other, 'push', 'origin', 'main')
         return self.remote_ref('main')
 
+
+class RuntimeGitTests(RuntimeGitFixture):
     def test_new_week_commits_only_preparation_and_pushes_with_upstream(self):
         result = self.prepare()
         self.assertEqual(result['base_commit'], self.base)
