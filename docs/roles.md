@@ -4,7 +4,8 @@
 
 Sherlock is een actieve ChatGPT-taak.
 
-Sherlocks precieze contract ligt **nog niet vast**. De eerste fase van het project is bewust observerend: gedurende enkele weken laten we Sherlock verzamelen en bekijken we wat een actieve taak in de praktijk betrouwbaar kan afleveren, hoeveel materiaal dat oplevert, hoe consequent de bronverwijzingen en samenvattingen zijn en hoeveel structuur zonder extra complexiteit haalbaar blijkt.
+Sherlocks inhoudelijke fiche-indeling blijft observerend; de technische header en
+dagafsluiting liggen vast in het [versie-1-contract](daily-runtime.md). De eerste fase van het project is bewust observerend: gedurende enkele weken laten we Sherlock verzamelen en bekijken we wat een actieve taak in de praktijk betrouwbaar kan afleveren, hoeveel materiaal dat oplevert, hoe consequent de bronverwijzingen en samenvattingen zijn en hoeveel structuur zonder extra complexiteit haalbaar blijkt.
 
 Pas op basis van die echte oogst leggen we het definitieve invoercontract voor Ariadne en de rest van de keten vast.
 
@@ -25,8 +26,9 @@ Pas op basis van die echte oogst leggen we het definitieve invoercontract voor A
   welke week actief is.
 
 Deze lijst beschrijft de gewenste richting, niet een reeds bewezen betrouwbaar protocol.
-De gereedmelding is een nieuwe afspraak: het formaat en de aanpassing van de actieve
-Sherlock-taak zijn nog te implementeren. Zie
+De gereedmelding heeft een [concreet versie-1-contract](daily-runtime.md).
+De [exacte instructieaanvulling](sherlock-dagafsluiting.md) moet nog handmatig in
+Sherlocks actieve taak worden opgenomen. Zie
 [dagafsluiting en dagelijkse uitvoering](architecture.md#dagafsluiting-en-dagelijkse-uitvoering-afgesproken-ontwerp).
 
 ### Onderzoeksgebieden
@@ -114,7 +116,8 @@ De output moet uiteindelijk bruikbaar genoeg zijn om deterministisch door Ariadn
 
 Ariadne is geen agent maar een deterministisch script, bedoeld om via cron op een Raspberry Pi te draaien.
 
-De geïmplementeerde taak is [wekelijkse weekvoorbereiding op origin](architecture.md#eerste-implementatiestap-weekvoorbereiding). De onderstaande verantwoordelijkheden beschrijven het verdere ontwerp.
+Geïmplementeerd zijn de wekelijkse weekvoorbereiding en de
+[dagelijkse deterministische verwerking](daily-runtime.md).
 
 ### Verantwoordelijkheden
 
@@ -124,8 +127,9 @@ De geïmplementeerde taak is [wekelijkse weekvoorbereiding op origin](architectu
   gereedmelding, met tien minuten slaap tussen controles;
 - de dagoogst uitsluitend na die gereedmelding verwerken;
 - nieuwe Sherlock-output herkennen;
+- fichetopic valideren tegen de vaste catalogus `1`, `2`, `3`, `4`;
 - mechanisch groeperen per onderwerp;
-- tokenaantal meten met bijvoorbeeld `tiktoken`;
+- tokenaantal meten met `tiktoken==0.12.0`, encoding `cl100k_base`;
 - lokale draden maken;
 - garanderen dat de volledige input voor Leonardo nooit groter wordt dan 35.000 tokens;
 - verwerkingsstatus en provenance in een lokale SQLite-database administreren;
@@ -137,8 +141,10 @@ De geïmplementeerde taak is [wekelijkse weekvoorbereiding op origin](architectu
 Tijdens de observatiefase zijn Ariadnes draden afgeleide werkproducten. Ze hoeven niet
 terug naar GitHub en moeten uit dezelfde ingress reproduceerbaar opnieuw opgebouwd
 kunnen worden.
-Dagelijkse verwerking en weekvoorbereiding mogen niet gelijktijdig aan dezelfde
-clone werken. Na een weekovergang haalt Ariadne geen oude weken in; late aanvullingen
+Dagelijkse verwerking en weekvoorbereiding delen een slot en starten steeds uit
+`app` op `main`; één aparte beheerde weekworktree bevat de ingressbranch.
+Er zijn maximaal twee geregistreerde worktrees. De wekelijkse SQLite-retentie
+bewaart de aflopende Belgische ISO-week plus de zeven voorgaande weken. Na een weekovergang haalt Ariadne geen oude weken in; late aanvullingen
 blijven op de oude branch staan.
 
 ### Niet doen

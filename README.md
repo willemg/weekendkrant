@@ -29,25 +29,31 @@ Zie de ontwerpdocumentatie:
 
 ## Status
 
-De geïmplementeerde taak is Ariadnes **wekelijkse weekvoorbereiding op origin**:
-een ISO-weekbranch, een ingressmap en een herhaalbaar auditrecord. Bronfiches verwerken, draden vlechten
-en modelcalls zijn nog niet geïmplementeerd.
+Geïmplementeerd zijn Ariadnes wekelijkse voorbereiding en dagelijkse deterministische
+verwerking van Sherlocks afgesloten oogst. De dagelijkse taak pollt de remote,
+valideert het afsluitmanifest, maakt lokale thematische draden en registreert status
+en provenance in SQLite. Er zijn geen modelcalls.
 
-De eerstvolgende Ariadne-fase blijft bewust observerend. Sherlocks bronfiches blijven
-op de wekelijkse ingressbranch staan; Ariadne zal daar lokaal reproduceerbare
-Leonardo-inputs van maximaal 35.000 tokens uit afleiden. Die afgeleide draden hoeven
-tijdens deze proefperiode niet terug naar GitHub: ze mogen lokaal opnieuw opgebouwd
-en weggegooid worden. Verwerkingsstatus en provenance worden lokaal in SQLite
-bijgehouden.
+Zie [dagelijkse runtime en handmatige controles voor bibib](docs/daily-runtime.md)
+en [de exacte aanvulling voor Sherlock](docs/sherlock-dagafsluiting.md).
+De dagelijkse cronregel is alleen gedocumenteerd, nog niet geïnstalleerd.
+`/home/weekendkrant/app` blijft op `main`; alleen
+`/home/weekendkrant/weekworktree` bevat een ingressbranch. Er zijn maximaal twee
+geregistreerde worktrees. Beide taken starten altijd de code en venv uit `app`.
+Volg bij een bestaande installatie eerst de
+[veilige migratie na merge](docs/daily-runtime.md#migratie-van-bibib-na-merge).
+SQLite bewaart de aflopende Belgische ISO-week plus de zeven voorgaande weken.
 
 ## Weekwerkruimte voorbereiden
 
-Python 3.9 of nieuwer, Git en een lokale clone volstaan; er zijn geen Python-dependencies.
+Python 3.9 of nieuwer, Git en een lokale clone zijn vereist. Dagelijkse verwerking
+gebruikt daarnaast de vastgelegde tokenizer uit `requirements.txt`.
 De installatie staat onder `/home/weekendkrant/app`. Maak daar eenmalig de venv aan:
 
 ```bash
 cd /home/weekendkrant/app
 python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
 ```
 
 Normale gebruikers en toekomstige cronjobs starten Ariadne via `start_ariadne.sh`.
@@ -75,14 +81,20 @@ exclusief; één van beide is verplicht. De oude aanroep zonder subcommand verva
 
 De taak vereist een schone werkboom, haalt `origin` op en werkt lokale `main`
 uitsluitend fast-forward bij tot `origin/main`. Nieuwe weekbranches beginnen op
-die actuele `main`; bestaande lokale of remote weekbranches worden veilig hergebruikt.
+die actuele `main`; bestaande lokale of remote weekbranches worden veilig hergebruikt
+in de afzonderlijke weekworktree. Vóór een weekwissel wordt alleen die beheerde,
+schone worktree via Git verwijderd. Branches en oogst blijven behouden. Extra
+worktrees, lokale wijzigingen (ook genegeerde weekbestanden) of vergrendelde
+worktrees leiden tot veilig stoppen.
 Ariadne commit alleen de twee voorbereidingsbestanden indien nodig en pusht de
 weekbranch met upstream. Git-identiteit en niet-interactieve lees-/schrijfauthenticatie
 voor `origin` moeten vooraf zijn ingesteld. Alleen een geslaagde push geldt als succes.
 
 Herhalen bewaart oogst en auditrecord en maakt geen nutteloze extra commit.
 Een vuile werkboom, conflicterende metadata, divergente of lokaal vooruitgelopen
-`main`, of een weekremote die vooruitloopt/divergeert leidt tot stoppen.
+`main`, of divergente weekhistory leidt tot stoppen. Een vooruitgelopen weekremote
+wordt uitsluitend fast-forward gevolgd; een lokale voorbereidingscommit na een
+mislukte push kan bij weekvoorbereiding opnieuw worden gepusht.
 Er is geen force-push, reset, automatische conflictmerge of weggooien van lokale
 wijzigingen. Gebruik één schrijver per clone. Bij een pushfout blijft een gemaakte
 commit lokaal behouden; na herstel van de fout kan dezelfde taak opnieuw worden uitgevoerd.
@@ -97,16 +109,18 @@ De handmatige preflight van `prepare-week --next-week` op `bibib` is geslaagd;
 de weekbranch staat op GitHub en de wekelijkse cronjob is ingesteld voor zondag
 om 22:00 Belgische tijd. Zie [het weekritme](docs/architecture.md#zondagavond-en-overgang-naar-de-volgende-week).
 
-Voor de nog te implementeren dagelijkse taak is afgesproken: één cronstart om
-10:00 Belgische tijd, waarna Ariadne zelf elke tien minuten op Sherlocks expliciete
-gereedmelding voor die dag controleert, maximaal drie uur. Ze verwerkt uitsluitend
-een afgesloten dagoogst en bewaart succes of fouten in SQLite. Dagfouten zijn
-leesbaar voor de weekjob, maar blokkeren de volgende weekvoorbereiding niet.
-Vorige weken worden niet ingehaald. Zie
-[het dagafsluitingscontract](docs/architecture.md#dagafsluiting-en-dagelijkse-uitvoering-afgesproken-ontwerp).
-Dagelijkse verwerking, gereedmeldingen, de gedeelde vergrendeling, `weave`, SQLite
-en tokenmeting zijn nog niet geïmplementeerd; ook Sherlocks actieve taak moet nog
-aan het gereedmeldingscontract worden aangepast.
+Dagelijks handmatig starten:
+
+```bash
+./start_ariadne.sh daily
+```
+
+Dit kiest vandaag in `Europe/Brussels`, wacht maximaal drie uur op Sherlock en
+verwerkt alleen de expliciet afgesloten dag. Succes, timeout en verwerkingsfouten
+blijven binnen de achtwekenretentie in SQLite bewaard. De zondagavondjob rapporteert onvolledige dagen zonder
+de volgende weekvoorbereiding te blokkeren. Beide taken gebruiken hetzelfde slot.
+Volg eerst de [preflight](docs/daily-runtime.md#handmatig-controleren-op-bibib--vóór-croninstallatie),
+inclusief tokenizer-cache en de handmatige workflowtest.
 
 ```bash
 ./start_tests.sh

@@ -91,3 +91,25 @@ Sherlock-output deze periode
 ```
 
 Een later budgetmechanisme kan op basis hiervan een harde week- of maandgrens afdwingen.
+
+## Dagelijkse bundeling versie 1
+
+De implementatie legt `tiktoken==0.12.0` en `cl100k_base` expliciet vast, onafhankelijk
+van veranderlijke modelnamen. De volledige geserialiseerde draad wordt gemeten,
+inclusief draadheader, bronpaden, hashes, byteaantallen en bronafscheidingen.
+Maximaal 30.000 tokens draad plus **5.000 gereserveerde tokens** voor alle overige
+Leonardo-input samen: instructies, dossierstate, berichtenstructuur en API-overhead.
+
+Het weven groepeert numeriek per topic en sorteert bronpaden lexicografisch. Het
+splitst uitsluitend tussen hele fiches. Een fiche die alleen al niet past, faalt
+de hele dag expliciet; er wordt geen tekst afgekapt. Ook identieke fiches blijven
+behouden. De provenance registreert per draad de telling, tokenizer en reserve.
+
+Deze PR doet geen Leonardo-calls en kent nog geen definitieve instructies of
+modelkeuze. De reserve is daarom een bindend budget voor de latere callbouwer.
+Die moet de werkelijk samengestelde input opnieuw meten met de tokenizer van het
+gekozen model, inclusief berichtoverhead, en een call boven 35.000 weigeren of de
+input opnieuw laten verdelen. Een andere tokenizer of context boven de reserve
+maakt de huidige draadindeling niet automatisch geschikt. De reserve mag nooit
+stilzwijgend worden overschreden. Voor installatie en caching op bibib: zie
+[de dagelijkse preflight](daily-runtime.md).
