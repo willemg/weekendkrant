@@ -27,7 +27,11 @@ naar GitHub gecommit. Het operationele schema voor dagelijkse bundeling staat hi
 
 De dagelijkse Ariadne bewaart per lokale datum en ISO-week een operationele status
 in `/home/weekendkrant/weekendkrant.sqlite3`. Deze registratie staat los van
-claimkwaliteitslabels en van het Git-bootstraprecord. De statusnamen zijn `success`, `timeout` en `processing_error`.
+claimkwaliteitslabels en van het Git-bootstraprecord. De huidige implementatie
+gebruikt `success`, `timeout` en `processing_error`. Het afgesproken
+grace-ontwerp voegt een terminale gemiste toestand toe (werknaam `missed`) voor
+dagen die aan het einde van hun graceweek nog niet succesvol verwerkt zijn; die
+status bestaat nog niet in het huidige schema.
 
 | Uitkomst | Betekenis |
 | --- | --- |
@@ -35,13 +39,16 @@ claimkwaliteitslabels en van het Git-bootstraprecord. De statusnamen zijn `succe
 | Wachttijd verstreken | Na maximaal drie uur wachten was er geen geldige gereedmelding; de dagoogst is niet verwerkt. |
 | Verwerking mislukt | De gereedmelding was beschikbaar, maar de verwerking slaagde niet. |
 | Geen dagrecord | Er is geen bewijs van succesvolle verwerking; mogelijk startte de dagelijkse job niet. |
+| Grace gemist (gepland: `missed`) | De graceweek is verstreken zonder succesvolle verwerking; de dag wordt niet meer automatisch ingehaald. |
 
 De zondagavondjob leest deze gestructureerde status om onvolledige dagen te herkennen;
 logbestanden dienen voor diagnose en worden hiervoor niet geparseerd. Dagfouten en
-ontbrekende records blokkeren de voorbereiding van de volgende week niet. Een
-weekovergang verhelpt fouten niet; retentie verwijdert uitsluitend records ouder
-dan de aflopende week plus zeven voorgaande ISO-weken, en start geen inhaalverwerking van
-vorige weken.
+ontbrekende records blokkeren de voorbereiding van de volgende week niet. In het
+afgesproken vervolgontwerp blijft de onmiddellijk vorige ISO-week als `grace`
+beschikbaar: daarvoor in aanmerking komende timeout- of ontbrekende dagen mogen nog
+worden ingehaald wanneer Sherlock alsnog geldig afsluit. Aan het einde van grace
+worden resterende open dagen terminale gemiste dagen. Oudere weken worden niet
+automatisch heropend. Deze grace-overgangen zijn nog niet geïmplementeerd.
 
 ## Minimale kwaliteitslabels
 
@@ -154,7 +161,9 @@ ook dat als onvolledig. Eerdere succesvolle dagen worden nooit verwijderd.
 
 Een geslaagde dag is idempotent en wordt niet opnieuw verwerkt; handmatig verwijderen
 van succesvolle output wordt niet automatisch hersteld. Bewaar de database en
-succesvolle draden samen. Deze PR biedt geen herstel- of inhaalcommando voor oude dagen.
+succesvolle draden samen. De huidige runtime biedt nog geen herstel- of
+inhaalmechanisme voor oude dagen. Het afgesproken vervolgontwerp beperkt automatische
+catch-up tot de onmiddellijk voorafgaande graceweek en laat oudere weken gesloten.
 
 ## Wekelijkse retentie
 

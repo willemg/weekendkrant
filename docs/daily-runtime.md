@@ -1,7 +1,9 @@
 # Ariadnes dagelijkse verwerking
 
-`./start_ariadne.sh daily` verwerkt uitsluitend **vandaag in Europe/Brussels**.
-Er is bewust geen `--date` voor deze taak: oude weken worden niet ingehaald.
+`./start_ariadne.sh daily` verwerkt in de huidige implementatie uitsluitend
+**vandaag in Europe/Brussels**. Er is bewust nog geen publieke `--date` voor deze
+taak. Het afgesproken vervolgontwerp voegt automatische inhaalverwerking toe voor
+de onmiddellijk voorafgaande graceweek; dat gedrag is nog niet geïmplementeerd.
 De bestaande `prepare-week --date …` en `prepare-week --next-week` blijven bestaan.
 Geen modelcalls, inhoudelijke beoordeling, deduplicatie of push van draden.
 
@@ -119,9 +121,39 @@ succes en provenance niet; de mislukte poging wordt apart geregistreerd.
 De zondagavondjob verwijdert vóór een weekwissel alleen de beheerde schone
 weekworktree, via `git worktree remove` zonder force. Ook untracked en genegeerde
 bestanden tellen als lokale wijzigingen en blijven behouden bij weigering.
-Branches en commits blijven bestaan. Een juiste worktree wordt gecontroleerd en
-hergebruikt. Worktrees delen de Git-objectdatabase; het is geen volledige tweede
-clone. Alle controles, verwijdering en creatie vallen onder hetzelfde slot.
+Een juiste worktree wordt gecontroleerd en hergebruikt. Worktrees delen de
+Git-objectdatabase; het is geen volledige tweede clone. Alle controles, verwijdering
+en creatie vallen onder hetzelfde slot.
+
+## Operationeel branchvenster en grace (afgesproken ontwerp, nog te implementeren)
+
+Ariadne houdt maximaal drie opeenvolgende ingressbranches operationeel:
+
+| Rol | Betekenis |
+| --- | --- |
+| `new` | Volgende ISO-week, voorbereid op zondag vóór de weekwissel. |
+| `current` | Actuele Belgische ISO-week waarin Sherlock normaal publiceert. |
+| `grace` | Onmiddellijk vorige ISO-week; alleen nog voor late afsluitingen en inhaalbare dagen. |
+
+Dit zijn branches, geen extra worktrees. De limiet van twee worktrees blijft
+ongewijzigd. Late graceverwerking leest de gefetchte oude branch read-only via een
+expliciete commit/ref en Git-objecten; zij mag de enige beheerde `weekworktree`
+niet heen en weer schakelen tussen weken.
+
+Een timeout of ontbrekend dagrecord uit de vorige week mag gedurende de volledige
+volgende ISO-week alsnog succesvol worden wanneer Sherlock later een geldige,
+onveranderlijke gereedmelding publiceert. Een bestaande `success` blijft
+idempotent en definitief. Een `processing_error` wordt niet automatisch door deze
+graceregel herclassificeerd: de implementatie moet late publicatie onderscheiden
+van een echte verwerkingsfout.
+
+Bij het einde van grace worden resterende open dagen terminale gemiste dagen
+(bijvoorbeeld status `missed`) en wordt dat expliciet gelogd. Daarna mag de oudste
+ingressbranch uit het operationele venster verdwijnen. Remote branchverwijdering is
+pas toegestaan nadat de eindtip via een duurzame archiefref of gelijkwaardig
+auditmechanisme bereikbaar blijft. Het precieze archiveringsmechanisme is nog een
+implementatiebeslissing; tot die is vastgelegd mag de runtime geen remote
+historische branch verwijderen.
 
 ## Lokale draden en tokens
 
@@ -155,9 +187,12 @@ Een geldige lege oogst is succes met nul draden en nul bronnen.
 
 Bij `prepare-week --next-week` rapporteert de weekjob alle zeven dagen van de
 aflopende ISO-week: `timeout`, `processing_error` en ontbrekende records worden
-als waarschuwingen gelogd. Zij blokkeren de volgende branch niet. De dagrecords en
-poginghistoriek blijven binnen de achtwekenretentie behouden. Een gewone Git-fout of onleesbare database blijft
-wel een runtimefout. Oude branches en late aanvullingen worden niet gewijzigd.
+als waarschuwingen gelogd. Zij blokkeren de volgende branch niet. Volgens het
+afgesproken grace-ontwerp blijven daarvoor in aanmerking komende dagen uit de
+onmiddellijk vorige week nog één volledige ISO-week inhaalbaar; de huidige runtime
+implementeert die catch-up nog niet. De dagrecords en poginghistoriek blijven binnen
+de achtwekenretentie behouden. Een gewone Git-fout of onleesbare database blijft
+wel een runtimefout.
 
 ## Acht Belgische ISO-weken bewaren
 
@@ -176,7 +211,9 @@ geldig blijven. Een volgende uitvoering kan VACUUM opnieuw uitvoeren.
 
 Draadbestanden worden niet opgeruimd. Bestanden waarvan de provenance door retentie
 vervallen is, gelden niet automatisch als actieve output. De pipeline gebruikt
-uitsluitend de bewaarde registratie van succesvolle dagen. Geen inhaalverwerking.
+uitsluitend de bewaarde registratie van succesvolle dagen. Inhaalverwerking is
+begrensd tot de afgesproken graceweek; oudere weken worden niet automatisch
+heropend.
 
 ## Migratie van bibib na merge
 
