@@ -120,15 +120,59 @@ gepruned of een willekeurige worktree verwijderd.
 Voor een andere week verwijdert Ariadne eerst uitsluitend de beheerde schone
 weekworktree met `git worktree remove`, zonder force. Ook untracked en genegeerde
 bestanden beschermen de werkruimte tegen verwijdering. Daarna maakt ze op hetzelfde
-pad de gewenste worktree aan. Lokale en remote branches en commits blijven bestaan;
-een juiste worktree wordt hergebruikt. Bij fouten kan tijdelijk alleen `app`
-overblijven; herhalen maakt de ontbrekende weekworktree opnieuw aan.
+pad de gewenste worktree aan. Een juiste worktree wordt hergebruikt. Bij fouten kan
+tijdelijk alleen `app` overblijven; herhalen maakt de ontbrekende weekworktree
+opnieuw aan. De levensduur van weekbranches zelf volgt het hieronder beschreven
+venster van new, current en grace; branchsnoei staat los van worktreesnoei.
 
 Worktrees delen de Git-objectdatabase: dit maakt geen volledige extra clone.
 De dagelijkse taak kan de actuele bestaande week zelf aankoppelen en is dus niet
 afhankelijk van een zondagrun. Na zondagavond kan tijdelijk de volgende week
 gekoppeld zijn; de dagelijkse taak bepaalt haar doel opnieuw volgens de Belgische
 kalender. Zie de [migratiehandleiding](daily-runtime.md#migratie-van-bibib-na-merge).
+
+## Ingressbranch-lifecycle en graceweek (afgesproken ontwerp, nog te implementeren)
+
+Ingressbranches zijn operationele transportkanalen, geen onbeperkt groeiend lokaal
+archief. Ariadne houdt maximaal drie opeenvolgende weekbranches operationeel:
+
+- **new**: de volgende ISO-week, vanaf de zondagse voorbereiding tot de weekwissel;
+- **current**: de actuele Belgische ISO-week waarin Sherlock publiceert;
+- **grace**: de onmiddellijk voorafgaande ISO-week, uitsluitend voor late afsluiting
+  van dagen die nog niet succesvol verwerkt zijn.
+
+Na de zondagse voorbereiding kunnen dus tijdelijk alle drie bestaan. Op gewone
+weekdagen zijn `current` en `grace` voldoende totdat de volgende `new` wordt
+aangemaakt. Dit branchvenster verandert de harde worktreegrens niet: er blijven
+maximaal twee worktrees, `app` op `main` en één beheerde `weekworktree`.
+
+Een weekwissel blokkeert niet wanneer Sherlock voor een dag geen geldige
+gereedmelding heeft gepubliceerd. De oude week wordt dan `grace`, zodat Sherlock
+nog gedurende de volledige volgende ISO-week zijn ontbrekende afsluiting kan
+publiceren. Ariadne mag zo'n late afsluiting alsnog verwerken. Dat vereist geen
+herkoppeling van de beheerde worktree: historische catch-up hoort read-only uit een
+expliciete gefetchte Git-commit/ref te lezen, met dezelfde blob-, manifest- en
+integriteitscontroles als normale verwerking.
+
+De graceperiode geldt voor dagen zonder succesvolle verwerking doordat de
+gereedmelding ontbrak of de dagelijkse taak niet aantoonbaar succesvol eindigde.
+Een bestaande `success` is definitief en wordt nooit opnieuw verwerkt. Het
+automatische beleid voor een echte `processing_error` wordt door dit besluit niet
+verruimd; daarvoor moet de implementatie onderscheid blijven maken tussen late
+publicatie en een inhoudelijke/verwerkingstechnische fout.
+
+Wanneer een week uit `grace` schuift, moet Ariadne alle nog openstaande dagen
+expliciet definitief maken, bijvoorbeeld met een terminale status `missed`, en dat
+loggen. Pas daarna mag de operationele ingressbranch gesnoeid worden. De historische
+Git-audit mag daarbij niet onbereikbaar worden: vóór een remote branch wordt
+verwijderd moet een duurzame archiefref of een gelijkwaardig bewaarmechanisme voor
+de eindtip zijn vastgelegd en geverifieerd. Het concrete archiveringsmechanisme is
+nog niet gekozen en moet vóór implementatie van remote branchverwijdering worden
+gedocumenteerd.
+
+De huidige runtime implementeert deze grace- en branchsnoeilifecycle nog niet. Tot
+die uitbreiding bestaat, blijven oude branches behouden en wordt alleen de actuele
+dag automatisch verwerkt.
 
 ## Dagafsluiting en dagelijkse uitvoering (afgesproken ontwerp)
 
@@ -186,19 +230,20 @@ niet aantoonbaar compleet is. Een ontbrekend dagrecord kan ook betekenen dat de
 dagelijkse job helemaal niet heeft gedraaid. De weekjob leest hiervoor geen logtekst.
 
 Een onvolledige dagoogst verandert de normale weekvoorbereiding niet en blokkeert
-nooit het aanmaken en pushen van de volgende weekbranch. De foutstatus blijft
-binnen de achtwekenretentie bewaard en wordt niet als opgelost gemarkeerd. Gewone Git- en runtimefouten blijven
-wel redenen om veilig te stoppen.
+nooit het aanmaken en pushen van de volgende weekbranch. Gewone Git- en
+runtimefouten blijven wel redenen om veilig te stoppen.
 
 Bij een ontbrekende gereedmelding kan Sherlock nog op de oude weekbranch schrijven.
-Ariadne mag daarom geen afsluitende wijzigingen aan die branch forceren, oogst
-overschrijven of de branch verwijderen. De nieuwe week voorbereiden is geen bewijs
-dat de oude oogst compleet is.
+Ariadne mag daarom geen afsluitende wijzigingen aan die branch forceren of oogst
+overschrijven. Na de weekwissel wordt die branch de `grace`-branch en blijft zij
+nog één volledige ISO-week beschikbaar voor late afsluiting en inhaalverwerking
+van daarvoor in aanmerking komende dagen.
 
-Na de weekovergang gaat de dagelijkse Ariadne uitsluitend verder met de nieuwe
-actuele week. Er is **geen inhaalverwerking van vorige weken**: eventuele late
-aanvullingen blijven op de oude branch staan en de fout blijft binnen de
-bewaartermijn geregistreerd.
+Wanneer de graceweek verstrijkt, worden resterende open dagen expliciet definitief
+afgesloten en mag de branch uit het operationele venster worden gesnoeid volgens
+de branch-lifecycle hierboven. Deze graceverwerking en branchesnoei zijn afgesproken
+ontwerp en nog niet geïmplementeerd; de huidige code verwerkt na de weekovergang
+nog uitsluitend de actuele dag.
 
 ## Achtwekenretentie
 
