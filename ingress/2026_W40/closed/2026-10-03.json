@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-03",
+  "week": "2026_W40",
+  "files": [
+    {
+      "path": "ingress/2026_W40/ingress_0004.md",
+      "sha256": "48803870bd5620c3b283296ba7d60367148f269059a2aee3654034480c5f352e"
+    }
+  ]
+}
