@@ -46,7 +46,8 @@ SQLite bewaart de aflopende Belgische ISO-week plus de zeven voorgaande weken.
 
 ## Weekwerkruimte voorbereiden
 
-Python 3.9 of nieuwer, Git en een lokale clone zijn vereist. Dagelijkse verwerking
+Python 3.9 of nieuwer, Git en een lokale clone zijn vereist. Git 2.30.2 op bibib
+wordt ondersteund; een Git-upgrade is niet nodig. Dagelijkse verwerking
 gebruikt daarnaast de vastgelegde tokenizer uit `requirements.txt`.
 De installatie staat onder `/home/weekendkrant/app`. Maak daar eenmalig de venv aan:
 

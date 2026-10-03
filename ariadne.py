@@ -130,6 +130,76 @@ def clone_lock(root):
             fcntl.flock(lock, fcntl.LOCK_UN)
 
 
+def _porcelain_path(value):
+    """Decode Git's C-quoted byte path; never evaluate shell/Python syntax."""
+    if value.startswith('"'):
+        if len(value) < 2 or not value.endswith('"'):
+            raise ValueError('Ongeldig gequote worktreepad')
+        value = value[1:-1]
+        data = bytearray()
+        escapes = {'a': 7, 'b': 8, 't': 9, 'n': 10, 'v': 11, 'f': 12,
+                   'r': 13, '\\': 92, '"': 34}
+        index = 0
+        while index < len(value):
+            char = value[index]
+            index += 1
+            if char == '"':
+                raise ValueError('Onverwacht aanhalingsteken in worktreepad')
+            if char != '\\':
+                data.extend(os.fsencode(char))
+                continue
+            if index == len(value):
+                raise ValueError('Onvolledige escape in worktreepad')
+            char = value[index]
+            if char in escapes:
+                data.append(escapes[char])
+                index += 1
+            elif re.fullmatch(r'[0-3][0-7]{2}', value[index:index + 3]):
+                data.append(int(value[index:index + 3], 8))
+                index += 3
+            else:
+                raise ValueError('Onbekende escape in worktreepad')
+        value = os.fsdecode(bytes(data))
+    if not value or not os.path.isabs(value) or '\0' in value:
+        raise ValueError('Ongeldig absoluut worktreepad')
+    return value
+
+
+def parse_worktree_porcelain(raw):
+    """Parse Git 2.30.2+ newline porcelain, including newer C-quoted paths.
+
+    Unknown/duplicate fields or incomplete records fail closed. Older Git cannot
+    unambiguously represent embedded newlines: reject malformed output.
+    """
+    records, record = [], {}
+    for line in raw.split('\n') + ['']:
+        if not line:
+            if record:
+                states = set(record) & {'branch', 'detached', 'bare'}
+                if (len(states) != 1 or 'worktree' not in record
+                        or ('bare' not in record and 'HEAD' not in record)):
+                    raise ValueError('Onvolledig worktree-record')
+                records.append(record)
+                record = {}
+            continue
+        key, separator, value = line.partition(' ')
+        if (key not in {'worktree', 'HEAD', 'branch', 'detached', 'bare', 'locked', 'prunable'}
+                or key in record or (not record and key != 'worktree')):
+            raise ValueError('Onduidelijke worktree-inventaris')
+        if key == 'worktree':
+            value = _porcelain_path(value)
+        elif key == 'HEAD' and not re.fullmatch(r'[0-9a-f]{40}|[0-9a-f]{64}', value):
+            raise ValueError('Ongeldige HEAD in worktree-inventaris')
+        elif key == 'branch' and not re.fullmatch(r'refs/heads/[^\s]+', value):
+            raise ValueError('Ongeldige branch in worktree-inventaris')
+        elif key in {'bare', 'detached'} and separator:
+            raise ValueError('Ongeldige worktree-vlag')
+        record[key] = value
+    if not records or len({r['worktree'] for r in records}) != len(records):
+        raise ValueError('Lege of dubbele worktree-inventaris')
+    return records
+
+
 def inspect_worktrees(root):
     """Validate the entire registration, including missing/locked worktrees.
 
@@ -137,17 +207,7 @@ def inspect_worktrees(root):
     """
     root = Path(root).resolve()
     managed = root.parent / 'weekworktree'
-    records = []
-    # -z avoids path quoting and handles whitespace without ambiguity.
-    raw = _git(root, 'worktree', 'list', '--porcelain', '-z')
-    for block in raw.split('\0\0'):
-        record = {}
-        for field in block.split('\0'):
-            if field:
-                key, _, value = field.partition(' ')
-                record[key] = value
-        if record:
-            records.append(record)
+    records = parse_worktree_porcelain(_git(root, 'worktree', 'list', '--porcelain'))
     paths = {r.get('worktree') for r in records}
     if (len(records) > 2 or not records or records[0].get('worktree') != str(root)
             or not paths.issubset({str(root), str(managed)})):
@@ -163,6 +223,12 @@ def inspect_worktrees(root):
         if (not re.fullmatch(r'refs/heads/ingress/[0-9]{4}_W[0-9]{2}', week_record.get('branch', ''))
                 or 'locked' in week_record or 'prunable' in week_record or not managed.is_dir()):
             raise ValueError('Onverwachte, vergrendelde of ontbrekende beheerde weekworktree.')
+        # Git 2.30.2 does not emit the porcelain 'locked' flag.
+        git_dir = Path(_git(managed, 'rev-parse', '--git-dir'))
+        if not git_dir.is_absolute():
+            git_dir = managed / git_dir
+        if (git_dir / 'locked').exists():
+            raise ValueError('Vergrendelde beheerde weekworktree.')
         # Git worktree remove may discard ignored files: protect those as well.
         if _git(managed, 'status', '--porcelain', '--untracked-files=all', '--ignored'):
             raise ValueError('Vuile weekworktree: lokale wijzigingen worden behouden.')

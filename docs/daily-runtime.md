@@ -96,9 +96,16 @@ met code, startscripts en venv uit `app` gestart; voer nooit scripts uit de
 weekworktree uit. Bestaande ingressbranches krijgen geen rebase of codemerge.
 
 Vóór fetch worden registratie en werkbomen gecontroleerd met
-`git worktree list --porcelain -z` en `git status`. Maximaal twee geregistreerde
+`git worktree list --porcelain` en `git status`. Maximaal twee geregistreerde
 worktrees zijn toegestaan, uitsluitend de twee vaste paden. Onverwachte extra
-worktrees worden niet opgeruimd: de taak stopt duidelijk. Ook een vergrendelde,
+worktrees worden niet opgeruimd: de taak stopt duidelijk.
+Dit ondersteunt Git 2.30.2 zonder upgrade. De gedeelde parser leest regels en
+Git-C-gequote paden (inclusief octale bytes), zonder splitsen op whitespace of
+shell-evaluatie. Onbekende, dubbele of onvolledige records leiden tot stoppen.
+Git 2.30.2 geeft paden ongequote weer; onduidelijke uitvoer, bijvoorbeeld een
+pad met een ingebedde newline, wordt geweigerd. Omdat die versie geen `locked`
+veld toont, controleert Ariadne ook het `locked`-bestand in de Git-adminmap van
+de beheerde worktree. Ook een vergrendelde,
 ontbrekende of verkeerd gekoppelde weekworktree wordt niet verwijderd.
 
 De actuele weekbranch wordt in de weekworktree uitsluitend fast-forward gevolgd.
@@ -188,16 +195,23 @@ if [ -n "$(git status --porcelain)" ]; then
     echo 'Vuile app-werkboom: bewaar wijzigingen vóór migratie.' >&2
     exit 1
 fi
+git fetch origin
+# Gebruik de nieuwe gedeelde parser, ook als app nog oude ingresscode bevat.
+inventory_code=$(mktemp /tmp/weekendkrant-inventory.XXXXXX.py)
+trap 'rm -f "$inventory_code"' EXIT
+git show origin/main:ariadne.py > "$inventory_code"
 git worktree list --porcelain
-.venv/bin/python - <<'PYCODE'
+.venv/bin/python - "$inventory_code" <<'PYCODE'
+import runpy
 import subprocess
-raw = subprocess.check_output(['git', 'worktree', 'list', '--porcelain', '-z'], text=True)
-paths = [field[9:] for field in raw.split('\0') if field.startswith('worktree ')]
+import sys
+parse = runpy.run_path(sys.argv[1])['parse_worktree_porcelain']
+raw = subprocess.check_output(['git', 'worktree', 'list', '--porcelain'], text=True)
+paths = [record['worktree'] for record in parse(raw)]
 allowed = {'/home/weekendkrant/app', '/home/weekendkrant/weekworktree'}
 if not 1 <= len(paths) <= 2 or not set(paths) <= allowed:
     raise SystemExit('Onverwachte worktrees; controleer handmatig, niets opgeruimd.')
 PYCODE
-git fetch origin
 git merge-base --is-ancestor main origin/main || {
     echo 'Lokale main loopt vooruit of divergeert; migratie gestopt.' >&2
     exit 1

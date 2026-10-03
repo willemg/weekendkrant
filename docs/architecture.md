@@ -111,7 +111,7 @@ oude code bevatten: die wordt nooit uitgevoerd. Er wordt geen main-code in
 bestaande ingressbranches gemerged of gerebased.
 
 Iedere runtime controleert onder het gemeenschappelijke `flock` de volledige
-registratie via `git worktree list --porcelain -z`. Er mogen maximaal twee
+registratie via `git worktree list --porcelain`. Er mogen maximaal twee
 worktrees bestaan: `app` en het vaste beheerde pad `weekworktree`. Onverwachte
 extra paden, een afwijkende branch, een ontbrekende of vergrendelde registratie
 of een ongekoppeld bestaand pad leiden tot stoppen. Er wordt niet automatisch
