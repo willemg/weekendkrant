@@ -64,16 +64,21 @@ semantische deduplicatie of modelcalls.
 
 ## Transactie en crashgedrag
 
-Database: `/home/weekendkrant/weekendkrant.sqlite3`. `BEGIN IMMEDIATE` fixeert de
-snapshot en houdt concurrerende SQLite-schrijvers tegen tot commit/rollback.
-Dit is één korte dagelijkse verwerkingsflow, geen lease of extra processingstatus.
+Database: `/home/weekendkrant/weekendkrant.sqlite3`. Eén snelle SELECT materialiseert
+de deterministische snapshot. Tijdens payloadvalidatie, weave/tokenisatie en
+filesystemwrites staat geen SQLite write-transactie open, zodat de producer kan
+blijven schrijven. Na de snapshot ontvangen items worden niet meegenomen en blijven
+pending. Alleen de finale provenance/statusupdate gebruikt een korte
+`BEGIN IMMEDIATE`-transactie, geen lease of extra processingstatus.
 De bestaande clone_lock blijft als gedeeld, niet-blokkerend Ariadne-runtime-slot;
 Git wordt alleen gebruikt om dat gemeenschappelijke slot te vinden, niet voor invoer.
 `daily` inspecteert of synchroniseert geen worktrees en wijzigt app niet.
 
 Alle payloads en het volledige draadplan worden gevalideerd vóór statuswijziging.
 Daarna worden bestanden met tempfile + file-fsync + os.replace + directory-fsync
-geschreven. Dezelfde SQLite-transactie registreert days.success, threads, sources,
+geschreven vóór de finale DB-transactie. Binnen die transactie worden eerst alle
+snapshot-IDs opnieuw op exact pending gecontroleerd; ontbrekende of gewijzigde IDs
+laten de transactie falen. Dezelfde transactie registreert days.success, threads, sources,
 het success-attempt en exact de gebruikte queue-IDs als processed. Pas daarna commit.
 `days.commit_sha` en `days.manifest_sha256` blijven NULL. `sources.source_path`
 bevat queue-identiteiten, geen Git-paden. IngressQueue.mark_processed commit niet zelf.

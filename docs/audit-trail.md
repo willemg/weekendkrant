@@ -142,9 +142,11 @@ ook na latere oogstcommits; een afwijkend record wordt geweigerd.
   `source_path` is de canonieke queue-identiteit, bijvoorbeeld `queue:2`.
   De hash betreft exact de UTF-8-bytes van payload.content.
 
-`BEGIN IMMEDIATE` fixeert de queue-snapshot. Alle geselecteerde payloads en draden
-worden volledig gevalideerd vóór enige statuswijziging. Draadbestanden worden met
-tempfile, fsync en atomische rename geschreven vóór commit. Eén DB-transactie
+Eén snelle SELECT materialiseert de queue-snapshot. Payloadvalidatie, tokenisatie
+en threadwrites houden geen write-transactie open. Draadbestanden worden met
+tempfile, fsync en atomische rename geschreven. Pas daarna begint een korte
+`BEGIN IMMEDIATE`-transactie die alle snapshot-IDs opnieuw op pending controleert.
+Later ontvangen items blijven buiten de snapshot en pending. Die DB-transactie
 registreert provenance, dagstatus success en exact de gebruikte queue-IDs als
 processed. Een fout (ook bij commit) rollbackt alles; de items blijven pending.
 Daarna wordt processing_error afzonderlijk geregistreerd. Bij een aanhoudend

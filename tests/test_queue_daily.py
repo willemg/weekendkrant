@@ -174,6 +174,52 @@ class QueueDailyTests(RuntimeGitFixture):
         with patch.object(daily, 'write_thread', side_effect=inspect_then_write):
             self.run_daily()
 
+    def producer_during(self, operation):
+        first = self.queue.add(payload())
+        second = self.queue.add(payload(topic=3))
+        original = getattr(daily, operation)
+        original_connect = sqlite3.connect
+        arrivals = []
+        def produce_then_continue(*args, **kwargs):
+            # Exercise the real producer on a separate connection, with a short
+            # busy timeout so a retained consumer lock fails quickly.
+            with patch('sqlite3.connect', side_effect=lambda path: original_connect(path, timeout=0.05)):
+                arrivals.append(self.queue.add(payload(content='Na de snapshot')))
+            return original(*args, **kwargs)
+        with patch.object(daily, operation, side_effect=produce_then_continue):
+            self.run_daily()
+        self.assertTrue(arrivals)
+        self.assertEqual(self.rows('SELECT id,status FROM ingress_queue ORDER BY id'),
+                         [(first, 'processed'), (second, 'processed')] +
+                         [(identity, 'pending') for identity in arrivals])
+        self.assertEqual(self.rows('SELECT source_path FROM sources ORDER BY source_path'),
+                         [(f'queue:{first}',), (f'queue:{second}',)])
+        for path in self.output.rglob('*.txt'):
+            self.assertNotIn('Na de snapshot', path.read_text())
+
+    def test_producer_can_add_during_weave_without_entering_snapshot(self):
+        self.producer_during('weave')
+
+    def test_producer_can_add_during_thread_write_without_entering_snapshot(self):
+        self.producer_during('write_thread')
+
+    def test_changed_snapshot_status_refuses_final_transaction(self):
+        first = self.queue.add(payload())
+        second = self.queue.add(payload(topic=3))
+        original = daily.weave
+        def change_status(*args, **kwargs):
+            with sqlite3.connect(self.db, timeout=0.05) as db:
+                db.execute("UPDATE ingress_queue SET status='processed' WHERE id=?", (first,))
+            return original(*args, **kwargs)
+        with patch.object(daily, 'weave', side_effect=change_status):
+            with self.assertRaisesRegex(ValueError, 'niet pending'):
+                self.run_daily()
+        self.assertEqual(self.rows('SELECT id,status FROM ingress_queue ORDER BY id'),
+                         [(first, 'processed'), (second, 'pending')])
+        self.assertEqual(self.rows('SELECT status FROM days'), [('processing_error',)])
+        self.assertEqual(self.rows('SELECT count(*) FROM sources'), [(0,)])
+        self.assertEqual(self.rows('SELECT count(*) FROM threads'), [(0,)])
+
     def test_shared_runtime_lock(self):
         with ariadne.clone_lock(self.root):
             with self.assertRaises(ValueError): self.run_daily()

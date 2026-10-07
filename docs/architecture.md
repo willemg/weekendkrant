@@ -141,7 +141,9 @@ Oudere/toekomstige dagen worden niet verwerkt en late arrivals blijven pending.
 
 Dagelijkse verwerking en weekvoorbereiding gebruiken hetzelfde niet-blokkerende
 Linux `flock` in de gemeenschappelijke Git-map. De SQLite-transactie gebruikt
-`BEGIN IMMEDIATE`; producers kunnen gedurende die korte verwerking niet schrijven.
+`BEGIN IMMEDIATE` uitsluitend voor de finale provenance/statusupdate. Tijdens
+validatie, tokenisatie en threadwrites blijft de producer vrij om items toe te voegen;
+die nieuwe items vallen buiten de oorspronkelijke snapshot en blijven pending.
 Geen modellen, leases, retries of aanvullende queue-statussen.
 
 ## Zondagavond en overgang naar de volgende week

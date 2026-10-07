@@ -152,26 +152,32 @@ def run_daily(root, db_path=DB_PATH, output=OUTPUT_PATH, now=None):
         db = database(db_path)
         try:
             queue = IngressQueue(db_path)
-            # Fix the snapshot and exclude concurrent writers until commit/rollback.
-            # No status is changed before validation and the complete thread plan.
-            db.execute('BEGIN IMMEDIATE')
+            # SELECT materializes the snapshot without retaining a write lock.
             previous = db.execute('SELECT status FROM days WHERE day=?', (str(day),)).fetchone()
             if previous and previous[0] == 'success':
-                db.rollback()
                 logger.info('Dag al geslaagd: %s', day)
                 return {'date': str(day), 'week': week, 'status': 'success'}
             items = queue.pending_for_day(db, day)
             fiches = [queue_fiche(identity, payload, day) for identity, payload in items]
             threads = weave(fiches, week, day)
-            status(db, day, 'success')
+            written = []
             for thread in threads:
                 path = outside_repo(root, output / week / f'topic_{thread["topic"]}' /
                                     f'{day}_{thread["part"]:04d}.txt')
                 data = thread['text'].encode('utf-8')
                 write_thread(path, data)
+                written.append((thread, path, hashlib.sha256(data).hexdigest()))
+            # Only the final audit/status update needs the SQLite write lock.
+            db.execute('BEGIN IMMEDIATE')
+            for identity, _ in items:
+                row = db.execute('SELECT status FROM ingress_queue WHERE id=?', (identity,)).fetchone()
+                if row != ('pending',):
+                    raise ValueError(f'Queue-item niet pending: queue:{identity}')
+            status(db, day, 'success')
+            for thread, path, digest in written:
                 db.execute('INSERT INTO threads VALUES (?,?,?,?,?,?,?,?)',
                            (str(path), str(day), thread['topic'], thread['part'],
-                            hashlib.sha256(data).hexdigest(), thread['tokens'], TOKENIZER, RESERVE))
+                            digest, thread['tokens'], TOKENIZER, RESERVE))
                 for position, fiche in enumerate(thread['sources']):
                     db.execute('INSERT INTO sources VALUES (?,?,?,?,?)',
                                (str(day), fiche.path, fiche.sha256, str(path), position))
