@@ -38,7 +38,11 @@ niet als primaire transportqueue.
 **Migratie loopt:** Sherlock is nog niet omgezet en Ariadne `daily` consumeert
 nog geen queue-items. De bestaande wekelijkse voorbereiding en dagelijkse
 Git-verwerking blijven werken; API-items blijven voorlopig `pending`.
-Zie [ingress-runtime](docs/ingress-runtime.md) voor starten, authenticatie en grenzen.
+De nieuwe `ingress_tunnel.py` houdt een Cloudflare Quick Tunnel open en publiceert
+de actuele URL als `config/ingress-endpoint.json` op GitHub `main`. De MCP-plugin
+leest die vaste discoverypointer; Sherlock hoeft de tunnel-URL niet te kennen.
+Zie [ingress-runtime](docs/ingress-runtime.md) voor starten, authenticatie,
+de geïsoleerde publisher en de handmatig te installeren voorbeeld-unit.
 
 ## Bestaande Git-runtime tijdens de migratie
 

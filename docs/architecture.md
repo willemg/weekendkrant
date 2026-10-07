@@ -17,9 +17,8 @@ Minos-herschrijving. De volledige Leonardo-input blijft maximaal 35.000 tokens.
 
 De producerkant is geïmplementeerd: `GET /health` en bearer-beveiligde
 `POST /ingress` bewaren JSON-objecten persistent als `pending`. De API bindt
-standaard op `127.0.0.1:8000`. Een afzonderlijke tunnel/reverse proxy verzorgt
-externe HTTPS-bereikbaarheid. Deze infrastructuur behoort niet tot de Python-app;
-er is geen Cloudflare-configuratie of service-installatie in deze stap.
+standaard op `127.0.0.1:8000`. `ingress_tunnel.py` start en superviseert een afzonderlijk `cloudflared`-proces
+voor externe HTTPS-bereikbaarheid. Het programma installeert geen binary of service.
 Het verwachte token komt uitsluitend uit `WEEKENDKRANT_INGRESS_TOKEN`.
 De publieke interface laat producers schrijven, maar biedt geen `GET /queue`.
 
@@ -55,7 +54,22 @@ Alle semantische interpretatie ligt vóór of na Ariadne:
 Git/GitHub blijft voor code, ontwerpdocumentatie, weekbranches, worktrees,
 auditbare redactionele output en krantartefacten. GitHub is niet langer het
 gekozen transportmechanisme voor Sherlock-fiches: SQLite is de persistente
-transportqueue. Een weekbranch is geen queue.
+transportqueue. Een weekbranch is geen queue. GitHub verzorgt daarnaast uitsluitend
+service discovery via `config/ingress-endpoint.json` op `main`:
+
+`cloudflared Quick Tunnel -> actuele URL -> discoverybestand op GitHub -> MCP-plugin`
+
+De plugin Weekendkrant Ingress leest steeds de vaste raw GitHub-URL, en stuurt
+fiches rechtstreeks door de tunnel naar de API. Sherlock kent alleen de MCP-tool.
+Het discoverybestand bevat geen secret; de bearer-token blijft in de secretopslag
+van bibib/Sites. Na reboot vervangt de publisher automatisch de oude tunnel-URL.
+
+De publisher gebruikt een zelfstandige tijdelijke shallow clone met GitHub SSH,
+buiten `app` en zonder `git worktree`. Alleen het discoverybestand wordt gecommit
+en naar `main` gepusht. Een gelijktijdige remote wijziging stopt veilig zonder
+force of rebase. Er wordt geen Git-opdracht op de hoofdrepo of weekworktree uitgevoerd.
+De tijdelijke clone verdwijnt na publicatie of fout; systemd `RuntimeDirectory`
+ruimt bij de gedocumenteerde productie-unit ook na een harde crash op.
 
 Afgeleide thematische draden blijven in de observatiefase lokaal. SQLite bewaart
 zowel de nieuwe transportqueue als Ariadnes bestaande operationele verwerkingsaudit,
@@ -296,6 +310,6 @@ lokale draden met gereserveerde ruimte voor Leonardo-context van. Daarbij gelden
 Het [dagelijkse runtimecontract](daily-runtime.md) legt bundelpaden, manifest,
 SQLite-transacties, tokenizer, foutgedrag en concrete controlecommando’s vast.
 De bestaande Ariadne-cronjobs zijn op bibib actief: `daily` dagelijks om 10:00
-en `prepare-week --next-week` zondag om 22:00 Belgische tijd. De ingress-API krijgt
-in deze PR geen permanente processupervisie; Cloudflare Tunnel wordt evenmin als
-permanente service geïnstalleerd.
+en `prepare-week --next-week` zondag om 22:00 Belgische tijd. De ingress-API draait op bibib via `weekendkrant-ingress.service`. De tunnelcomponent
+heeft een afzonderlijke voorbeeld-unit in [ingress-runtime](ingress-runtime.md);
+installatie daarvan gebeurt handmatig na merge.
