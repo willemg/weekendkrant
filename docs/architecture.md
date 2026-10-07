@@ -295,4 +295,7 @@ lokale draden met gereserveerde ruimte voor Leonardo-context van. Daarbij gelden
 
 Het [dagelijkse runtimecontract](daily-runtime.md) legt bundelpaden, manifest,
 SQLite-transacties, tokenizer, foutgedrag en concrete controlecommando’s vast.
-De dagelijkse cronregel blijft voorlopig documentatie; eerst handmatig testen.
+De bestaande Ariadne-cronjobs zijn op bibib actief: `daily` dagelijks om 10:00
+en `prepare-week --next-week` zondag om 22:00 Belgische tijd. De ingress-API krijgt
+in deze PR geen permanente processupervisie; Cloudflare Tunnel wordt evenmin als
+permanente service geïnstalleerd.

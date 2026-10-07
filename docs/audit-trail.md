@@ -28,8 +28,9 @@ naar GitHub gecommit. Het operationele schema voor dagelijkse bundeling staat hi
 `ingress_queue` staat naast de bestaande audittabellen in
 `/home/weekendkrant/weekendkrant.sqlite3`. Elk record bevat `id` (uniek intern
 INTEGER PRIMARY KEY AUTOINCREMENT), `received_at` (UTC met offset), `payload`
-(JSON-object als tekst) en `status` (`pending`). Een succesvolle HTTP `201` volgt
-pas nadat de INSERT-transactie is gecommit. De interface bewaart de JSON-inhoud,
+(JSON-object als tekst) en `status` (`TEXT NOT NULL DEFAULT 'pending'`, zonder
+beperkende CHECK-constraint). Deze producerstap schrijft uitsluitend `pending`.
+Een succesvolle HTTP `201` volgt pas nadat de INSERT-transactie is gecommit. De interface bewaart de JSON-inhoud,
 geen exacte HTTP-bodybytes of inhoudelijk gevalideerde ficheheader.
 
 Dit is ontvangstregistratie, geen bewijs van Ariadne-verwerking. Ariadne leest

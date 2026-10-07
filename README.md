@@ -48,7 +48,8 @@ redactionele/versioneringsdoel; zij zijn geen SQLite-ingressqueue.
 
 Zie [dagelijkse runtime en handmatige controles voor bibib](docs/daily-runtime.md)
 en [de oude Git-contractreferentie voor Sherlock](docs/sherlock-dagafsluiting.md).
-De dagelijkse cronregel is alleen gedocumenteerd, nog niet geïnstalleerd.
+De bestaande Ariadne-cronjobs zijn op bibib actief: dagelijks om 10:00 en
+zondagse weekvoorbereiding om 22:00 Belgische tijd.
 `/home/weekendkrant/app` blijft op `main`; alleen
 `/home/weekendkrant/weekworktree` bevat een ingressbranch. Er zijn maximaal twee
 geregistreerde worktrees. Beide taken starten altijd de code en venv uit `app`.
@@ -69,7 +70,7 @@ python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
 ```
 
-Normale gebruikers en toekomstige cronjobs starten Ariadne via `start_ariadne.sh`.
+Normale gebruikers en de actieve cronjobs starten Ariadne via `start_ariadne.sh`.
 Beide uitvoerscripts gaan eerst naar de vaste repositoryroot en gebruiken rechtstreeks
 `/home/weekendkrant/app/.venv/bin/python`; handmatig activeren van `.venv` is niet nodig.
 Een ontbrekende venv/interpreter geeft een shellfout en een niet-nul exitcode.
@@ -132,7 +133,7 @@ Dit kiest vandaag in `Europe/Brussels`, wacht maximaal drie uur op Sherlock en
 verwerkt alleen de expliciet afgesloten dag. Succes, timeout en verwerkingsfouten
 blijven binnen de achtwekenretentie in SQLite bewaard. De zondagavondjob rapporteert onvolledige dagen zonder
 de volgende weekvoorbereiding te blokkeren. Beide taken gebruiken hetzelfde slot.
-Volg eerst de [preflight](docs/daily-runtime.md#handmatig-controleren-op-bibib--vóór-croninstallatie),
+Volg eerst de [preflight](docs/daily-runtime.md#handmatig-controleren-op-bibib),
 inclusief tokenizer-cache en de handmatige workflowtest.
 
 ```bash

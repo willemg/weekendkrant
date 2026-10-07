@@ -37,6 +37,13 @@ class QueueTests(unittest.TestCase):
         self.assertEqual(rows[0][3], 'pending')
         self.assertIsNotNone(datetime.fromisoformat(rows[0][1]).tzinfo)
 
+    def test_status_schema_has_no_pending_only_constraint(self):
+        with sqlite3.connect(self.path) as db:
+            schema = db.execute(
+                "SELECT sql FROM sqlite_master WHERE name = 'ingress_queue'").fetchone()[0]
+        self.assertNotIn('CHECK', schema.upper())
+        self.assertIn("status TEXT NOT NULL DEFAULT 'pending'", schema)
+
     def test_only_json_objects(self):
         for payload in ([], 'text', 1, None, True, {'bad': float('nan')}, {'bad': object()}):
             with self.subTest(payload=payload), self.assertRaises((ValueError, TypeError)):

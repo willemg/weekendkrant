@@ -14,7 +14,7 @@ class IngressQueue:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 received_at TEXT NOT NULL,
                 payload TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'pending' CHECK (status = 'pending')
+                status TEXT NOT NULL DEFAULT 'pending'
             )''')
 
     def add(self, payload):

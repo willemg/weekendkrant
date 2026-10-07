@@ -267,7 +267,7 @@ Een vuile weekworktree wordt niet vervangen; bewaar of commit de wijzigingen
 eerst bewust. De dagelijkse taak voert dezelfde aankoppeling automatisch uit
 wanneer ze nog ontbreekt. Start vervolgens de echte dagelijkse handmatige test.
 
-## Handmatig controleren op bibib — vóór croninstallatie
+## Handmatig controleren op bibib
 
 Voer na de geslaagde migratie uit als gebruiker `weekendkrant`:
 
@@ -335,9 +335,10 @@ getest met de bestaande `./start_ariadne.sh prepare-week --next-week`; dat comma
 **pusht werkelijk** de volgende weekbranch. De tests dekken deze overgang eerst met
 een tijdelijke lokale remote en een mislukte dag.
 
-## Dagelijkse cronregel — alleen documentatie, nog niet installeren
+## Actieve Ariadne-cronjobs op bibib
 
-Voor een host waarvan `timedatectl show -p Timezone --value` `Europe/Brussels` geeft:
+Op bibib zijn deze bestaande cronjobs reeds geïnstalleerd en actief, met
+hosttimezone `Europe/Brussels`:
 
 ```cron
 0 10 * * * /home/weekendkrant/app/start_ariadne.sh daily >/dev/null
@@ -349,6 +350,7 @@ De bestaande zondagregel blijft:
 0 22 * * 0 /home/weekendkrant/app/start_ariadne.sh prepare-week --next-week >/dev/null
 ```
 
-Geen losse cronstart om de tien minuten en geen apart cronlog. De dagelijkse regel
-wordt pas na de handmatige workflowtest geïnstalleerd; deze PR installeert niets en
-wijzigt Sherlocks actieve ChatGPT-taak niet.
+Geen losse cronstart om de tien minuten en geen apart cronlog. Deze PR wijzigt
+de bestaande cronjobs en Sherlocks actieve ChatGPT-taak niet. De nieuwe ingress-API
+krijgt hier geen systemd-service, cronjob of andere permanente processupervisie.
+Ook Cloudflare Tunnel wordt niet als permanente service geïnstalleerd.
