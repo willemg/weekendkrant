@@ -4,8 +4,11 @@
 
 Sherlock is een actieve ChatGPT-taak.
 
-Sherlocks inhoudelijke fiche-indeling blijft observerend; de technische header en
-dagafsluiting liggen vast in het [versie-1-contract](daily-runtime.md). De eerste fase van het project is bewust observerend: gedurende enkele weken laten we Sherlock verzamelen en bekijken we wat een actieve taak in de praktijk betrouwbaar kan afleveren, hoeveel materiaal dat oplevert, hoe consequent de bronverwijzingen en samenvattingen zijn en hoeveel structuur zonder extra complexiteit haalbaar blijkt.
+Sherlock zal fiches via HTTPS POST naar de bearer-beveiligde ingress-API sturen.
+SQLite bewaart de transportqueue; GitHub is geen doeltransport. Sherlocks actieve
+taak wordt in deze stap niet aangepast. De bestaande Git-header en dagafsluiting
+gelden alleen voor de [overgangsruntime](daily-runtime.md); het API-contract
+accepteert nu ieder geldig JSON-object, zonder inhoudelijk ficheschema. De eerste fase van het project is bewust observerend: gedurende enkele weken laten we Sherlock verzamelen en bekijken we wat een actieve taak in de praktijk betrouwbaar kan afleveren, hoeveel materiaal dat oplevert, hoe consequent de bronverwijzingen en samenvattingen zijn en hoeveel structuur zonder extra complexiteit haalbaar blijkt.
 
 Pas op basis van die echte oogst leggen we het definitieve invoercontract voor Ariadne en de rest van de keten vast.
 
@@ -17,19 +20,16 @@ Pas op basis van die echte oogst leggen we het definitieve invoercontract voor A
 - per relevante vondst de oorspronkelijke bron bewaren;
 - waar haalbaar de bron compact en feitelijk samenvatten;
 - waar haalbaar een eenvoudige onderwerpindeling bewaren;
-- de oogst naar GitHub schrijven;
-- als laatste een expliciete gereedmelding voor de lokale datum publiceren,
-  uitsluitend nadat alle dagoogst succesvol is gepusht; ook een lege oogst afsluiten;
-- na die gereedmelding voor de afgesloten datum niets meer toevoegen;
-- voor datum, ISO-week, ingressbranch en ingressmap uitsluitend de kalenderzone
-  `Europe/Brussels` gebruiken; UTC of een impliciete omgevingstijdzone bepaalt nooit
-  welke week actief is.
+- de oogst via HTTPS aan de ingress-API afleveren (omschakeling volgt);
+- lokale datums en redactionele ISO-weken bepalen in `Europe/Brussels`.
 
-Deze lijst beschrijft de gewenste richting, niet een reeds bewezen betrouwbaar protocol.
-De gereedmelding heeft een [concreet versie-1-contract](daily-runtime.md).
-De [exacte instructieaanvulling](sherlock-dagafsluiting.md) moet nog handmatig in
-Sherlocks actieve taak worden opgenomen. Zie
-[dagafsluiting en dagelijkse uitvoering](architecture.md#dagafsluiting-en-dagelijkse-uitvoering-afgesproken-ontwerp).
+De producer-API is beschikbaar, maar de actieve Sherlock-taak en Ariadne-consument
+zijn nog niet omgezet. Het bestaande Git-afsluitcontract blijft alleen tijdens
+de overgang gelden. Het toekomstige queuecontract voor dagafsluiting, lege oogst
+en inhoudelijke fichevalidatie hoort bij de consumenten-PR, niet bij deze API-stap.
+Zie [ingress-runtime](ingress-runtime.md). De
+[oude instructieaanvulling](sherlock-dagafsluiting.md) is uitsluitend een referentie
+voor de bestaande Git-runtime, geen opdracht om Sherlock nu aan te passen.
 
 ### Onderzoeksgebieden
 
@@ -116,12 +116,14 @@ De output moet uiteindelijk bruikbaar genoeg zijn om deterministisch door Ariadn
 
 Ariadne is geen agent maar een deterministisch script, bedoeld om via cron op een Raspberry Pi te draaien.
 
-Geïmplementeerd zijn de wekelijkse weekvoorbereiding en de
+Queueconsumptie is nog niet geïmplementeerd. Geïmplementeerd zijn de wekelijkse
+Git-weekvoorbereiding en de bestaande
 [dagelijkse deterministische verwerking](daily-runtime.md).
 
 ### Verantwoordelijkheden
 
-- de wekelijkse Sherlock-werkruimte voorbereiden vóór Sherlock die nodig heeft;
+- weekbranches en worktrees voor redactionele/versioneringsoutput voorbereiden;
+- de SQLite-queue lokaal consumeren (volgende PR; nu nog Git-invoer);
 - repository synchroniseren;
 - dagelijks vanaf 10:00 Belgische tijd maximaal drie uur zelf pollen op Sherlocks
   gereedmelding, met tien minuten slaap tussen controles;
@@ -143,7 +145,7 @@ terug naar GitHub en moeten uit dezelfde ingress reproduceerbaar opnieuw opgebou
 kunnen worden.
 Dagelijkse verwerking en weekvoorbereiding delen een slot en starten steeds uit
 `app` op `main`; één aparte beheerde weekworktree bevat de ingressbranch.
-Er zijn maximaal twee geregistreerde worktrees. De wekelijkse SQLite-retentie
+Er zijn maximaal twee geregistreerde worktrees. De wekelijkse SQLite-auditretentie laat de nieuwe transportqueue intact en
 bewaart de aflopende Belgische ISO-week plus de zeven voorgaande weken. Na een weekovergang haalt Ariadne geen oude weken in; late aanvullingen
 blijven op de oude branch staan.
 

@@ -29,13 +29,25 @@ Zie de ontwerpdocumentatie:
 
 ## Status
 
-Geïmplementeerd zijn Ariadnes wekelijkse voorbereiding en dagelijkse deterministische
-verwerking van Sherlocks afgesloten oogst. De dagelijkse taak pollt de remote,
-valideert het afsluitmanifest, maakt lokale thematische draden en registreert status
-en provenance in SQLite. Er zijn geen modelcalls.
+De ingress-API en persistente SQLite-queue zijn geïmplementeerd met uitsluitend
+Python 3.9-standaardbibliotheek. Het doeltransport is
+`Sherlock -> HTTPS ingress-API -> SQLite queue -> Ariadne`.
+Git/GitHub dient voor code, weekbranches, worktrees, audit en krantartefacten,
+niet als primaire transportqueue.
+
+**Migratie loopt:** Sherlock is nog niet omgezet en Ariadne `daily` consumeert
+nog geen queue-items. De bestaande wekelijkse voorbereiding en dagelijkse
+Git-verwerking blijven werken; API-items blijven voorlopig `pending`.
+Zie [ingress-runtime](docs/ingress-runtime.md) voor starten, authenticatie en grenzen.
+
+## Bestaande Git-runtime tijdens de migratie
+
+De onderstaande voorbereiding, manifesteisen en controles beschrijven uitsluitend
+de bestaande Git-consument. Weekbranches/worktrees blijven bestaan voor hun
+redactionele/versioneringsdoel; zij zijn geen SQLite-ingressqueue.
 
 Zie [dagelijkse runtime en handmatige controles voor bibib](docs/daily-runtime.md)
-en [de exacte aanvulling voor Sherlock](docs/sherlock-dagafsluiting.md).
+en [de oude Git-contractreferentie voor Sherlock](docs/sherlock-dagafsluiting.md).
 De dagelijkse cronregel is alleen gedocumenteerd, nog niet geïnstalleerd.
 `/home/weekendkrant/app` blijft op `main`; alleen
 `/home/weekendkrant/weekworktree` bevat een ingressbranch. Er zijn maximaal twee
