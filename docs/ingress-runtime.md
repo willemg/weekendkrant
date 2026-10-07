@@ -120,7 +120,9 @@ De URL-timeout is standaard 60 seconden (`--url-timeout`). Stdout en stderr van
 cloudflared worden samengevoegd en continu uitgelezen. De detector accepteert
 uitsluitend HTTPS, één geldige DNS-label onder `trycloudflare.com` en optioneel
 het pad `/ingress`. Credentials, poorten, query, fragment en andere paden/domeinen
-worden geweigerd. Bekende Cloudflare-documentatie/voorwaardenlinks worden genegeerd.
+worden geweigerd bij tunnelkandidaten. Gewone externe documentatie-/diagnostieklinks
+worden genegeerd zonder whitelist; alleen URLs met `trycloudflare.com` in hun
+authority worden als tunnelkandidaat strikt gevalideerd.
 Herhaling van dezelfde URL is toegestaan; verschillende URLs stoppen veilig,
 ook wanneer ze later verschijnen nadat de eerste al gepubliceerd is.
 De component logt eigen status/fouten naar stderr voor journald en geeft geen

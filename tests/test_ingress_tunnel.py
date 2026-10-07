@@ -19,7 +19,7 @@ class DetectionTests(unittest.TestCase):
         self.assertEqual(detector.feed('ordinary log'), URL + '/ingress')
 
     def test_invalid_urls(self):
-        for url in ['http://calm.trycloudflare.com', 'https://evil.example',
+        for url in ['http://calm.trycloudflare.com', 'ftp://calm.trycloudflare.com',
                     'https://bad_host.trycloudflare.com', 'https://-bad.trycloudflare.com',
                     'https://a.b.trycloudflare.com', 'https://user@calm.trycloudflare.com',
                     URL + ':443', URL + '?x=1', URL + '#x', URL + '/other',
@@ -39,6 +39,24 @@ class DetectionTests(unittest.TestCase):
 
     def test_unrelated_cloudflare_help_link(self):
         self.assertIsNone(URLDetector().feed('See https://developers.cloudflare.com/cloudflare-one/'))
+
+    def test_real_quic_go_diagnostic_link(self):
+        detector = URLDetector()
+        line = ('failed to sufficiently increase receive buffer size. See '
+                'https://github.com/quic-go/quic-go/wiki/UDP-Buffer-Sizes for details.')
+        self.assertIsNone(detector.feed(line))
+        self.assertEqual(detector.feed(URL), URL + '/ingress')
+        self.assertEqual(detector.feed(line), URL + '/ingress')
+
+    def test_arbitrary_unrelated_links_are_ignored(self):
+        for url in ['https://evil.example', 'https://docs.example.org/diagnostics?x=1#help',
+                    'http://status.example.net:8080/health',
+                    'https://docs.example.org/trycloudflare.com',
+                    'https://docs.example.org/?example=' + URL]:
+            with self.subTest(url=url):
+                detector = URLDetector()
+                self.assertIsNone(detector.feed('Diagnostic details: ' + url))
+                self.assertEqual(detector.feed(URL + ' See ' + url), URL + '/ingress')
 
     def test_serialization(self):
         self.assertEqual(discovery_json(URL + '/ingress'),

@@ -11,7 +11,6 @@ import subprocess
 import tempfile
 import threading
 import time
-from urllib.parse import urlsplit
 
 LOGGER = logging.getLogger(__name__)
 REMOTE = 'git@github.com:willemg/weekendkrant.git'
@@ -40,13 +39,12 @@ class URLDetector:
 
     def feed(self, line):
         # Tokens preserve credentials, port, path, query and fragment for validation.
-        for candidate in re.findall(r'https?://[^\s|<>"\']+', line):
-            try:
-                parsed = urlsplit(candidate)
-            except ValueError as exc:
-                raise TunnelError('Ongeldige Quick Tunnel URL') from exc
-            # cloudflared also prints documentation/terms links, not tunnel candidates.
-            if parsed.hostname in ('www.cloudflare.com', 'developers.cloudflare.com'):
+        for candidate in re.findall(r'\b[a-zA-Z][a-zA-Z0-9+.-]*://[^\s|<>"\']+', line):
+            # Inspect the raw authority so even malformed tunnel hosts reach strict
+            # validation. A tunnel hostname mentioned in an external path/query is
+            # not a candidate; documentation hosts need no whitelist.
+            authority = re.split(r'[/?#]', candidate.split('://', 1)[1], maxsplit=1)[0]
+            if 'trycloudflare.com' not in authority.lower():
                 continue
             endpoint = ingress_url(candidate)
             if self.url is not None and self.url != endpoint:
