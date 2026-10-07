@@ -1,9 +1,17 @@
-# Ariadnes dagelijkse verwerking
+# Ariadnes dagelijkse verwerking — Git-overgangsruntime
+
+Dit document beschrijft de **bestaande**, nog ongewijzigde Git-consument, niet
+het doeltransport. Het doel is Sherlock -> HTTPS ingress-API -> SQLite queue ->
+lokale Ariadne-consumptie. De API en queue zijn beschikbaar; `daily` leest ze nog
+niet. Sherlock wordt hier niet aangepast. Weekbranches en worktrees blijven voor
+redactioneel versiebeheer en tijdelijk voor de bestaande invoer behouden.
+Zie [ingress-runtime](ingress-runtime.md). De manifest- en Git-commando’s hieronder
+zijn alleen voor deze overgang; een API-POST bereikt `daily` nog niet.
 
 `./start_ariadne.sh daily` verwerkt in de huidige implementatie uitsluitend
 **vandaag in Europe/Brussels**. Er is bewust nog geen publieke `--date` voor deze
-taak. Het afgesproken vervolgontwerp voegt automatische inhaalverwerking toe voor
-de onmiddellijk voorafgaande graceweek; dat gedrag is nog niet geïmplementeerd.
+taak. Het vroegere voorstel voor Git-grace-catch-up is niet geïmplementeerd en wordt
+niet als queueconsumptiecontract overgenomen.
 De bestaande `prepare-week --date …` en `prepare-week --next-week` blijven bestaan.
 Geen modelcalls, inhoudelijke beoordeling, deduplicatie of push van draden.
 
@@ -125,35 +133,12 @@ Een juiste worktree wordt gecontroleerd en hergebruikt. Worktrees delen de
 Git-objectdatabase; het is geen volledige tweede clone. Alle controles, verwijdering
 en creatie vallen onder hetzelfde slot.
 
-## Operationeel branchvenster en grace (afgesproken ontwerp, nog te implementeren)
+## Weekbranches tijdens de migratie
 
-Ariadne houdt maximaal drie opeenvolgende ingressbranches operationeel:
-
-| Rol | Betekenis |
-| --- | --- |
-| `new` | Volgende ISO-week, voorbereid op zondag vóór de weekwissel. |
-| `current` | Actuele Belgische ISO-week waarin Sherlock normaal publiceert. |
-| `grace` | Onmiddellijk vorige ISO-week; alleen nog voor late afsluitingen en inhaalbare dagen. |
-
-Dit zijn branches, geen extra worktrees. De limiet van twee worktrees blijft
-ongewijzigd. Late graceverwerking leest de gefetchte oude branch read-only via een
-expliciete commit/ref en Git-objecten; zij mag de enige beheerde `weekworktree`
-niet heen en weer schakelen tussen weken.
-
-Een timeout of ontbrekend dagrecord uit de vorige week mag gedurende de volledige
-volgende ISO-week alsnog succesvol worden wanneer Sherlock later een geldige,
-onveranderlijke gereedmelding publiceert. Een bestaande `success` blijft
-idempotent en definitief. Een `processing_error` wordt niet automatisch door deze
-graceregel herclassificeerd: de implementatie moet late publicatie onderscheiden
-van een echte verwerkingsfout.
-
-Bij het einde van grace worden resterende open dagen terminale gemiste dagen
-(bijvoorbeeld status `missed`) en wordt dat expliciet gelogd. Daarna mag de oudste
-ingressbranch uit het operationele venster verdwijnen. Remote branchverwijdering is
-pas toegestaan nadat de eindtip via een duurzame archiefref of gelijkwaardig
-auditmechanisme bereikbaar blijft. Het precieze archiveringsmechanisme is nog een
-implementatiebeslissing; tot die is vastgelegd mag de runtime geen remote
-historische branch verwijderen.
+De vroegere transportbranch-lifecycle met `new`, `current` en `grace` is geen
+ontwerp voor de nieuwe queue. Catch-up en branchsnoei zijn niet geïmplementeerd.
+Oude branches blijven behouden zolang runtime en audit ze nodig hebben; deze PR
+verwijdert geen branches en wijzigt geen weekworktreegedrag.
 
 ## Lokale draden en tokens
 
@@ -187,10 +172,7 @@ Een geldige lege oogst is succes met nul draden en nul bronnen.
 
 Bij `prepare-week --next-week` rapporteert de weekjob alle zeven dagen van de
 aflopende ISO-week: `timeout`, `processing_error` en ontbrekende records worden
-als waarschuwingen gelogd. Zij blokkeren de volgende branch niet. Volgens het
-afgesproken grace-ontwerp blijven daarvoor in aanmerking komende dagen uit de
-onmiddellijk vorige week nog één volledige ISO-week inhaalbaar; de huidige runtime
-implementeert die catch-up nog niet. De dagrecords en poginghistoriek blijven binnen
+als waarschuwingen gelogd. Zij blokkeren de volgende branch niet. De huidige runtime biedt geen historische catch-up. De dagrecords en poginghistoriek blijven binnen
 de achtwekenretentie behouden. Een gewone Git-fout of onleesbare database blijft
 wel een runtimefout.
 
@@ -203,6 +185,9 @@ rapport op 10 januari 2021 (2021_W01) bewaart vanaf maandag 16 november 2020
 (2020_W47), inclusief 2020_W53. Het criterium gebruikt lokale kalenderdatums,
 geen getalberekening op `YYYY_Www` en geen 56 dagen vanaf zondag.
 
+Deze auditretentie verwijdert geen `ingress_queue`-records; pending fiches blijven
+bewaard tot een latere consumentenimplementatie een beleid toevoegt.
+
 Verwijdervolgorde in één transactie: `sources`, `threads`, `attempts`, `days`.
 Ook foutstatussen en losse oude pogingen vervallen. Daarna voert de runtime buiten
 de transactie `VACUUM` uit. Een verwijderfout rolt alle verwijderingen terug; een
@@ -211,9 +196,7 @@ geldig blijven. Een volgende uitvoering kan VACUUM opnieuw uitvoeren.
 
 Draadbestanden worden niet opgeruimd. Bestanden waarvan de provenance door retentie
 vervallen is, gelden niet automatisch als actieve output. De pipeline gebruikt
-uitsluitend de bewaarde registratie van succesvolle dagen. Inhaalverwerking is
-begrensd tot de afgesproken graceweek; oudere weken worden niet automatisch
-heropend.
+uitsluitend de bewaarde registratie van succesvolle dagen. Historische dagen worden niet automatisch heropend.
 
 ## Migratie van bibib na merge
 
@@ -284,7 +267,7 @@ Een vuile weekworktree wordt niet vervangen; bewaar of commit de wijzigingen
 eerst bewust. De dagelijkse taak voert dezelfde aankoppeling automatisch uit
 wanneer ze nog ontbreekt. Start vervolgens de echte dagelijkse handmatige test.
 
-## Handmatig controleren op bibib — vóór croninstallatie
+## Handmatig controleren op bibib
 
 Voer na de geslaagde migratie uit als gebruiker `weekendkrant`:
 
@@ -352,9 +335,10 @@ getest met de bestaande `./start_ariadne.sh prepare-week --next-week`; dat comma
 **pusht werkelijk** de volgende weekbranch. De tests dekken deze overgang eerst met
 een tijdelijke lokale remote en een mislukte dag.
 
-## Dagelijkse cronregel — alleen documentatie, nog niet installeren
+## Actieve Ariadne-cronjobs op bibib
 
-Voor een host waarvan `timedatectl show -p Timezone --value` `Europe/Brussels` geeft:
+Op bibib zijn deze bestaande cronjobs reeds geïnstalleerd en actief, met
+hosttimezone `Europe/Brussels`:
 
 ```cron
 0 10 * * * /home/weekendkrant/app/start_ariadne.sh daily >/dev/null
@@ -366,6 +350,7 @@ De bestaande zondagregel blijft:
 0 22 * * 0 /home/weekendkrant/app/start_ariadne.sh prepare-week --next-week >/dev/null
 ```
 
-Geen losse cronstart om de tien minuten en geen apart cronlog. De dagelijkse regel
-wordt pas na de handmatige workflowtest geïnstalleerd; deze PR installeert niets en
-wijzigt Sherlocks actieve ChatGPT-taak niet.
+Geen losse cronstart om de tien minuten en geen apart cronlog. Deze PR wijzigt
+de bestaande cronjobs en Sherlocks actieve ChatGPT-taak niet. De nieuwe ingress-API
+krijgt hier geen systemd-service, cronjob of andere permanente processupervisie.
+Ook Cloudflare Tunnel wordt niet als permanente service geïnstalleerd.

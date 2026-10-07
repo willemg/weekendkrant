@@ -38,8 +38,11 @@ Daarom stopt de standaardketen na maximaal één Minos-herschrijving.
 
 ## Menselijke inspectie blijft mogelijk
 
-GitHub bewaart de bronfiches en versioneerbare publicatieartefacten. Ariadnes lokale
+SQLite bewaart nieuwe fiches in de persistente transportqueue; Git/GitHub bewaart
+code en versioneerbare redactionele audit/publicatieartefacten. Tijdens de migratie
+blijven oude Git-fiches voor de bestaande Ariadne-consument beschikbaar. De lokale
 SQLite-audit bewaart de operationele provenance van de deterministische verwerking.
+De producerkant is beschikbaar; lokale queueconsumptie volgt nog.
 Bij uitzonderlijke, verrassende of twijfelachtige claims moet het gemakkelijk zijn om
 van een afgeleid resultaat terug te gaan naar de gebruikte bronfiches en hun
 oorspronkelijke bronnen.
@@ -52,7 +55,7 @@ Weekendkrant hoeft geen breaking-newsmachine te zijn. Het weekendritme laat toe 
 
 Nieuwe automatisering wordt alleen toegevoegd wanneer een concrete behoefte aantoonbaar bestaat. Vermijd preventief complexe databases, semantische zoeklagen, workflow-engines en extra agents.
 
-Een lokale SQLite-database voor verwerkingsaudit is een bewuste uitzondering: daar is
+Een lokale SQLite-database voor transportqueue en verwerkingsaudit is een bewuste keuze: daar is
 een concrete behoefte aan herstartbare status, provenance en inspecteerbaarheid zonder
 afgeleide runtimegegevens in Git te moeten bewaren.
 

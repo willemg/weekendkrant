@@ -1,7 +1,12 @@
-# Exacte aanvulling op Sherlocks bestaande taakinstructies
+# Sherlocks oude Git-dagafsluiting — overgangsreferentie
 
-Voeg onderstaande tekst toe aan de bestaande taakinstructies. Deze PR wijzigt de
-actieve ChatGPT-taak niet. De bestaande inhoudelijke zoekopdracht blijft behouden.
+De nieuwe richting is HTTPS POST naar de ingress-API en een persistente SQLite-queue;
+GitHub is niet langer het gekozen fichetransport. De producerkant is beschikbaar,
+maar Sherlock en Ariadne `daily` worden in deze PR niet omgezet. Onderstaande
+instructies documenteren uitsluitend het contract van de bestaande Git-runtime.
+Pas de actieve taak hiermee niet als onderdeel van deze PR aan. Het toekomstige
+queuecontract voor dagafsluiting en lege oogst volgt bij de consumentenstap.
+Zie [ingress-runtime](ingress-runtime.md).
 
 ---
 

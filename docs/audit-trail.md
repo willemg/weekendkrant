@@ -23,32 +23,30 @@ uitgevoerd.
 Tijdens de observatiefase is deze database lokale operationele staat en wordt ze niet
 naar GitHub gecommit. Het operationele schema voor dagelijkse bundeling staat hieronder.
 
-## Operationele dagstatus (afgesproken ontwerp)
+## Persistente transportqueue
 
-De dagelijkse Ariadne bewaart per lokale datum en ISO-week een operationele status
-in `/home/weekendkrant/weekendkrant.sqlite3`. Deze registratie staat los van
-claimkwaliteitslabels en van het Git-bootstraprecord. De huidige implementatie
-gebruikt `success`, `timeout` en `processing_error`. Het afgesproken
-grace-ontwerp voegt een terminale gemiste toestand toe (werknaam `missed`) voor
-dagen die aan het einde van hun graceweek nog niet succesvol verwerkt zijn; die
-status bestaat nog niet in het huidige schema.
+`ingress_queue` staat naast de bestaande audittabellen in
+`/home/weekendkrant/weekendkrant.sqlite3`. Elk record bevat `id` (uniek intern
+INTEGER PRIMARY KEY AUTOINCREMENT), `received_at` (UTC met offset), `payload`
+(JSON-object als tekst) en `status` (`TEXT NOT NULL DEFAULT 'pending'`, zonder
+beperkende CHECK-constraint). Deze producerstap schrijft uitsluitend `pending`.
+Een succesvolle HTTP `201` volgt pas nadat de INSERT-transactie is gecommit. De interface bewaart de JSON-inhoud,
+geen exacte HTTP-bodybytes of inhoudelijk gevalideerde ficheheader.
 
-| Uitkomst | Betekenis |
-| --- | --- |
-| Geslaagd | Sherlock meldde klaar en Ariadne verwerkte de afgesloten oogst succesvol; ook een expliciet afgesloten lege oogst kan slagen. |
-| Wachttijd verstreken | Na maximaal drie uur wachten was er geen geldige gereedmelding; de dagoogst is niet verwerkt. |
-| Verwerking mislukt | De gereedmelding was beschikbaar, maar de verwerking slaagde niet. |
-| Geen dagrecord | Er is geen bewijs van succesvolle verwerking; mogelijk startte de dagelijkse job niet. |
-| Grace gemist (gepland: `missed`) | De graceweek is verstreken zonder succesvolle verwerking; de dag wordt niet meer automatisch ingehaald. |
+Dit is ontvangstregistratie, geen bewijs van Ariadne-verwerking. Ariadne leest
+nog Git; lokale queueconsumptie volgt in een volgende PR. De publieke API heeft
+geen queue-leesendpoint. De bestaande achtweken-auditretentie verwijdert geen
+pending queue-items. Er is nog geen queueopruiming, lease of retryworkflow.
 
-De zondagavondjob leest deze gestructureerde status om onvolledige dagen te herkennen;
-logbestanden dienen voor diagnose en worden hiervoor niet geparseerd. Dagfouten en
-ontbrekende records blokkeren de voorbereiding van de volgende week niet. In het
-afgesproken vervolgontwerp blijft de onmiddellijk vorige ISO-week als `grace`
-beschikbaar: daarvoor in aanmerking komende timeout- of ontbrekende dagen mogen nog
-worden ingehaald wanneer Sherlock alsnog geldig afsluit. Aan het einde van grace
-worden resterende open dagen terminale gemiste dagen. Oudere weken worden niet
-automatisch heropend. Deze grace-overgangen zijn nog niet geïmplementeerd.
+## Operationele dagstatus (bestaande Git-overgangsruntime)
+
+Ariadne bewaart lokale datum, ISO-week en `success`, `timeout` of
+`processing_error`. Een ontbrekend dagrecord bewijst geen succesvolle verwerking.
+Een lege oogst slaagt alleen met een expliciet geldig Git-afsluitmanifest.
+De zondagjob leest deze statussen, geen logtekst, en blokkeert de volgende
+weekvoorbereiding niet wegens een onvolledige oogst. Historische catch-up en de
+vroeger voorgestelde grace-/`missed`-overgangen zijn niet geïmplementeerd; zij
+vormen geen contract voor de nieuwe transportqueue.
 
 ## Minimale kwaliteitslabels
 
@@ -132,7 +130,7 @@ herhaald uitvoeren dezelfde inhoud oplevert. Na commit maakt Git de wijziging
 en het tijdstip traceerbaar. Een bestaand passend record blijft behouden,
 ook na latere oogstcommits; een afwijkend record wordt geweigerd.
 
-## Dagelijkse SQLite-tabellen
+## Dagelijkse SQLite-audittabellen (bestaande Git-consument)
 
 - `days`: één record per lokale datum, met ISO-week, status, remote commit-SHA,
   SHA-256 van het afsluitmanifest en eventuele foutmelding.
@@ -162,12 +160,13 @@ ook dat als onvolledig. Eerdere succesvolle dagen worden nooit verwijderd.
 Een geslaagde dag is idempotent en wordt niet opnieuw verwerkt; handmatig verwijderen
 van succesvolle output wordt niet automatisch hersteld. Bewaar de database en
 succesvolle draden samen. De huidige runtime biedt nog geen herstel- of
-inhaalmechanisme voor oude dagen. Het afgesproken vervolgontwerp beperkt automatische
-catch-up tot de onmiddellijk voorafgaande graceweek en laat oudere weken gesloten.
+inhaalmechanisme voor oude dagen. Het toekomstige lokale consumentencontract wordt afzonderlijk uitgewerkt;
+deze PR verandert geen verwerkingsstatussen of catch-up.
 
 ## Wekelijkse retentie
 
-Na rapportage bewaart de zondagjob acht Belgische ISO-weken: de aflopende week en
+Deze retentie geldt uitsluitend voor de bestaande verwerkingsaudit, niet voor
+`ingress_queue`. Na rapportage bewaart de zondagjob acht Belgische ISO-weken: de aflopende week en
 zeven voorgaande weken. De ondergrens is de maandag van de aflopende week minus
 zeven weken; records met een eerdere `day` vervallen, inclusief fouten en pogingen.
 `sources`, `threads`, `attempts` en `days` worden in die volgorde in één transactie
