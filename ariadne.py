@@ -326,7 +326,7 @@ def main():
                        help='Lokale kalenderdatum YYYY-MM-DD; ISO-week wordt afgeleid.')
     dates.add_argument('--next-week', action='store_true',
                        help='Eerstvolgende ISO-week volgens Europe/Brussels.')
-    daily_parser = commands.add_parser('daily', help='Verwerk de afgesloten dagoogst van vandaag.')
+    daily_parser = commands.add_parser('daily', help='Verwerk de SQLite-queue voor vandaag in Europe/Brussels.')
     daily_parser.add_argument('--repo', type=Path, default=Path.cwd())
     args = parser.parse_args()
     try:

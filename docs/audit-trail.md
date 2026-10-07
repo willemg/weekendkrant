@@ -33,16 +33,15 @@ beperkende CHECK-constraint). Deze producerstap schrijft uitsluitend `pending`.
 Een succesvolle HTTP `201` volgt pas nadat de INSERT-transactie is gecommit. De interface bewaart de JSON-inhoud,
 geen exacte HTTP-bodybytes of inhoudelijk gevalideerde ficheheader.
 
-Dit is ontvangstregistratie, geen bewijs van Ariadne-verwerking. Ariadne leest
-nog Git; lokale queueconsumptie volgt in een volgende PR. De publieke API heeft
+Dit is ontvangstregistratie, geen bewijs van Ariadne-verwerking. Ariadne consumeert lokaal pending fiches en markeert ze na succes processed. De publieke API heeft
 geen queue-leesendpoint. De bestaande achtweken-auditretentie verwijdert geen
 pending queue-items. Er is nog geen queueopruiming, lease of retryworkflow.
 
-## Operationele dagstatus (bestaande Git-overgangsruntime)
+## Operationele dagstatus
 
-Ariadne bewaart lokale datum, ISO-week en `success`, `timeout` of
-`processing_error`. Een ontbrekend dagrecord bewijst geen succesvolle verwerking.
-Een lege oogst slaagt alleen met een expliciet geldig Git-afsluitmanifest.
+Ariadne bewaart lokale datum, ISO-week en `success` of `processing_error`.
+Historische `timeout`-records blijven leesbaar. Een ontbrekend dagrecord bewijst geen succesvolle verwerking.
+Nul pending fiches voor vandaag geeft success met nul draden, zonder manifest.
 De zondagjob leest deze statussen, geen logtekst, en blokkeert de volgende
 weekvoorbereiding niet wegens een onvolledige oogst. Historische catch-up en de
 vroeger voorgestelde grace-/`missed`-overgangen zijn niet geïmplementeerd; zij
@@ -130,24 +129,29 @@ herhaald uitvoeren dezelfde inhoud oplevert. Na commit maakt Git de wijziging
 en het tijdstip traceerbaar. Een bestaand passend record blijft behouden,
 ook na latere oogstcommits; een afwijkend record wordt geweigerd.
 
-## Dagelijkse SQLite-audittabellen (bestaande Git-consument)
+## Dagelijkse SQLite-audittabellen
 
-- `days`: één record per lokale datum, met ISO-week, status, remote commit-SHA,
-  SHA-256 van het afsluitmanifest en eventuele foutmelding.
+- `days`: één record per lokale datum, met ISO-week, status en eventuele foutmelding.
+  `commit_sha` en `manifest_sha256` zijn NULL voor queueverwerking.
 - `attempts`: historie van afgeronde pogingen binnen de bewaartermijn, met status, fout en UTC-tijd.
   Een herhaling van een geslaagde dag voegt geen poging toe. Een herstelde fout
   blijft hier zichtbaar, ook wanneer de actuele dagstatus daarna succes wordt.
 - `threads`: absoluut lokaal pad, dag, topic, deelnummer, inhoudshash, gemeten
   tokens, tokenizer en gereserveerde tokens.
 - `sources`: per dag en bronpad de exacte SHA-256, gekoppelde draad en positie.
-  De `days.commit_sha` legt vast uit welke Git-snapshot de bytes kwamen.
+  `source_path` is de canonieke queue-identiteit, bijvoorbeeld `queue:2`.
+  De hash betreft exact de UTF-8-bytes van payload.content.
 
-Alle draden worden eerst deterministisch gepland. Binnen één SQLite-transactie
-worden de draadbestanden via een tijdelijk bestand, fsync en atomische rename
-gepubliceerd en worden alle provenance en de successtatus vastgelegd. Pas na de
-commit is de dag succesvol. Een fout rolt de volledige transactie terug en schrijft
-afzonderlijk `processing_error`; een ontbrekende melding na de deadline schrijft
-`timeout`. Foutpogingen blijven binnen de bewaartermijn bewaard. Buiten Git staan zowel database als draden.
+Eén snelle SELECT materialiseert de queue-snapshot. Payloadvalidatie, tokenisatie
+en threadwrites houden geen write-transactie open. Draadbestanden worden met
+tempfile, fsync en atomische rename geschreven. Pas daarna begint een korte
+`BEGIN IMMEDIATE`-transactie die alle snapshot-IDs opnieuw op pending controleert.
+Later ontvangen items blijven buiten de snapshot en pending. Die DB-transactie
+registreert provenance, dagstatus success en exact de gebruikte queue-IDs als
+processed. Een fout (ook bij commit) rollbackt alles; de items blijven pending.
+Daarna wordt processing_error afzonderlijk geregistreerd. Bij een aanhoudend
+onbeschrijfbare DB kan ook foutregistratie mislukken; de fout wordt gelogd en de
+CLI stopt niet-nul. Er is geen polling of nieuwe timeoutstatus.
 
 Bestandssysteem en SQLite vormen samen geen enkele atomische transactie. Een crash
 of fout tijdens schrijven kan daarom losse afgeleide bestanden achterlaten, maar
@@ -160,8 +164,9 @@ ook dat als onvolledig. Eerdere succesvolle dagen worden nooit verwijderd.
 Een geslaagde dag is idempotent en wordt niet opnieuw verwerkt; handmatig verwijderen
 van succesvolle output wordt niet automatisch hersteld. Bewaar de database en
 succesvolle draden samen. De huidige runtime biedt nog geen herstel- of
-inhaalmechanisme voor oude dagen. Het toekomstige lokale consumentencontract wordt afzonderlijk uitgewerkt;
-deze PR verandert geen verwerkingsstatussen of catch-up.
+inhaalmechanisme voor oude dagen. Ook items die na success voor dezelfde datum
+arriveren blijven pending; een volgende daily is een no-op zonder nieuwe provenance.
+Zie [queuecontract en crashgedrag](daily-runtime.md).
 
 ## Wekelijkse retentie
 

@@ -22,12 +22,11 @@ voor externe HTTPS-bereikbaarheid. Het programma installeert geen binary of serv
 Het verwachte token komt uitsluitend uit `WEEKENDKRANT_INGRESS_TOKEN`.
 De publieke interface laat producers schrijven, maar biedt geen `GET /queue`.
 
-Ariadne zal de queue rechtstreeks lokaal via de database-interface consumeren.
-Die consumptie en Sherlocks omschakeling zijn **nog niet geïmplementeerd**.
-`daily` leest voorlopig nog de bestaande Git-fiches en afsluitmanifesten;
-API-fiches worden nu opgeslagen maar nog niet door Ariadne verwerkt.
-Zie [ingress-runtime](ingress-runtime.md) en
-[de bestaande overgangsruntime](daily-runtime.md).
+Ariadne consumeert de queue rechtstreeks lokaal via `IngressQueue`:
+`Sherlock -> MCP ingress -> ingress_queue.pending -> Ariadne daily -> lokale draden -> ingress_queue.processed`
+`daily` verwerkt alleen vandaag in Europe/Brussels, zonder Git-transport,
+manifestpolling of weekworktree. Zie [ingress-runtime](ingress-runtime.md) en
+[het dagelijkse contract](daily-runtime.md). De oude `closed`-route is niet meer operationeel.
 
 ## Scheiding tussen determinisme en intelligentie
 
@@ -35,7 +34,7 @@ Ariadne vormt de harde grens tussen de voorspelbare softwarelaag en de generatie
 
 Ariadne mag geen nieuws begrijpen, waarderen of samenvatten. Haar taken moeten reproduceerbaar zijn:
 
-- nieuwe queue-items lokaal lezen (volgende implementatiestap);
+- pending queue-items van vandaag lokaal lezen;
 - items per vooraf gekend onderwerp bundelen;
 - eenvoudige technische deduplicatie uitvoeren indien nodig;
 - tokenaantallen berekenen;
@@ -74,12 +73,12 @@ ruimt bij de gedocumenteerde productie-unit ook na een harde crash op.
 Afgeleide thematische draden blijven in de observatiefase lokaal. SQLite bewaart
 zowel de nieuwe transportqueue als Ariadnes bestaande operationele verwerkingsaudit,
 in afzonderlijke tabellen. De database staat buiten Git en wordt niet gecommit.
-De huidige Git-fiches blijven beschikbaar zolang `daily` daarvan afhankelijk is.
+Oude Git-fiches blijven historische artefacten; `daily` leest ze niet meer.
 
 | Pad | Inhoud |
 | --- | --- |
 | `/home/weekendkrant/app/` | Primaire worktree op `main`: code, startscripts, tests en `.venv`. |
-| `/home/weekendkrant/weekworktree/` | Enige beheerde weekworktree; bestaand redactioneel/versioneringsdoel en tijdelijk nog invoer voor de Git-consument. |
+| `/home/weekendkrant/weekworktree/` | Enige beheerde weekworktree; bestaand redactioneel/versioneringsdoel; geen dagelijkse invoer. |
 | `/home/weekendkrant/logs/` | Roterende Ariadne-logs. |
 | `/home/weekendkrant/weekendkrant.sqlite3` | Persistente transportqueue en afzonderlijke operationele audittabellen. |
 | `/home/weekendkrant/draden/` | Lokale afgeleide draden. |
@@ -93,7 +92,7 @@ vanuit deze map, met de interpreter uit `app/.venv`. Oude ingressbranches mogen
 oude code bevatten: die wordt nooit uitgevoerd. Er wordt geen main-code in
 bestaande ingressbranches gemerged of gerebased.
 
-Iedere Ariadne-runtime controleert onder het gemeenschappelijke `flock` de volledige
+`prepare-week` controleert onder het gemeenschappelijke `flock` de volledige
 registratie via `git worktree list --porcelain`. Er mogen maximaal twee
 worktrees bestaan: `app` en het vaste beheerde pad `weekworktree`. Onverwachte
 extra paden, een afwijkende branch, een ontbrekende of vergrendelde registratie
@@ -109,10 +108,8 @@ opnieuw aan. Weekbranches blijven tijdens de migratie behouden; branchsnoei staa
 van worktreesnoei en wordt in deze stap niet toegevoegd.
 
 Worktrees delen de Git-objectdatabase: dit maakt geen volledige extra clone.
-De dagelijkse taak kan de actuele bestaande week zelf aankoppelen en is dus niet
-afhankelijk van een zondagrun. Na zondagavond kan tijdelijk de volgende week
-gekoppeld zijn; de dagelijkse taak bepaalt haar doel opnieuw volgens de Belgische
-kalender. Zie de [migratiehandleiding](daily-runtime.md#migratie-van-bibib-na-merge).
+`daily` gebruikt uitsluitend het gemeenschappelijke slot en raakt de worktrees
+niet aan. Alleen `prepare-week` controleert, koppelt en wisselt de weekworktree.
 
 ## Ingressbranch-lifecycle tijdens de overgang
 
@@ -124,48 +121,30 @@ van de nieuwe SQLite-queue.
 Het vroegere ontwerp van branches als transportkanalen met `new`, `current` en
 `grace` wordt niet verder als doeltransport uitgewerkt. Grace-catch-up en
 branchsnoei zijn niet geïmplementeerd. Oude branches worden in deze PR niet
-verwijderd; de runtime leest nog hun fiches en audit. Eventuele latere
+verwijderd; historische fiches en audit blijven behouden. Eventuele latere
 branchopruiming moet die audit behouden en afzonderlijk worden uitgewerkt.
 
-## Dagafsluiting en dagelijkse uitvoering (bestaande Git-overgangsruntime)
+## Dagelijkse uitvoering
 
-Sherlock start momenteel dagelijks rond 08:00 in `Europe/Brussels`, met een flexibel
-starttijdstip. Dat is geen gegarandeerde eindtijd. Ariadne mag de dagoogst pas
-verwerken nadat Sherlock expliciet heeft gemeld dat hij voor die datum klaar is.
+Sherlock publiceert zijn geselecteerde fiches via MCP vóór Ariadne om 10:00 start.
+Ariadne neemt één SQLite-snapshot van `pending` voor de lokale datum, valideert de
+volledige selectie en plant alle draden. Nul fiches geeft `success` met nul draden.
+Er is geen gereedmarker en geen polling tot 13:00. Een ongeldige fiche of budgetfout
+faalt de hele dag met `processing_error`; geselecteerde items blijven pending.
 
-Sherlock publiceert de gereedmelding op de bijbehorende weekbranch als laatste,
-nadat alle fiches van die dag succesvol zijn gepusht. De melding noemt de lokale
-datum en geldt ook voor een dag zonder geselecteerde fiches. Na die melding mag
-Sherlock voor die datum niets meer toevoegen. Bij een onvolledige of mislukte
-publicatie geeft hij geen gereedmelding. Het bestand is `ingress/YYYY_Www/closed/YYYY-MM-DD.json`: een versie-1-manifest
-met datum, week en exacte fichepaden plus SHA-256-hashes. Zie
-[het concrete contract](daily-runtime.md#sherlocks-afsluitcontract-versie-1). Het is geen bronfiche.
+Draadbestanden worden atomisch geschreven vóór de databasecommit. Provenance,
+dagstatus en de geselecteerde queue-statussen worden samen gecommit. Het
+[crashvenster](daily-runtime.md#transactie-en-crashgedrag) kan losse bestanden
+achterlaten; die zijn zonder succesvolle DB-registratie geen gepubliceerde output.
+Een geslaagde dag is een no-op, ook als later nieuwe fiches voor die datum arriveren.
+Oudere/toekomstige dagen worden niet verwerkt en late arrivals blijven pending.
 
-De dagelijkse cronjob start Ariadne één keer om **10:00 Belgische tijd**. Het proces
-controleert meteen de gereedmelding voor die dag op de actuele remote weekbranch.
-Ontbreekt de melding, dan slaapt Ariadne tien minuten en haalt daarna de remote
-stand opnieuw op voor de volgende controle. Dit herhaalt ze gedurende maximaal
-drie uur vanaf de start. Er komen geen afzonderlijke cronaanroepen elke tien minuten.
-
-Na fetch synchroniseert Ariadne de afzonderlijke actuele weekworktree veilig via
-fast-forward en controleert daarin de gereedmelding. Alleen na een geldige melding
-verwerkt ze de afgesloten dagoogst. Een reeds succesvol
-verwerkte dag wordt niet dubbel verwerkt. Een vuile werkboom of conflicterende
-Git-history mag niet met reset, force-push of automatische conflictmerge worden
-opgelost. De huidige week volgt uit de Belgische kalender, niet uit de branch
-waarop de clone toevallig achterbleef na weekvoorbereiding.
-
-Bij een start om 10:00 eindigt het wachten uiterlijk om 13:00. Dat begrenst alleen
-het wachten: verwerking die net vóór de deadline begint, kan later eindigen.
-Zonder gereedmelding wordt niets verwerkt. Bij het verstrijken van de wachttijd
-registreert Ariadne de fout voor de betreffende datum in SQLite, schrijft ze een
-diagnostische melding via de bestaande logging en stopt ze met een niet-nul exitcode.
-Ook succesvolle verwerking en verwerkingsfouten krijgen een persistente dagstatus;
-zie [de operationele dagstatus](audit-trail.md#operationele-dagstatus-bestaande-git-overgangsruntime).
-
-Dagelijkse verwerking en wekelijkse voorbereiding gebruiken dezelfde vergrendeling,
-zodat nooit twee Ariadne-processen tegelijk aan dezelfde clone werken. Het Linux-`flock` staat in de gemeenschappelijke Git-map en blijft gedurende
-de hele taak vastgehouden. Een tweede proces stopt direct.
+Dagelijkse verwerking en weekvoorbereiding gebruiken hetzelfde niet-blokkerende
+Linux `flock` in de gemeenschappelijke Git-map. De SQLite-transactie gebruikt
+`BEGIN IMMEDIATE` uitsluitend voor de finale provenance/statusupdate. Tijdens
+validatie, tokenisatie en threadwrites blijft de producer vrij om items toe te voegen;
+die nieuwe items vallen buiten de oorspronkelijke snapshot en blijven pending.
+Geen modellen, leases, retries of aanvullende queue-statussen.
 
 ## Zondagavond en overgang naar de volgende week
 
@@ -176,7 +155,7 @@ ingesteld, met de hosttimezone `Europe/Brussels`:
 0 22 * * 0 /home/weekendkrant/app/start_ariadne.sh prepare-week --next-week >/dev/null
 ```
 
-De weekjob start dus zondag om **22:00**, ruim na het dagelijkse wachtvenster.
+De weekjob start dus zondag om **22:00**, na de dagelijkse verwerking.
 De geïmplementeerde uitbreiding leest de dagstatussen van de aflopende week uit SQLite.
 Een timeout, verwerkingsfout of ontbrekend dagrecord maakt zichtbaar dat de oogst
 niet aantoonbaar compleet is. Een ontbrekend dagrecord kan ook betekenen dat de
@@ -186,10 +165,8 @@ Een onvolledige dagoogst verandert de normale weekvoorbereiding niet en blokkeer
 nooit het aanmaken en pushen van de volgende weekbranch. Gewone Git- en
 runtimefouten blijven wel redenen om veilig te stoppen.
 
-Zolang `daily` Git leest, blijven bestaande fiches, manifesten en branches
-behouden. De huidige code verwerkt na de weekovergang uitsluitend de actuele dag.
-De oude voorgestelde branchgrace is geen geïmplementeerde catch-up en geen
-ontwerp voor de SQLite-queue.
+Bestaande weekbranches blijven behouden; `prepare-week` is niet nodig voor
+Sherlock-transport. Historical catch-up en late-arrival-verwerking blijven buiten scope.
 
 ## Achtwekenretentie
 
@@ -207,7 +184,7 @@ voorbereiding en voert geen weekrapport/retentie uit. Database- of VACUUM-fouten
 zijn runtimefouten en worden niet als gewone dagoogstfouten genegeerd.
 
 De retentie raakt `ingress_queue` niet: pending fiches worden nooit door deze
-auditretentie verwijderd. Queueconsumptie en -opruiming volgen afzonderlijk.
+auditretentie verwijderd. Queueopruiming volgt afzonderlijk.
 
 ## Kalender- en tijdzonecontract
 
@@ -261,7 +238,7 @@ CLI-help en argumentfouten blijven door `argparse` afgehandeld.
 ## Eerste implementatiestap: weekvoorbereiding
 
 Het bestaande subcommand `prepare-week` bereidt de Git-weekwerkruimte voor
-die tijdens de migratie nog door `daily` wordt gebruikt. Het vaste technische
+voor de verdere redactionele pipeline; `daily` heeft die niet nodig. Het vaste technische
 padcontract is `ingress/<ISO-jaar>_W<week>/` op branch
 `ingress/<ISO-jaar>_W<week>` (twee cijfers voor de week).
 Een `.gitkeep` maakt de lege map versieerbaar. Dit legt het inhoudelijke
@@ -278,8 +255,7 @@ naar `origin` pushen met upstream. Een nieuwe branch start op de bijgewerkte `ma
 Een bestaande weekremote wordt uitsluitend fast-forward gevolgd; bij een alleen
 remote bestaande weekbranch wordt een lokale trackingbranch gemaakt. Bestaande
 oogst blijft intact. Een lokale weekvoorsprong mag bij voorbereiding opnieuw
-worden gepusht, bijvoorbeeld na een eerdere pushfout; dagelijkse verwerking weigert
-een lokale voorsprong. Divergente weekhistory, vooruitgelopen/divergente `main`,
+worden gepusht, bijvoorbeeld na een eerdere pushfout. Divergente weekhistory, vooruitgelopen/divergente `main`,
 een vuile werkboom of conflicterende metadata leidt tot veilig stoppen.
 Er is geen reset, force-push, automatische conflictmerge of commit van weekbestanden
 op `main`. Herhaling maakt geen extra commit; push bevestigt telkens remote succes.
@@ -294,9 +270,9 @@ geïnstalleerd zoals hierboven beschreven. De code bevat geen croninstallatie.
 De dagelijkse verwerking is inmiddels toegevoegd als afzonderlijk subcommand `daily`.
 Modelcalls blijven buiten scope.
 
-## Dagelijkse lokale bundeling (bestaande Git-consument)
+## Dagelijkse lokale bundeling
 
-De dagelijkse deterministische stap leest Sherlocks bestaande ingress en maakt daar
+De dagelijkse deterministische stap leest Sherlocks SQLite-queue en maakt daar
 lokale draden met gereserveerde ruimte voor Leonardo-context van. Daarbij gelden voorlopig deze invarianten:
 
 - bundelen gebeurt mechanisch op basis van expliciete metadata, niet op semantische interpretatie;
@@ -307,7 +283,7 @@ lokale draden met gereserveerde ruimte voor Leonardo-context van. Daarbij gelden
 - verwerking en provenance worden in SQLite geregistreerd;
 - geen bundel wordt automatisch naar GitHub teruggeschreven tijdens de observatiefase.
 
-Het [dagelijkse runtimecontract](daily-runtime.md) legt bundelpaden, manifest,
+Het [dagelijkse runtimecontract](daily-runtime.md) legt bundelpaden, queuevalidatie,
 SQLite-transacties, tokenizer, foutgedrag en concrete controlecommando’s vast.
 De bestaande Ariadne-cronjobs zijn op bibib actief: `daily` dagelijks om 10:00
 en `prepare-week --next-week` zondag om 22:00 Belgische tijd. De ingress-API draait op bibib via `weekendkrant-ingress.service`. De tunnelcomponent

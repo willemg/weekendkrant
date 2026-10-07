@@ -2,7 +2,7 @@
 
 ## Doel en migratiestatus
 
-Sherlock zal fiches via HTTPS POST afleveren aan de ingress-API op bibib.
+Sherlock levert fiches via HTTPS POST af aan de ingress-API op bibib via de Weekendkrant Ingress MCP-plugin.
 De Python-server luistert standaard alleen op `127.0.0.1:8000`. `ingress_tunnel.py` superviseert een afzonderlijke Cloudflare Quick Tunnel
 voor externe HTTPS-bereikbaarheid. De component downloadt of installeert geen
 binary en wijzigt geen services, router of firewall.
@@ -12,12 +12,17 @@ transportmechanisme voor Sherlock-fiches. Git blijft voor code, weekbranches,
 worktrees, auditbare redactionele output en krantartefacten. Een weekworktree is
 geen queue. Bestaande branches blijven behouden zolang de huidige runtime ze nodig heeft.
 
-**Nu geïmplementeerd:** producer-API, queueopslag en Quick Tunnel/discoverypublisher.
-**Volgende PR:** Ariadne consumeert rechtstreeks lokaal via de queue/database-interface.
-Sherlock is nog niet omgezet en `daily` leest nog de bestaande Git-fiches en
-manifesten. API-items blijven nu `pending`; POST betekent ontvangst, geen verwerking.
-De API valideert alleen JSON-objecten, geen inhoudelijk fiche- of dagafsluitschema.
-Het contract voor dagafsluiting en lege oogst wordt bij de consumentenstap uitgewerkt.
+**Geïmplementeerd:** producer-API, queueopslag, Quick Tunnel/discoverypublisher en
+Ariadnes lokale queueconsument.
+`Sherlock -> MCP ingress -> ingress_queue.pending -> Ariadne daily -> lokale draden -> ingress_queue.processed`
+POST betekent ontvangst (`pending`), geen verwerking. `daily` zet precies de
+gebruikte items pas na geslaagde dagelijkse verwerking op `processed`.
+De API accepteert JSON-objecten; Ariadne valideert het strikte versie-1-contract
+met exact `schema_version`, `topic` (1–3), `date` en `content`.
+`daily` verwerkt één snapshot voor vandaag in Europe/Brussels zonder polling of
+`closed`-manifest. Een lege dagsnapshot slaagt. Oudere/toekomstige fiches en late
+arrivals na dagsucces blijven pending. `prepare-week` blijft bestaan maar is geen
+transportvoorwaarde. Zie [dagelijkse runtime](daily-runtime.md).
 
 ## Starten op bibib
 

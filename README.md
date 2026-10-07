@@ -35,31 +35,27 @@ Python 3.9-standaardbibliotheek. Het doeltransport is
 Git/GitHub dient voor code, weekbranches, worktrees, audit en krantartefacten,
 niet als primaire transportqueue.
 
-**Migratie loopt:** Sherlock is nog niet omgezet en Ariadne `daily` consumeert
-nog geen queue-items. De bestaande wekelijkse voorbereiding en dagelijkse
-Git-verwerking blijven werken; API-items blijven voorlopig `pending`.
+Ariadne `daily` consumeert rechtstreeks de SQLite-queue voor vandaag in
+Europe/Brussels. Sherlock gebruikt de Weekendkrant Ingress MCP-plugin.
+`Sherlock -> MCP ingress -> ingress_queue.pending -> Ariadne daily -> lokale draden -> ingress_queue.processed`
+Nul pending fiches voor vandaag is een succesvolle lege run. Na succes worden de
+gebruikte items `processed`; late arrivals blijven `pending`. Geen historische
+catch-up, manifest of polling.
 De nieuwe `ingress_tunnel.py` houdt een Cloudflare Quick Tunnel open en publiceert
 de actuele URL als `config/ingress-endpoint.json` op GitHub `main`. De MCP-plugin
 leest die vaste discoverypointer; Sherlock hoeft de tunnel-URL niet te kennen.
 Zie [ingress-runtime](docs/ingress-runtime.md) voor starten, authenticatie,
 de geïsoleerde publisher en de handmatig te installeren voorbeeld-unit.
 
-## Bestaande Git-runtime tijdens de migratie
+## Dagelijkse queue en wekelijkse werkruimte
 
-De onderstaande voorbereiding, manifesteisen en controles beschrijven uitsluitend
-de bestaande Git-consument. Weekbranches/worktrees blijven bestaan voor hun
-redactionele/versioneringsdoel; zij zijn geen SQLite-ingressqueue.
-
-Zie [dagelijkse runtime en handmatige controles voor bibib](docs/daily-runtime.md)
-en [de oude Git-contractreferentie voor Sherlock](docs/sherlock-dagafsluiting.md).
-De bestaande Ariadne-cronjobs zijn op bibib actief: dagelijks om 10:00 en
-zondagse weekvoorbereiding om 22:00 Belgische tijd.
-`/home/weekendkrant/app` blijft op `main`; alleen
-`/home/weekendkrant/weekworktree` bevat een ingressbranch. Er zijn maximaal twee
-geregistreerde worktrees. Beide taken starten altijd de code en venv uit `app`.
-Volg bij een bestaande installatie eerst de
-[veilige migratie na merge](docs/daily-runtime.md#migratie-van-bibib-na-merge).
-SQLite bewaart de aflopende Belgische ISO-week plus de zeven voorgaande weken.
+Zie [dagelijkse runtime en controles voor bibib](docs/daily-runtime.md).
+De oude `closed`-manifestroute is niet meer operationeel. `prepare-week` blijft
+voor redactioneel versiebeheer bestaan en is niet nodig voor Sherlock-transport.
+De cronjobs blijven dagelijks om 10:00 en zondag om 22:00 Belgische tijd.
+`app` blijft op `main`; `prepare-week` beheert maximaal één aparte weekworktree.
+Beide taken gebruiken hetzelfde Ariadne-slot. De auditretentie is acht ISO-weken
+maar ruimt geen queue-items op.
 
 ## Weekwerkruimte voorbereiden
 
@@ -133,12 +129,11 @@ Dagelijks handmatig starten:
 ./start_ariadne.sh daily
 ```
 
-Dit kiest vandaag in `Europe/Brussels`, wacht maximaal drie uur op Sherlock en
-verwerkt alleen de expliciet afgesloten dag. Succes, timeout en verwerkingsfouten
-blijven binnen de achtwekenretentie in SQLite bewaard. De zondagavondjob rapporteert onvolledige dagen zonder
-de volgende weekvoorbereiding te blokkeren. Beide taken gebruiken hetzelfde slot.
-Volg eerst de [preflight](docs/daily-runtime.md#handmatig-controleren-op-bibib),
-inclusief tokenizer-cache en de handmatige workflowtest.
+Dit kiest vandaag in `Europe/Brussels` en verwerkt één consistente snapshot van
+pending fiches voor die datum, zonder Git fetch of wachten op Sherlock.
+De hele dag slaagt of faalt; zie [transactie en crashgedrag](docs/daily-runtime.md#transactie-en-crashgedrag).
+Volg eerst de [preflight](docs/daily-runtime.md#handmatig-controleren-op-bibib).
+De zondagjob rapporteert onvolledige dagen zonder de volgende week te blokkeren.
 
 ```bash
 ./start_tests.sh

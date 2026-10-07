@@ -31,12 +31,20 @@ class WorktreeTests(RuntimeGitFixture):
         self.run_git(other, 'commit', '-m', 'Oude code met afgesloten oogst')
         self.run_git(other, 'push', '-u', 'origin', self.branch)
         self.old_head = self.remote_ref(self.branch)
-        for name in ('ariadne.py', 'daily.py'):
+        for name in ('ariadne.py', 'daily.py', 'ingress_queue.py'):
             shutil.copy(Path(ariadne.__file__).parent / name, self.root / name)
         self.git('add', '*.py')
         self.git('commit', '-m', 'Actuele uitvoercode')
         self.git('push')
         self.code_head = self.git('rev-parse', 'HEAD')
+
+    def prepare_current(self):
+        return ariadne.prepare_week_runtime(self.root, self.day)
+
+    def attach_old_week(self):
+        with ariadne.clone_lock(self.root):
+            self.git('fetch', 'origin')
+            ariadne.ensure_week_worktree(self.root, self.day)
 
     def daily(self):
         return daily.run_daily(self.root, self.db, self.output,
@@ -51,16 +59,17 @@ class WorktreeTests(RuntimeGitFixture):
         self.assertIn('daily', result.stdout)
 
     def test_old_ingress_daily_and_new_cli_process(self):
+        self.attach_old_week()
         self.daily()
         self.assert_code_available()
         self.assertFalse((self.weekroot / 'daily.py').exists())
         self.assertEqual(self.run_git(self.weekroot, 'branch', '--show-current'), self.branch)
         self.assertEqual(self.remote_ref(self.branch), self.old_head)
-        self.daily()
+        self.attach_old_week()
         self.assertEqual(self.git('worktree', 'list', '--porcelain').count('worktree '), 2)
 
     def test_week_transition_keeps_code_branch_and_old_harvest(self):
-        self.daily()
+        self.attach_old_week()
         ariadne.prepare_week_runtime(self.root, date(2026, 10, 12))
         self.assert_code_available()
         self.assertEqual(self.run_git(self.weekroot, 'branch', '--show-current'), 'ingress/2026_W42')
@@ -71,10 +80,10 @@ class WorktreeTests(RuntimeGitFixture):
         self.assertEqual(self.git('worktree', 'list', '--porcelain').count('worktree '), 2)
 
     def test_dirty_week_preserved(self):
-        self.daily()
+        self.prepare_current()
         path = self.weekroot / 'unpublished.txt'
         path.write_text('Niet weggooien')
-        for run in (self.daily, lambda: ariadne.prepare_week_runtime(self.root, date(2026, 10, 12))):
+        for run in (self.prepare_current, lambda: ariadne.prepare_week_runtime(self.root, date(2026, 10, 12))):
             with self.assertRaisesRegex(ValueError, 'Vuile|wijzigingen'):
                 run()
             self.assertEqual(path.read_text(), 'Niet weggooien')
@@ -84,29 +93,29 @@ class WorktreeTests(RuntimeGitFixture):
         extra = self.root.parent / 'unexpected'
         self.git('worktree', 'add', '--detach', str(extra), 'main')
         with self.assertRaisesRegex(ValueError, 'worktree'):
-            self.daily()
+            self.prepare_current()
         self.assertTrue(extra.exists())
         self.assertFalse(self.weekroot.exists())
         self.assert_code_available()
 
     def test_third_worktree_stops_even_on_success_repeat(self):
-        self.daily()
+        self.prepare_current()
         extra = self.root.parent / 'unexpected'
         self.git('worktree', 'add', '--detach', str(extra), 'main')
         with self.assertRaisesRegex(ValueError, 'worktree'):
-            self.daily()
+            self.prepare_current()
         self.assertTrue(extra.exists())
         self.assertTrue(self.weekroot.exists())
 
     def test_locked_managed_worktree_not_removed(self):
-        self.daily()
+        self.prepare_current()
         self.git('worktree', 'lock', str(self.weekroot))
         with self.assertRaises(ValueError):
             ariadne.prepare_week_runtime(self.root, date(2026, 10, 12))
         self.assertTrue(self.weekroot.exists())
 
     def test_ignored_week_files_are_not_discarded(self):
-        self.daily()
+        self.prepare_current()
         self.week_git('config', 'core.excludesFile', str(self.root.parent / 'excludes'))
         (self.root.parent / 'excludes').write_text('precious.tmp\n')
         precious = self.weekroot / 'precious.tmp'
@@ -133,7 +142,7 @@ class WorktreeTests(RuntimeGitFixture):
         precious = self.weekroot / 'precious'
         precious.write_text('keep')
         with self.assertRaisesRegex(ValueError, 'niet geregistreerd'):
-            self.daily()
+            self.prepare_current()
         self.assertEqual(precious.read_text(), 'keep')
 
     def test_state_cannot_be_written_into_weekworktree(self):
@@ -187,14 +196,6 @@ class RetentionTests(unittest.TestCase):
         with sqlite3.connect(self.path) as db:
             for table in ('days', 'attempts', 'threads', 'sources'):
                 self.assertEqual(db.execute('SELECT count(*) FROM ' + table).fetchone()[0], 1)
-
-    def test_fixed_topic_catalog(self):
-        for topic in ('0', '5', '999999999999999999999', '-1', '01'):
-            with self.subTest(topic=topic), self.assertRaises(ValueError):
-                daily.parse_fiche(f'WEEKENDKRANT-INGRESS-1\ntopic: {topic}\ndate: 2026-10-05\n\nBody'.encode())
-        for topic in range(1, 5):
-            self.assertEqual(daily.parse_fiche(
-                f'WEEKENDKRANT-INGRESS-1\ntopic: {topic}\ndate: 2026-10-05\n\nBody'.encode())[0], topic)
 
     def test_vacuum_reclaims_space_after_deletion(self):
         self.seed(date(2020, 1, 1), 'processing_error')
