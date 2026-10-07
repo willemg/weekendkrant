@@ -1,206 +1,112 @@
-# Ariadnes dagelijkse verwerking — Git-overgangsruntime
+# Ariadnes dagelijkse SQLite-verwerking
 
-Dit document beschrijft de **bestaande**, nog ongewijzigde Git-consument, niet
-het doeltransport. Het doel is Sherlock -> HTTPS ingress-API -> SQLite queue ->
-lokale Ariadne-consumptie. De API en queue zijn beschikbaar; `daily` leest ze nog
-niet. Sherlock wordt hier niet aangepast. Weekbranches en worktrees blijven voor
-redactioneel versiebeheer en tijdelijk voor de bestaande invoer behouden.
-Zie [ingress-runtime](ingress-runtime.md). De manifest- en Git-commando’s hieronder
-zijn alleen voor deze overgang; een API-POST bereikt `daily` nog niet.
+`Sherlock -> MCP ingress -> ingress_queue.pending -> Ariadne daily -> lokale draden -> ingress_queue.processed`
 
-`./start_ariadne.sh daily` verwerkt in de huidige implementatie uitsluitend
-**vandaag in Europe/Brussels**. Er is bewust nog geen publieke `--date` voor deze
-taak. Het vroegere voorstel voor Git-grace-catch-up is niet geïmplementeerd en wordt
-niet als queueconsumptiecontract overgenomen.
-De bestaande `prepare-week --date …` en `prepare-week --next-week` blijven bestaan.
-Geen modelcalls, inhoudelijke beoordeling, deduplicatie of push van draden.
+`./start_ariadne.sh daily` consumeert rechtstreeks de lokale SQLite-queue.
+GitHub is geen Sherlock-transportqueue meer. De oude `closed`-manifestroute is
+niet meer operationeel; geen fetch, weekbranch lookup, manifest of drie uur polling.
+`prepare-week` en de bestaande weekworktreelogica blijven ongewijzigd voor verdere
+redactionele/versioneringsoutput; zij zijn geen voorwaarde voor daily of Sherlock.
 
-## Sherlocks afsluitcontract, versie 1
+## Dagselectie en payloadcontract
 
-Op `ingress/YYYY_Www` staat per lokale datum precies één bestand:
-`ingress/YYYY_Www/closed/YYYY-MM-DD.json`. Voorbeeld van een **lege**, succesvol
-afgesloten oogst:
+De datum wordt eenmaal gekozen met `local_day()` in Europe/Brussels. Alleen
+`pending` items met `payload.date` gelijk aan die lokale datum worden verwerkt.
+Geen historische catch-up of toekomstige verwerking. Sherlock voert zijn dagelijkse
+run uit vóór de bestaande cronstart om 10:00. Er is geen gereedmarker.
+
+Een fiche is een JSON-object met **exact** deze velden:
 
 ```json
 {
   "schema_version": 1,
-  "date": "2026-10-05",
-  "week": "2026_W41",
-  "files": []
+  "topic": 2,
+  "date": "2026-10-07",
+  "content": "# Titel\n\nBronfiche met bronlinks."
 }
 ```
 
-Bij een niet-lege oogst bevat `files` exact alle fiches met die lokale `date`:
+`schema_version` is exact integer 1; `topic` is exact integer 1, 2 of 3.
+Booleans, floats, extra/ontbrekende velden, dubbele JSON-sleutels, NaN en Infinity
+worden geweigerd. `date` is een geldige ISO-kalenderdatum in exacte YYYY-MM-DD-vorm.
+`content` is een niet-lege string; alleen whitespace is geen fiche. De oorspronkelijke
+content wordt niet gestript of herschreven: exact UTF-8 encode bepaalt de fichebytes
+én hun SHA-256. Ariadne synthetiseert geen Git-header.
 
-```json
-{
-  "schema_version": 1,
-  "date": "2026-10-05",
-  "week": "2026_W41",
-  "files": [
-    {
-      "path": "ingress/2026_W41/ingress_0001.md",
-      "sha256": "<64 kleine hextekens: SHA-256 van de exacte gepubliceerde bytes>"
-    }
-  ]
-}
-```
+Selectie leest pending records uit één DB-snapshot. Geldige andere kalenderdatums
+worden overgeslagen vóór inhoudelijke fichevalidatie. Beschadigde JSON, een niet-object
+of een ontbrekende/ongeldige datum kan niet veilig aan een andere dag worden toegewezen:
+de run faalt dan expliciet met processing_error, zonder dat item te consumeren.
+Dit voorkomt dat beschadigde pending records stil verdwijnen uit de dagselectie.
+Eén ongeldige geselecteerde fiche faalt de hele dag vóór bestandspublicatie.
 
-Het tweede voorbeeld is een sjabloon; de hashplaceholder is geen geldige hash.
-Paden zijn relatief aan de repositoryroot; alleen `ingress_[0-9]+.md` direct in
-de weekmap is toegestaan. Alle bestanden zijn gewone niet-uitvoerbare Git-blobs,
-geen symlinks. Geen dubbele paden, dubbele JSON-sleutels of extra manifestvelden.
-
-Sherlock publiceert dit manifest **als laatste**, pas nadat alle fiches succesvol
-op de remote staan. Hij mag de afgesloten fiches en het manifest vervolgens niet
-wijzigen, verwijderen of aanvullen. Bij onvolledige publicatie ontbreekt het manifest.
-`files: []` betekent expliciet nul fiches; het ontbreken van een manifest betekent
-nooit een lege oogst. Het manifest is geen bronfiche.
-
-De ondersteunde bestaande ficheheader is UTF-8 met LF-regeleinden:
-
-```text
-WEEKENDKRANT-INGRESS-1
-topic: 2
-date: 2026-10-05
-
-De volledige oorspronkelijke fiche, inclusief bronlinks.
-```
-
-`topic` is exact één van `1`, `2`, `3`, `4` uit Sherlocks vaste catalogus; nul,
-onbekende nummers en afwijkende schrijfwijzen zoals `01` worden geweigerd. `date` is een geldige lokale
-kalenderdatum in de betreffende ISO-week. De drie headerregels staan in deze
-volgorde, zonder dubbele velden. Ariadne raadt geen metadata. Tijdens validatie
-worden alle fiches in de weeksnapshot op geldig formaat gecontroleerd, maar alleen
-de afgesloten datum wordt verwerkt. Een beschadigde fiche van een andere dag in
-dezelfde snapshot leidt dus ook tot een expliciete verwerkingsfout.
-
-Ariadne leest exacte Git-blobs uit één gefetchte commit. Ze controleert zowel de
-snapshot waarin het manifest voor het eerst werd toegevoegd als de actuele snapshot:
-alle genoemde fiches moeten toen al bestaan, hashes moeten overeenkomen, er mogen
-geen extra fiches voor die datum bestaan en het manifest mag niet veranderd zijn.
-Een ongeldige aanwezige melding is een `processing_error`, geen reden om verder te
-wachten. Een eerder geslaagde dag is een no-op; die wordt niet opnieuw gevalideerd.
-
-## Runtime en vergrendeling
-
-Een cronstart om 10:00; meteen `fetch --prune origin` en controle van de remote huidige week.
-Bij afwezigheid slaapt het proces 600 seconden en fetcht opnieuw. De monotone
-wachttijd is maximaal 10.800 seconden vanaf het begin van de dagelijkse taak,
-inclusief fetch en controles. Fetch krijgt de resterende tijd als subprocess-timeout.
-Op of na de deadline wordt geen verwerking gestart. Een verwerking die ervoor
-begon, mag later eindigen. Datum en ISO-week worden eenmaal bij start vastgelegd,
-onafhankelijk van de hosttimezone en uitgecheckte branch. Klok en slaapfunctie
-zijn injecteerbaar; tests slapen nooit echt.
-
-Beide runtimefuncties nemen hetzelfde niet-blokkerende Linux `flock` op
-`<git-common-dir>/ariadne.lock`. Het slot blijft ook tijdens polling vastgehouden;
-een tweede Ariadne stopt zonder Git-wijzigingen. Het slotbestand mag blijven staan:
-de kernel laat het slot bij afsluiten of crash vrij. Ook gekoppelde Git-worktrees
-delen dit slot. Andere schrijvers moeten deze clone ongemoeid laten.
-
-`/home/weekendkrant/app` moet op `main` blijven staan. De runtime weigert een
-andere app-branch en verwijst naar de migratie hieronder. Alleen de afzonderlijke
-`/home/weekendkrant/weekworktree` bevat de weekbranch. Beide taken worden altijd
-met code, startscripts en venv uit `app` gestart; voer nooit scripts uit de
-weekworktree uit. Bestaande ingressbranches krijgen geen rebase of codemerge.
-
-Vóór fetch worden registratie en werkbomen gecontroleerd met
-`git worktree list --porcelain` en `git status`. Maximaal twee geregistreerde
-worktrees zijn toegestaan, uitsluitend de twee vaste paden. Onverwachte extra
-worktrees worden niet opgeruimd: de taak stopt duidelijk.
-Dit ondersteunt Git 2.30.2 zonder upgrade. De gedeelde parser leest regels en
-Git-C-gequote paden (inclusief octale bytes), zonder splitsen op whitespace of
-shell-evaluatie. Onbekende, dubbele of onvolledige records leiden tot stoppen.
-Git 2.30.2 geeft paden ongequote weer; onduidelijke uitvoer, bijvoorbeeld een
-pad met een ingebedde newline, wordt geweigerd. Omdat die versie geen `locked`
-veld toont, controleert Ariadne ook het `locked`-bestand in de Git-adminmap van
-de beheerde worktree. Ook een vergrendelde,
-ontbrekende of verkeerd gekoppelde weekworktree wordt niet verwijderd.
-
-De actuele weekbranch wordt in de weekworktree uitsluitend fast-forward gevolgd.
-Een ontbrekende lokale weekbranch wordt een trackingbranch. Dagelijkse verwerking
-weigert lokale voorsprong en divergentie. Zij kan een al bestaande huidige
-remoteweek zelf aankoppelen, zonder eerst op zondagavond te moeten wachten.
-Een geslaagde herhaling blijft een no-op, maar controleert wel beide werkbomen en
-het aantal geregistreerde worktrees. Een fout bij die controle wist eerder
-succes en provenance niet; de mislukte poging wordt apart geregistreerd.
-
-De zondagavondjob verwijdert vóór een weekwissel alleen de beheerde schone
-weekworktree, via `git worktree remove` zonder force. Ook untracked en genegeerde
-bestanden tellen als lokale wijzigingen en blijven behouden bij weigering.
-Een juiste worktree wordt gecontroleerd en hergebruikt. Worktrees delen de
-Git-objectdatabase; het is geen volledige tweede clone. Alle controles, verwijdering
-en creatie vallen onder hetzelfde slot.
-
-## Weekbranches tijdens de migratie
-
-De vroegere transportbranch-lifecycle met `new`, `current` en `grace` is geen
-ontwerp voor de nieuwe queue. Catch-up en branchsnoei zijn niet geïmplementeerd.
-Oude branches blijven behouden zolang runtime en audit ze nodig hebben; deze PR
-verwijdert geen branches en wijzigt geen weekworktreegedrag.
+Nul pending fiches voor vandaag betekent `success` met nul draden. Een succesvol
+dagrecord maakt iedere volgende daily een no-op, zonder extra poging, provenance
+of bestanden. Ook bij een lege succesvolle dag blijven **late arrivals voor dezelfde
+datum pending**. Er is geen late-arrival verwerking of heropening. Oudere pending
+fiches blijven staan totdat een toekomstig expliciet beleid is gebouwd.
 
 ## Lokale draden en tokens
 
-Bestanden staan onder:
+Outputpad blijft:
 `/home/weekendkrant/draden/YYYY_Www/topic_N/YYYY-MM-DD_PPPP.txt`.
-Ze bevatten draadmetadata, bronpad, SHA-256 en byteaantal, gevolgd door de volledige
-fichebytes als UTF-8-tekst. Headers en bronlinks blijven behouden. De vaste volgorde
-is numeriek topic, vervolgens lexicografisch volledig bronpad; deelnummer vanaf 1
-per dag en topic. Geen semantische deduplicatie, ook niet bij identieke inhoud.
-Oudere succesvolle dagen blijven beschikbaar. De SQLite-provenance bepaalt welke
-bestanden volledig en succesvol gepubliceerd zijn; lees niet blind alle `.txt`-files.
+De bronidentiteit is `queue:<id>`, bijvoorbeeld `queue:2`. Topic en datum staan
+structureel in draadmetadata; bronidentiteit, SHA-256 en byteaantal in elke bronafscheiding.
+De inhoud tussen die afscheidingen is de exacte payload.content als UTF-8.
+`received_at` wordt niet in de draad opgenomen.
 
-`tiktoken==0.12.0` met expliciet `cl100k_base` meet de **volledige geserialiseerde
-draad**, inclusief metadata en bronafscheidingen. Maximaal 30.000 tokens per draad;
-5.000 van de totale 35.000 blijven gereserveerd voor latere instructies, dossierstate
-en bericht-/API-overhead. De reserve is een maximum voor die hele aanvullende
-context, geen toestemming om er onbeperkt tekst bij te voegen. Zie de
-[tokenstrategie](token-and-cost-strategy.md#dagelijkse-bundeling-versie-1).
+Volgorde is numeriek topic, daarna lexicografisch bronidentiteit; `queue:10` sorteert
+vóór `queue:2`. Delen starten op 1 per topic en dag. De volledige geserialiseerde
+draad wordt gemeten met `tiktoken==0.12.0`, encoding `cl100k_base`: maximaal 30.000
+tokens met 5.000 reserve binnen de totale modelruimte van 35.000. Iedere fiche blijft
+heel. Past een fiche ook alleen niet, dan faalt de hele dag; geen truncatie,
+semantische deduplicatie of modelcalls.
 
-Ariadne vult een draad tot de volgende hele fiche niet meer past en begint dan een
-nieuw deel. Past één fiche ook alleen niet, dan mislukt **de hele dag**, met bronpad
-in de foutmelding. Er wordt niets afgekapt of stil overgeslagen. Er zijn nog geen
-Leonardo-instructies, dossierstates of API-calls; voor toekomstige calls is een
-controle van de werkelijk samengestelde modelinput verplicht.
+## Transactie en crashgedrag
 
-## SQLite en foutafhandeling
+Database: `/home/weekendkrant/weekendkrant.sqlite3`. `BEGIN IMMEDIATE` fixeert de
+snapshot en houdt concurrerende SQLite-schrijvers tegen tot commit/rollback.
+Dit is één korte dagelijkse verwerkingsflow, geen lease of extra processingstatus.
+De bestaande clone_lock blijft als gedeeld, niet-blokkerend Ariadne-runtime-slot;
+Git wordt alleen gebruikt om dat gemeenschappelijke slot te vinden, niet voor invoer.
+`daily` inspecteert of synchroniseert geen worktrees en wijzigt app niet.
 
-Database: `/home/weekendkrant/weekendkrant.sqlite3`. Tabellen en crashgedrag staan
-in [de auditdocumentatie](audit-trail.md#dagelijkse-sqlite-tabellen).
-Een geldige lege oogst is succes met nul draden en nul bronnen.
+Alle payloads en het volledige draadplan worden gevalideerd vóór statuswijziging.
+Daarna worden bestanden met tempfile + file-fsync + os.replace + directory-fsync
+geschreven. Dezelfde SQLite-transactie registreert days.success, threads, sources,
+het success-attempt en exact de gebruikte queue-IDs als processed. Pas daarna commit.
+`days.commit_sha` en `days.manifest_sha256` blijven NULL. `sources.source_path`
+bevat queue-identiteiten, geen Git-paden. IngressQueue.mark_processed commit niet zelf.
 
-Bij `prepare-week --next-week` rapporteert de weekjob alle zeven dagen van de
-aflopende ISO-week: `timeout`, `processing_error` en ontbrekende records worden
-als waarschuwingen gelogd. Zij blokkeren de volgende branch niet. De huidige runtime biedt geen historische catch-up. De dagrecords en poginghistoriek blijven binnen
-de achtwekenretentie behouden. Een gewone Git-fout of onleesbare database blijft
-wel een runtimefout.
+Een fout vóór of tijdens commit rollbackt alle DB-wijzigingen. Betrokken items
+blijven pending, zonder gedeeltelijk geconsumeerde dag. Processing_error wordt
+vervolgens in een aparte transactie geregistreerd. Bij een aanhoudende databasefout
+kan ook die registratie mislukken; logging bewaart de fout en de CLI stopt niet-nul.
 
-## Acht Belgische ISO-weken bewaren
+Filesystem en SQLite hebben geen gezamenlijke atomische commit. Een crash of
+schrijffout kan al geschreven draadbestanden achterlaten terwijl queue-items pending
+blijven en provenance ontbreekt. Alleen bestanden die in threads bij een succesvolle
+dag geregistreerd zijn gelden als gepubliceerde output. Bij herhaling gebruiken
+dezelfde snapshot en code dezelfde paden/bytes en worden bestanden veilig atomisch
+overschreven. Als sinds de mislukte run nieuwe fiches zijn toegevoegd, wordt de nieuwe
+dagsnapshot opnieuw volledig gepland. Er is geen distributed transaction of journalinglaag.
+Na hard procesverlies kan het foutdagrecord ontbreken; de weekjob meldt dat als onvolledig.
 
-Na het weekrapport en vóór de volgende weekvoorbereiding verwijdert de zondagjob
-alle SQLite-records van vóór de maandag van de aflopende week minus zeven weken.
-Dat bewaart de gerapporteerde week plus zeven voorgaande ISO-weken. Bijvoorbeeld:
-rapport op 10 januari 2021 (2021_W01) bewaart vanaf maandag 16 november 2020
-(2020_W47), inclusief 2020_W53. Het criterium gebruikt lokale kalenderdatums,
-geen getalberekening op `YYYY_Www` en geen 56 dagen vanaf zondag.
+## Weekvoorbereiding en auditretentie
 
-Deze auditretentie verwijdert geen `ingress_queue`-records; pending fiches blijven
-bewaard tot een latere consumentenimplementatie een beleid toevoegt.
-
-Verwijdervolgorde in één transactie: `sources`, `threads`, `attempts`, `days`.
-Ook foutstatussen en losse oude pogingen vervallen. Daarna voert de runtime buiten
-de transactie `VACUUM` uit. Een verwijderfout rolt alle verwijderingen terug; een
-VACUUM-fout wordt gelogd en stopt de job, terwijl de al gecommitte verwijderingen
-geldig blijven. Een volgende uitvoering kan VACUUM opnieuw uitvoeren.
-
-Draadbestanden worden niet opgeruimd. Bestanden waarvan de provenance door retentie
-vervallen is, gelden niet automatisch als actieve output. De pipeline gebruikt
-uitsluitend de bewaarde registratie van succesvolle dagen. Historische dagen worden niet automatisch heropend.
+`prepare-week` behoudt alle bestaande worktreecontroles, maximaal twee registraties,
+veilig weigeren van lokale wijzigingen, locks en afwijkende paden. Alleen die taak
+koppelt/wisselt de beheerde weekworktree. Daily heeft geen weekbranch nodig.
+De zondagjob rapporteert de afgelopen week zonder dagfouten als blokkade te behandelen.
+De bestaande auditretentie bewaart acht Belgische ISO-weken, met sources, threads,
+attempts en days in één delete-transactie en daarna VACUUM. Deze retentie verwijdert
+**geen ingress_queue-records**, ook geen processed items. Queue-retentie is buiten scope.
+Lokale draden blijven opstartartefacten; zonder bewaarde provenance zijn ze geen actieve output.
 
 ## Migratie van bibib na merge
 
-De bestaande `app` kan nog op `ingress/2026_W41` staan. Voer als `weekendkrant`
+Als `app` nog op een ingressbranch staat, gebruik onderstaande veilige migratie.
+Staat app al op main, werk die buiten een lopende Ariadne-run met `git pull --ff-only` bij. Voer als `weekendkrant`
 onderstaand blok uit. Het stopt bij lokale wijzigingen, extra worktrees,
 slotbezetting of een `main` die niet fast-forward tot `origin/main` kan komen.
 Er worden geen wijzigingen weggegooid. Plan dit buiten een lopende Ariadne-run.
@@ -241,35 +147,12 @@ git merge --ff-only origin/main
 SH
 ```
 
-Ga alleen verder als het migratieblok slaagt. Bereid de tokenizer en tests voor
-zoals hieronder. Koppel daarna veilig de **bestaande huidige** Belgische week aan,
-zonder push, weekrapport of retentie:
-
-```bash
-cd /home/weekendkrant/app
-.venv/bin/python - <<'PYCODE'
-from pathlib import Path
-from ariadne import clone_lock, inspect_worktrees, ensure_week_worktree, _git
-from daily import local_day
-root = Path('/home/weekendkrant/app')
-with clone_lock(root):
-    inspect_worktrees(root)
-    _git(root, 'fetch', 'origin')
-    print(ensure_week_worktree(root, local_day()))
-PYCODE
-git worktree list --porcelain
-git branch --show-current
-./start_ariadne.sh daily --help
-```
-
-Verwacht `app` op `main` en precies één `weekworktree` op de actuele ingressbranch.
-Een vuile weekworktree wordt niet vervangen; bewaar of commit de wijzigingen
-eerst bewust. De dagelijkse taak voert dezelfde aankoppeling automatisch uit
-wanneer ze nog ontbreekt. Start vervolgens de echte dagelijkse handmatige test.
+Ga na de geslaagde migratie verder met de preflight hieronder. Er hoeft geen
+weekworktree te worden aangekoppeld om daily te testen.
 
 ## Handmatig controleren op bibib
 
-Voer na de geslaagde migratie uit als gebruiker `weekendkrant`:
+Voer als gebruiker weekendkrant, na merge en bijwerken van main, uit:
 
 ```bash
 cd /home/weekendkrant/app
@@ -281,76 +164,68 @@ export TIKTOKEN_CACHE_DIR=/home/weekendkrant/.cache/tiktoken
 ./start_tests.sh
 ```
 
-Het tokenizerwoordenboek wordt bij deze preflight éénmalig opgehaald en lokaal
-gecached. De startscripts gebruiken dezelfde persistente cache. Python 3.9+, Git,
-Linux `flock`, SQLite uit de Python-standaardbibliotheek en de dependency uit
-`requirements.txt` zijn nodig. Controleer de installatie daadwerkelijk op bibib;
-de geautomatiseerde tests gebruiken lokale tijdelijke Git-remotes.
+De tokenizer wordt eenmalig gecached. Python 3.9+, Linux flock en SQLite zijn nodig.
+Tests gebruiken tijdelijke SQLite-databases, outputdirectories en lokale Git-remotes;
+geen echte productie-DB, GitHub of Cloudflare. Productie opent de DB pas bij daily.
 
-Bepaal datum en branch expliciet en bekijk eerst Sherlocks manifest:
-
-```bash
-DAY=$(.venv/bin/python -c 'from daily import local_day; print(local_day())')
-WEEK=$(.venv/bin/python -c 'from daily import local_day; from ariadne import week_name; print(week_name(local_day()))')
-git fetch origin
-git show "origin/ingress/$WEEK:ingress/$WEEK/closed/$DAY.json"
-./start_ariadne.sh daily
-printf 'Exitcode: %s\n' "$?"
-tail -n 40 /home/weekendkrant/logs/ariadne.log
-```
-
-Ontbreekt de melding, dan wacht het echte commando maximaal drie uur; gebruik de
-tests voor snelle controle van het timeoutpad. Publiceer geen verzonnen gereedmelding
-op de productietak. Laat Sherlock eerst met de
-[exacte instructieaanvulling](sherlock-dagafsluiting.md) zijn echte oogst afsluiten.
-
-Controleer status, pogingen, draden en provenance zonder extra SQLite-CLI:
+Controleer vóór de echte run de huidige datum, dagstatus en queue:
 
 ```bash
 .venv/bin/python - <<'PYCODE'
 import sqlite3
-from pathlib import Path
-import hashlib
-from daily import DB_PATH, token_count, LIMIT
+from daily import DB_PATH, local_day
 with sqlite3.connect(DB_PATH) as db:
-    for table in ('days', 'attempts', 'threads', 'sources'):
-        print(table)
-        for row in db.execute('SELECT * FROM ' + table):
-            print(row)
+    print('Lokale dag:', local_day())
+    print('Dagrecord:', db.execute('SELECT day,status FROM days WHERE day=?',
+                                  (str(local_day()),)).fetchone())
+    for row in db.execute("SELECT id,status,json_extract(payload,'$.date') FROM ingress_queue ORDER BY id"):
+        print(row)
+PYCODE
+./start_ariadne.sh daily
+tail -n 40 /home/weekendkrant/logs/ariadne.log
+```
+
+De echte Sherlock-items van 7 oktober 2026 beginnen volgens de productiecontrole
+bij ID 2; fictief item 1 is verwijderd. Controleer de werkelijk aanwezige IDs:
+items voor vandaag horen pending te zijn vóór hun eerste daily. Een bestaand
+success-dagrecord betekent bewust no-op, ook voor nu pending fiches. Verwijder of
+reset zo'n record niet stilzwijgend. Na lokale middernacht verwerkt dit commando
+7 oktober niet meer; gebruik geen productiecatch-up buiten dit contract.
+
+Controleer daarna output en provenance:
+
+```bash
+.venv/bin/python - <<'PYCODE'
+import hashlib
+from pathlib import Path
+import sqlite3
+from daily import DB_PATH, local_day, token_count, LIMIT
+with sqlite3.connect(DB_PATH) as db:
+    day = str(local_day())
+    print(db.execute('SELECT * FROM days WHERE day=?', (day,)).fetchone())
+    print(db.execute('SELECT source_path,sha256 FROM sources WHERE day=?', (day,)).fetchall())
+    print(db.execute('SELECT id,status FROM ingress_queue ORDER BY id').fetchall())
     for path, digest, tokens, reserve in db.execute(
-            'SELECT path,sha256,tokens,reserved_tokens FROM threads'):
+            'SELECT path,sha256,tokens,reserved_tokens FROM threads WHERE day=?', (day,)):
         data = Path(path).read_bytes()
         assert hashlib.sha256(data).hexdigest() == digest
         assert token_count(data.decode('utf-8')) == tokens
         assert tokens + reserve <= LIMIT
 PYCODE
 ./start_ariadne.sh daily
-git status --short
 ```
 
-De tweede dagelijkse aanroep meldt `success` zonder extra provenance of output.
-`git status` blijft schoon en `git branch --show-current` blijft `main`. Controleer
-ook `git worktree list --porcelain`: maximaal twee registraties. De weekvoorbereiding kan daarna handmatig worden
-getest met de bestaande `./start_ariadne.sh prepare-week --next-week`; dat commando
-**pusht werkelijk** de volgende weekbranch. De tests dekken deze overgang eerst met
-een tijdelijke lokale remote en een mislukte dag.
+De tweede run is een no-op; bestaande provenance en bestanden blijven behouden.
+Late arrivals blijven pending. Productie mag uitsluitend de lokale actuele dag verwerken.
 
 ## Actieve Ariadne-cronjobs op bibib
 
-Op bibib zijn deze bestaande cronjobs reeds geïnstalleerd en actief, met
-hosttimezone `Europe/Brussels`:
+Bestaande cronregels blijven ongewijzigd, hosttimezone Europe/Brussels:
 
 ```cron
 0 10 * * * /home/weekendkrant/app/start_ariadne.sh daily >/dev/null
-```
-
-De bestaande zondagregel blijft:
-
-```cron
 0 22 * * 0 /home/weekendkrant/app/start_ariadne.sh prepare-week --next-week >/dev/null
 ```
 
-Geen losse cronstart om de tien minuten en geen apart cronlog. Deze PR wijzigt
-de bestaande cronjobs en Sherlocks actieve ChatGPT-taak niet. De nieuwe ingress-API
-krijgt hier geen systemd-service, cronjob of andere permanente processupervisie.
-Ook Cloudflare Tunnel wordt niet als permanente service geïnstalleerd.
+De dagelijkse job hoeft niet meer tot 13:00 te pollen. Geen nieuwe cronjobs,
+Sherlock-aanpassing, API/plugin/tunnelwijzigingen of retentiebeleid voor de queue.

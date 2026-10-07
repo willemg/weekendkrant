@@ -1,5 +1,10 @@
 # Sherlocks oude Git-dagafsluiting — overgangsreferentie
 
+> Historische referentie: de onderstaande Git-route is niet meer operationeel.
+> Sherlock levert via MCP aan de SQLite-queue; Ariadne daily wacht niet op closed.
+> Het actuele contract staat in [daily-runtime.md](daily-runtime.md).
+
+
 De nieuwe richting is HTTPS POST naar de ingress-API en een persistente SQLite-queue;
 GitHub is niet langer het gekozen fichetransport. De producerkant is beschikbaar,
 maar Sherlock en Ariadne `daily` worden in deze PR niet omgezet. Onderstaande
