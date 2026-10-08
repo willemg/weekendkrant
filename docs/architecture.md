@@ -28,6 +28,20 @@ Ariadne consumeert de queue rechtstreeks lokaal via `IngressQueue`:
 manifestpolling of weekworktree. Zie [ingress-runtime](ingress-runtime.md) en
 [het dagelijkse contract](daily-runtime.md). De oude `closed`-route is niet meer operationeel.
 
+## Geheugen en regie: doelontwerp van 8 oktober 2026
+
+[Leonardo: geheugen, draden en deterministische regie](leonardo-memory-and-orchestration.md)
+legt het nieuwe doelontwerp vast. Dagelijkse queueconsumptie en de levensduur
+van een bronpart worden gescheiden: nog niet aangeboden parts groeien per week
+en topic over daggrenzen heen. Leonardo legt inhoudelijke dossierverbanden;
+Ariadne volgt uitsluitend expliciete identifiers.
+
+Leonardo schrijft compacte rolling state. Ariadne bewaart en versieert die,
+bouwt begrensde vervolgcalls, administreert tokengebruik en kosten en routeert
+Kuifjes resultaten via de oorspronkelijke missie naar hetzelfde logische dossier.
+Reeds aangeboden partversies blijven intact. Deze mogelijkheden zijn nog niet
+geïmplementeerd; de huidige dagsnapshot, dagbestanden en retentie blijven gelden.
+
 ## Scheiding tussen determinisme en intelligentie
 
 Ariadne vormt de harde grens tussen de voorspelbare softwarelaag en de generatieve modellen.

@@ -182,3 +182,21 @@ gecommitte retentie niet en wordt als runtimefout gemeld.
 Lokale draadbestanden blijven staan als opstartartefacten. Vervallen provenance
 betekent dat die bestanden niet meer als actieve verwerkingsoutput gelden.
 Er wordt geen oude week opnieuw verwerkt om provenance te reconstrueren.
+
+## Geplande dossier-, state- en callaudit
+
+Het [ontwerpbesluit van 8 oktober 2026](leonardo-memory-and-orchestration.md)
+scheidt dagelijkse consumptie van dagoverschrijdende parts en langlevende dossiers.
+Het toekomstige schema moet bronlidmaatschap over meerdere dagen kunnen registreren,
+met partrevisies, hashes, stateversies en expliciete dossier- en missie-identifiers.
+
+Iedere modelcall moet traceerbaar zijn naar prompt/modelconfiguratie, de werkelijk
+aangeboden partversies en input-state, eventuele missiecontext, output en gebruik.
+Reeds aangeboden versies blijven intact. Ook het laten groeien van een nog niet
+aangeboden part mag een eerder succesvol geregistreerde versie niet ongeldig
+maken bij een mislukte DB-commit. Hiervoor is apart migratie- en crashherstelontwerp
+nodig; de huidige dagtabellen implementeren dit nog niet.
+
+De achtwekenretentie van dag-audit wordt niet automatisch dossierretentie.
+Actieve state, open missies en benodigd bronbewijs vragen een afzonderlijk,
+begrensd bewaarbeleid. Deze documentatie wijzigt de bestaande retentiejob niet.

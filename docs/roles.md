@@ -129,7 +129,9 @@ Git-weekvoorbereiding en de
 - mechanisch groeperen per onderwerp;
 - tokenaantal meten met `tiktoken==0.12.0`, encoding `cl100k_base`;
 - lokale draden maken;
-- garanderen dat de volledige input voor Leonardo nooit groter wordt dan 35.000 tokens;
+- maximaal 30.000 geserialiseerde brontokens per draad bewaken, met 5.000 reserve
+  voor overige Leonardo-input; de toekomstige callbouwer moet de volledige
+  request opnieuw meten en maximaal 35.000 inputtokens afdwingen;
 - verwerkingsstatus en provenance in een lokale SQLite-database administreren;
 - dagfouten voor de weekjob leesbaar bewaren, zonder de voorbereiding van de volgende
   week door een onvolledige oogst te blokkeren;
@@ -144,6 +146,16 @@ Dagelijkse verwerking en weekvoorbereiding delen een slot en starten steeds uit
 Er zijn maximaal twee geregistreerde worktrees. De wekelijkse SQLite-auditretentie laat de nieuwe transportqueue intact en
 bewaart de aflopende Belgische ISO-week plus de zeven voorgaande weken. Na een weekovergang haalt Ariadne geen oude weken in; late aanvullingen
 blijven pending in de queue.
+
+### Gepland geheugen- en budgetbeheer
+
+Volgens het [doelontwerp van 8 oktober 2026](leonardo-memory-and-orchestration.md)
+wordt Ariadne ook beheerder van Leonardo's persistente state en contextaanbieding:
+state letterlijk opslaan en versioneren, omvang meten, nog niet aangeboden parts
+over daggrenzen vullen, budget reserveren en werkelijk gebruik afrekenen.
+Kuifje-resultaten volgen expliciete missie- en dossieridentifiers. Dit is nog
+niet geïmplementeerd. Leonardo beslist over betekenis, compressie en inhoudelijke
+verbanden; Ariadne controleert formaat, omvang, koppelingen en toegestane acties.
 
 ### Niet doen
 
@@ -160,7 +172,10 @@ Ariadne vlecht draden; ze denkt niet.
 
 ## Leonardo — de schrijver en synthesizer
 
-Leonardo krijgt één afgebakende draad plus eventueel een compacte bestaande dossierstate.
+Leonardo krijgt een begrensde context met nieuwe bronparts, de geldige compacte
+dossierstate en eventueel de oorspronkelijke Kuifje-missie met resultaten.
+Elke call wordt expliciet samengesteld; continuïteit zit in de opgeslagen state
+en bronnen. Dit is doelontwerp, geen bestaande modelruntime.
 
 ### Verantwoordelijkheden
 
@@ -169,11 +184,26 @@ Leonardo krijgt één afgebakende draad plus eventueel een compacte bestaande do
 - patronen herkennen;
 - tegenstrijdigheden zichtbaar maken;
 - onderscheid maken tussen feit, inferentie en interpretatie;
-- een inhoudelijk coherent verhaal of bijgewerkt dossier maken.
+- een inhoudelijk coherent verhaal of bijgewerkt dossier maken;
+- compacte rolling state schrijven met bronverwijzingen, tegenbewijs en open vragen;
+- expliciete dossierkoppelingen en begrensde Kuifje-missies voorstellen;
+- op verzoek de eigen state comprimeren met behoud van onzekerheden en provenance.
 
 Leonardo krijgt zoveel redactionele vrijheid als nuttig is, maar mag feitelijke claims niet losmaken van het bronmateriaal.
 
 De standaardkandidaat voor Leonardo is een middenmodel zoals Terra, om kwaliteit en kost in balans te houden.
+
+## Kuifje — de onderzoeksreporter (gepland)
+
+Kuifje werkt alleen aan een afgebakende onderzoeksmissie van Leonardo die Ariadne
+binnen toegestane acties en budget kan uitvoeren. Hij krijgt de vraag en relevante
+context, zoekt aanvullend bewijs of tegenspraak en levert bronvaste resultaten
+onder dezelfde missie- en dossieridentiteit. Ook lege oogst en beperkingen worden
+expliciet gerapporteerd.
+
+Kuifje bepaalt niet zelf naar welk dossier zijn oogst gaat en vervangt Sherlocks
+brede signalering niet. Ariadne routeert zijn resultaten zonder inhoudelijk oordeel.
+Zie het [missie- en geheugenontwerp](leonardo-memory-and-orchestration.md).
 
 ## Striktland — de feitencontroleur
 

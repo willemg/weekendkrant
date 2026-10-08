@@ -6,7 +6,8 @@ Het systeem is bewust opgesplitst in een reeks smalle rollen:
 
 - **Sherlock** verzamelt nieuws, doet een eerste lichte triage en vat bronnen compact samen.
 - **Ariadne** is volledig deterministisch en vlecht Sherlocks output tot thematische draden met een harde tokenlimiet.
-- **Leonardo** maakt van die draden inhoudelijke syntheses en verhalen.
+- **Leonardo** maakt van die draden inhoudelijke syntheses en verhalen en schrijft compacte dossierstate.
+- **Kuifje** is de toekomstige onderzoeksreporter voor expliciete missies van Leonardo.
 - **Striktland** controleert of feitelijke claims door het aangeleverde bronmateriaal worden gedragen.
 - **Minos** herschrijft alleen wanneer Striktland een probleem vindt en velt daarmee het eindoordeel.
 
@@ -22,12 +23,18 @@ De kernprincipes zijn:
 Zie de ontwerpdocumentatie:
 
 - [Architectuur](docs/architecture.md)
-- [Rollen: Sherlock, Ariadne, Leonardo, Striktland en Minos](docs/roles.md)
+- [Rollen: Sherlock, Ariadne, Leonardo, Kuifje, Striktland en Minos](docs/roles.md)
+- [Leonardo: geheugen, draden en deterministische regie](docs/leonardo-memory-and-orchestration.md)
 - [Token- en kostenstrategie](docs/token-and-cost-strategy.md)
 - [Audit trail en kwaliteitslabels](docs/audit-trail.md)
 - [Redactionele principes](docs/editorial-principles.md)
 
 ## Status
+
+Het [ontwerpbesluit van 8 oktober 2026](docs/leonardo-memory-and-orchestration.md)
+werkt dagoverschrijdende parts, rolling state, Kuifje-missies en Ariadnes geheugen-
+en budgetbeheer uit. Dit is nog geen runtimefunctionaliteit: daily maakt vandaag
+aparte bestanden per topic en dag en doet geen modelcalls.
 
 De ingress-API en persistente SQLite-queue zijn geïmplementeerd met uitsluitend
 Python 3.9-standaardbibliotheek. Het doeltransport is
