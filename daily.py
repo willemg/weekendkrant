@@ -1,6 +1,6 @@
-"""Deterministische verwerking van de lokale dagsnapshot in de SQLite-queue."""
+"""Deterministische verwerking van de persistente backlogsnapshot in de SQLite-queue."""
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 import hashlib
 import logging
 import os
@@ -9,7 +9,7 @@ import sqlite3
 import tempfile
 from zoneinfo import ZoneInfo
 
-from ariadne import clone_lock, week_name
+from ariadne import LOCK_PATH, runtime_lock, week_name
 from ingress_queue import IngressQueue
 
 DB_PATH = Path('/home/weekendkrant/weekendkrant.sqlite3')
@@ -52,7 +52,8 @@ def queue_fiche(identity, payload, day):
     return Fiche(f'queue:{identity}', payload['topic'], data, hashlib.sha256(data).hexdigest())
 
 
-def weave(fiches, week, day, count=token_count, limit=LIMIT, reserve=RESERVE):
+def weave(fiches, week, day, count=token_count, limit=LIMIT, reserve=RESERVE, first_parts=None):
+    first_parts = {} if first_parts is None else first_parts
     threads = []
     current = []
     current_topic = None
@@ -65,11 +66,11 @@ def weave(fiches, week, day, count=token_count, limit=LIMIT, reserve=RESERVE):
         text = render(current, current_topic, part)
         threads.append({'topic': current_topic, 'part': part, 'text': text,
                         'tokens': count(text), 'sources': list(current)})
-    for fiche in sorted(fiches, key=lambda f: (f.topic, f.path)):
+    for fiche in sorted(fiches, key=lambda f: (f.topic, int(f.path.removeprefix('queue:')))):
         if fiche.topic != current_topic:
             if current:
                 finish()
-            current, current_topic, part = [], fiche.topic, 1
+            current, current_topic, part = [], fiche.topic, first_parts.get(fiche.topic, 1)
         if count(render(current + [fiche], current_topic, part)) + reserve > limit:
             if current:
                 finish()
@@ -109,8 +110,8 @@ def database(path):
 
 def status(db, day, state, commit=None, manifest=None, error=None):
     db.execute('INSERT INTO days VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(day) DO UPDATE SET '
-               'status=excluded.status, commit_sha=excluded.commit_sha, '
-               'manifest_sha256=excluded.manifest_sha256, error=excluded.error',
+               'status=excluded.status, commit_sha=COALESCE(days.commit_sha,excluded.commit_sha), '
+               'manifest_sha256=COALESCE(days.manifest_sha256,excluded.manifest_sha256), error=excluded.error',
                (str(day), week_name(day), state, commit, manifest, error))
     db.execute('INSERT INTO attempts(day,status,error) VALUES (?,?,?)', (str(day), state, error))
 
@@ -136,94 +137,77 @@ def write_thread(path, data):
 
 def outside_repo(root, path):
     path = Path(path).resolve()
-    for worktree in (root, (root.parent / 'weekworktree').resolve()):
-        if path == worktree or worktree in path.parents:
-            raise ValueError('Operationele staat moet buiten beide Git-working trees staan')
+    if path == root or root in path.parents:
+        raise ValueError('Operationele staat moet buiten de applicatierepository staan')
     return path
 
 
-def run_daily(root, db_path=DB_PATH, output=OUTPUT_PATH, now=None):
+def run_daily(root, db_path=DB_PATH, output=OUTPUT_PATH, now=None, lock_path=LOCK_PATH):
     day = local_day(now)
     week = week_name(day)
     root = Path(root).resolve()
     db_path, output = outside_repo(root, db_path), outside_repo(root, output)
+    lock_path = outside_repo(root, lock_path)
     logger.info('Dagverwerking gestart: datum=%s week=%s zone=Europe/Brussels', day, week)
-    with clone_lock(root):
+    with runtime_lock(lock_path):
         db = database(db_path)
         try:
             queue = IngressQueue(db_path)
-            # SELECT materializes the snapshot without retaining a write lock.
-            previous = db.execute('SELECT status FROM days WHERE day=?', (str(day),)).fetchone()
-            if previous and previous[0] == 'success':
-                logger.info('Dag al geslaagd: %s', day)
-                return {'date': str(day), 'week': week, 'status': 'success'}
+            # Materialize one snapshot without retaining a SQLite write lock.
             items = queue.pending_for_day(db, day)
-            fiches = [queue_fiche(identity, payload, day) for identity, payload in items]
-            threads = weave(fiches, week, day)
+            grouped = {}
+            for identity, payload in items:
+                original_day = date.fromisoformat(payload['date'])
+                grouped.setdefault(original_day, []).append(queue_fiche(identity, payload, original_day))
+            if not items:
+                logger.info('Geen verwerkbare pending fiches: datum=%s', day)
+                return {'date': str(day), 'week': week, 'status': 'success', 'threads': 0}
             written = []
-            for thread in threads:
-                path = outside_repo(root, output / week / f'topic_{thread["topic"]}' /
-                                    f'{day}_{thread["part"]:04d}.txt')
-                data = thread['text'].encode('utf-8')
-                write_thread(path, data)
-                written.append((thread, path, hashlib.sha256(data).hexdigest()))
-            # Only the final audit/status update needs the SQLite write lock.
+            for original_day, fiches in sorted(grouped.items()):
+                original_week = week_name(original_day)
+                # Committed provenance, never orphan files, determines numbering.
+                first_parts = dict(db.execute(
+                    'SELECT topic,MAX(part)+1 FROM threads WHERE day=? GROUP BY topic',
+                    (str(original_day),)).fetchall())
+                threads = weave(fiches, original_week, original_day, first_parts=first_parts)
+                for thread in threads:
+                    path = outside_repo(root, output / original_week / f'topic_{thread["topic"]}' /
+                                        f'{original_day}_{thread["part"]:04d}.txt')
+                    # Also protect registered paths if output configuration changes.
+                    if db.execute('SELECT 1 FROM threads WHERE path=?', (str(path),)).fetchone():
+                        raise ValueError(f'Draadpad heeft al succesvolle provenance: {path}')
+                    data = thread['text'].encode('utf-8')
+                    write_thread(path, data)
+                    written.append((original_day, thread, path, hashlib.sha256(data).hexdigest()))
+            # Only the final provenance/status update takes a SQLite write lock.
             db.execute('BEGIN IMMEDIATE')
             for identity, _ in items:
                 row = db.execute('SELECT status FROM ingress_queue WHERE id=?', (identity,)).fetchone()
                 if row != ('pending',):
                     raise ValueError(f'Queue-item niet pending: queue:{identity}')
-            status(db, day, 'success')
-            for thread, path, digest in written:
+            for original_day in sorted(grouped):
+                status(db, original_day, 'success')
+            for original_day, thread, path, digest in written:
                 db.execute('INSERT INTO threads VALUES (?,?,?,?,?,?,?,?)',
-                           (str(path), str(day), thread['topic'], thread['part'],
+                           (str(path), str(original_day), thread['topic'], thread['part'],
                             digest, thread['tokens'], TOKENIZER, RESERVE))
                 for position, fiche in enumerate(thread['sources']):
                     db.execute('INSERT INTO sources VALUES (?,?,?,?,?)',
-                               (str(day), fiche.path, fiche.sha256, str(path), position))
+                               (str(original_day), fiche.path, fiche.sha256, str(path), position))
             queue.mark_processed(db, [identity for identity, _ in items])
             db.commit()
-            logger.info('Dagverwerking geslaagd: datum=%s fiches=%s draden=%s', day, len(fiches), len(threads))
-            return {'date': str(day), 'week': week, 'status': 'success', 'threads': len(threads)}
+            logger.info('Dagverwerking geslaagd: datum=%s fiches=%s draden=%s', day, len(items), len(written))
+            return {'date': str(day), 'week': week, 'status': 'success', 'threads': len(written)}
         except Exception as error:
             db.rollback()
             try:
                 with db:
-                    status(db, day, 'processing_error', error=str(error))
+                    # A failed attempt must not downgrade successful output audit.
+                    db.execute('INSERT INTO attempts(day,status,error) VALUES (?,?,?)',
+                               (str(day), 'processing_error', str(error)))
             except sqlite3.Error:
-                logger.exception('Dagfout kon niet in SQLite worden geregistreerd: datum=%s', day)
+                logger.exception('Pogingsfout kon niet in SQLite worden geregistreerd: datum=%s', day)
             logger.exception('Dagverwerking mislukt: datum=%s status=processing_error', day)
             raise
         finally:
             db.close()
-
-
-def week_report(db_path, day):
-    monday = day - timedelta(days=day.weekday())
-    db = database(db_path)
-    try:
-        result = []
-        for offset in range(7):
-            target = str(monday + timedelta(days=offset))
-            row = db.execute('SELECT status FROM days WHERE day=?', (target,)).fetchone()
-            if not row or row[0] != 'success':
-                result.append({'date': target, 'status': row[0] if row else 'missing'})
-        return result
-    finally:
-        db.close()
-
-
-def prune_history(db_path, report_day):
-    """Keep the reported Belgian ISO-week and the seven preceding ISO-weeks."""
-    cutoff = report_day - timedelta(days=report_day.weekday(), weeks=7)
-    db = database(db_path)
-    try:
-        with db:
-            for table in ('sources', 'threads', 'attempts', 'days'):
-                db.execute(f'DELETE FROM {table} WHERE day < ?', (str(cutoff),))
-        # VACUUM cannot run within a transaction. Also retries a previous failed vacuum.
-        db.execute('VACUUM')
-        logger.info('SQLite-retentie voltooid: bewaard vanaf %s (acht ISO-weken)', cutoff)
-        return cutoff
-    finally:
-        db.close()

@@ -132,9 +132,11 @@ inclusief draadheader, bronpaden, hashes, byteaantallen en bronafscheidingen.
 Maximaal 30.000 tokens draad plus **5.000 gereserveerde tokens** voor alle overige
 Leonardo-input samen: instructies, dossierstate, berichtenstructuur en API-overhead.
 
-Momenteel beperkt run_daily() de invoer tot vandaag en start iedere dag nieuwe
-parts. Dagoverschrijdend vullen is gepland, niet geïmplementeerd.
-Het weven groepeert numeriek per topic en sorteert bronpaden lexicografisch. Het
+Momenteel verwerkt run_daily() pending fiches tot en met vandaag, gegroepeerd
+per oorspronkelijke datum/topic. Late fiches krijgen volgende legacy-parts;
+bestaande succesvolle draden worden niet verder gevuld. Dagoverschrijdend vullen
+is gepland, niet geïmplementeerd. Binnen datum/topic is de volgorde de numerieke
+queue-ID (`queue:2` vóór `queue:10`). Het
 splitst uitsluitend tussen hele fiches. Een fiche die alleen al niet past, faalt
 de hele dag expliciet; er wordt geen tekst afgekapt. Ook identieke fiches blijven
 behouden. De provenance registreert per draad de telling, tokenizer en reserve.

@@ -1,5 +1,4 @@
 from contextlib import redirect_stderr, redirect_stdout
-from datetime import date
 import io
 import json
 import logging
@@ -10,6 +9,7 @@ import unittest
 from unittest.mock import patch
 
 import ariadne
+import daily
 
 
 class LoggingTests(unittest.TestCase):
@@ -32,8 +32,7 @@ class LoggingTests(unittest.TestCase):
 
     def run_main(self):
         with patch.object(ariadne, 'LOG_PATH', self.path, create=True), patch(
-                'sys.argv', ['ariadne.py', 'prepare-week', '--repo', self.tmp.name,
-                             '--date', '2026-09-30']):
+                'sys.argv', ['ariadne.py', 'daily', '--repo', self.tmp.name]):
             ariadne.main()
 
     def test_default_path_and_module_logging(self):
@@ -85,18 +84,12 @@ class LoggingTests(unittest.TestCase):
         self.assertIn('Record 19', self.path.read_text())
 
     def test_entrypoint_preserves_json_stdout_and_logs_lifecycle_only_to_file(self):
-        result = {'week': '2026_W40', 'branch': 'ingress/2026_W40',
-                  'ingress_path': 'ingress/2026_W40', 'base_commit': 'abc123'}
+        result = {'date': '2026-10-05', 'week': '2026_W41', 'status': 'success', 'threads': 0}
         stdout, stderr = io.StringIO(), io.StringIO()
-        with patch.object(ariadne, 'prepare_week_runtime', return_value=result) as prepare, \
+        with patch.object(daily, 'run_daily', return_value=result) as consume, \
                 redirect_stdout(stdout), redirect_stderr(stderr):
             self.run_main()
-        prepare.assert_called_once_with(Path(self.tmp.name), date(2026, 9, 30))
-        content = self.path.read_text()
-        self.assertIn('INFO ariadne Weekvoorbereiding gestart', content)
-        self.assertIn('INFO ariadne Weekvoorbereiding voltooid', content)
-        for value in result.values():
-            self.assertIn(value, content)
+        consume.assert_called_once_with(Path(self.tmp.name))
         self.assertEqual(stdout.getvalue(), json.dumps(result, indent=2, sort_keys=True) + '\n')
         self.assertEqual(stderr.getvalue(), '')
 
@@ -106,7 +99,7 @@ class LoggingTests(unittest.TestCase):
                       RuntimeError('Onverwachte fout')):
             stdout, stderr = io.StringIO(), io.StringIO()
             with self.subTest(error=error), patch.object(
-                    ariadne, 'prepare_week_runtime', side_effect=error), \
+                    daily, 'run_daily', side_effect=error), \
                     redirect_stdout(stdout), redirect_stderr(stderr), \
                     self.assertRaises(SystemExit) as stopped:
                 self.run_main()
@@ -114,21 +107,19 @@ class LoggingTests(unittest.TestCase):
             self.assertEqual(stdout.getvalue(), '')
             self.assertEqual(stderr.getvalue(), '')
             content = self.path.read_text()
-            self.assertIn('ERROR ariadne Weekvoorbereiding mislukt', content)
+            self.assertIn('ERROR ariadne Dagelijkse taak mislukt', content)
             self.assertIn(self.tmp.name, content)
-            self.assertIn('2026-09-30', content)
             self.assertIn('Traceback (most recent call last)', content)
             self.assertIn(str(error), content)
-        self.assertNotIn('Weekvoorbereiding voltooid', content)
 
-    def test_logging_setup_failure_stops_before_preparation_and_logs_to_stderr(self):
+    def test_logging_setup_failure_stops_before_consumption_and_logs_to_stderr(self):
         self.path.parent.write_text('Geen map')
         stderr = io.StringIO()
-        with patch.object(ariadne, 'prepare_week_runtime', return_value={}) as prepare, \
+        with patch.object(daily, 'run_daily', return_value={}) as consume, \
                 redirect_stderr(stderr), self.assertRaises(SystemExit) as stopped:
             self.run_main()
         self.assertEqual(stopped.exception.code, 1)
-        prepare.assert_not_called()
+        consume.assert_not_called()
         self.assertIn('ERROR ariadne Logging initialiseren mislukt', stderr.getvalue())
         self.assertIn(str(self.path), stderr.getvalue())
         self.assertIn('Traceback (most recent call last)', stderr.getvalue())

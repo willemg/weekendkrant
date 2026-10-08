@@ -5,11 +5,12 @@
 Dit document legt het doelontwerp vast. Het implementeert geen modelcalls,
 weekoverschrijdende dossiers, Kuifje-missies of nieuw databaseschema.
 
-De huidige `daily` verwerkt één dagsnapshot. `weave()` bundelt alleen de
-aangeboden fiches; `run_daily()` levert uitsluitend de oogst van vandaag en
-schrijft `YYYY-MM-DD_PPPP.txt`. De deelnummering begint per topic en dag opnieuw.
-Een kleine draad van gisteren wordt vandaag dus niet verder gevuld. Ook
-`threads` en `sources` zijn in SQLite aan een dag gekoppeld. Dit is het
+Na de architecturale cleanup verwerkt `daily` een persistente backlogsnapshot:
+pending fiches tot en met vandaag, gegroepeerd per oorspronkelijke datum/topic.
+Legacy-output blijft `YYYY-MM-DD_PPPP.txt`. Late fiches krijgen volgende parts
+op basis van SQLite-provenance; bestaande succesvolle bytes blijven intact.
+Een kleine draad van gisteren wordt dus niet verder gevuld. `threads` en
+`sources` blijven aan de oorspronkelijke fichedatum gekoppeld. Dit is het
 [huidige runtimecontract](daily-runtime.md), niet het gewenste eindontwerp.
 
 Het nieuwe uitgangspunt is:
@@ -60,7 +61,7 @@ Deze begrippen hebben verschillende grenzen:
 
 | Eenheid | Betekenis | Grens |
 | --- | --- | --- |
-| Dagelijkse consumptie | De deterministische selectie en verwerking van queue-items. | Lokale kalenderdag in Europe/Brussels. |
+| Dagelijkse consumptie | De deterministische selectie en verwerking van queue-items. | Pending payloaddatums tot en met vandaag in Europe/Brussels. |
 | Topic | Vooraf vastgelegde brede rubriek, momenteel 1, 2 of 3. | Expliciete fichemetadata. |
 | Logisch dossier of draad | Een inhoudelijk onderzoek met eigen state en eventueel missies. | Expliciete redactionele beslissing van Leonardo. |
 | Part | Een begrensde hoeveelheid broncontext voor een Leonardo-call. | Tokenbudget of expliciet aanbiedmoment. |
@@ -79,9 +80,9 @@ niet samengevoegd om het budget vol te krijgen.
 Ariadne voegt in een vastgelegde deterministische volgorde hele fiches toe.
 Past de volgende fiche niet, dan sluit ze de part en begint een volgende.
 Ze zoekt geen combinatie die de resterende ruimte optimaal vult en beoordeelt
-geen semantische verwantschap. De huidige lexicografische queuevolgorde is
-geen chronologische volgorde; een nieuwe sorteersleutel moet bij implementatie
-expliciet worden gekozen, gedocumenteerd en getest.
+geen semantische verwantschap. De cleanup sorteert per oorspronkelijke datum/topic en numerieke queue-ID.
+De sorteersleutel van het nieuwe week/topic-model moet bij implementatie
+expliciet worden vastgelegd en getest.
 
 Een kleine part is toegestaan. Er wordt niet gewacht op precies 30.000 tokens
 als een publicatiedeadline of toegestaan onderzoeksmoment aanbieding vereist.
@@ -250,12 +251,11 @@ Een modelcall of langdurige filesystembewerking houdt geen SQLite
 write-transactie open. De bestaande korte finale transactie en controle
 van de oorspronkelijke queue-snapshot blijven uitgangspunten.
 
-Operationele dag-audit vervalt momenteel na acht ISO-weken. Dat is niet
-automatisch de bewaartermijn van een actief dossier. Actieve state, open
-missies en benodigd bronbewijs moeten bereikbaar blijven zolang het
-onderzoek loopt. Archivering en opruiming krijgen een apart beleid dat
-zowel traceerbaarheid als beperkte schijfruimte bewaakt. Dit ontwerp wijzigt
-de bestaande retentiejob nog niet.
+De oude automatische achtwekenretentie is in de cleanup verwijderd; bestaande
+data blijft behouden. Actieve state, open missies en benodigd bronbewijs moeten
+bereikbaar blijven zolang het onderzoek loopt. Archivering en opruiming krijgen
+een apart beleid rond bronarchief, partrevisies, Leonardo-state, actieve dossiers,
+missies en callaudit, met behoud van traceerbaarheid en beperkte schijfruimte.
 
 ## Volgende implementatiestappen
 
@@ -269,5 +269,5 @@ de bestaande retentiejob nog niet.
    protocolversie, budgetreservering en opslag-/retentiebeleid.
 
 Bella kan deze stappen later afzonderlijk uitvoeren op branches met PR's.
-Deze documentatiewijziging verandert geen productiecode, cronjob, actieve
-Sherlock-taak of inrichting van bibib.
+Het oorspronkelijke ontwerpbesluit in PR #16 wijzigde geen productiecode,
+cronjob, actieve Sherlock-taak of inrichting van bibib.

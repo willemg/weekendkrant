@@ -12,7 +12,7 @@ import daily
 
 class WeaveTests(unittest.TestCase):
     def test_weave_stable_split_and_oversize(self):
-        fiches = [daily.Fiche(f'ingress_000{i}.md', 2, b'x' * 150, 'abc') for i in range(3)]
+        fiches = [daily.Fiche(f'queue:{i}', 2, b'x' * 150, 'abc') for i in range(3)]
         first = daily.weave(fiches, '2026_W41', date(2026, 10, 5), count=len, limit=700, reserve=100)
         second = daily.weave(list(reversed(fiches)), '2026_W41', date(2026, 10, 5), count=len, limit=700, reserve=100)
         self.assertEqual(first, second)
@@ -27,14 +27,14 @@ class WeaveTests(unittest.TestCase):
 
     def test_real_tokenizer_bounds_full_serialized_threads(self):
         data = ('één bron https://example.org/ <|endoftext|>\n' * 1500).encode()
-        fiches = [daily.Fiche(str(i), 2, data, 'a' * 64) for i in range(2)]
+        fiches = [daily.Fiche(f'queue:{i}', 2, data, 'a' * 64) for i in range(2)]
         result = daily.weave(fiches, '2026_W41', date(2026, 10, 5))
         self.assertEqual(len(result), 2)
         for thread in result:
             self.assertEqual(thread['tokens'], daily.token_count(thread['text']))
             self.assertLessEqual(thread['tokens'] + daily.RESERVE, daily.LIMIT)
         with self.assertRaisesRegex(ValueError, 'fiche'):
-            daily.weave([daily.Fiche('huge', 1, data * 2, 'b' * 64)],
+            daily.weave([daily.Fiche('queue:99', 1, data * 2, 'b' * 64)],
                         '2026_W41', date(2026, 10, 5))
 
 

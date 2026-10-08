@@ -39,10 +39,9 @@ Daarom stopt de standaardketen na maximaal één Minos-herschrijving.
 ## Menselijke inspectie blijft mogelijk
 
 SQLite bewaart nieuwe fiches in de persistente transportqueue; Git/GitHub bewaart
-code en versioneerbare redactionele audit/publicatieartefacten. Tijdens de migratie
-blijven oude Git-fiches voor de bestaande Ariadne-consument beschikbaar. De lokale
-SQLite-audit bewaart de operationele provenance van de deterministische verwerking.
-De producerkant is beschikbaar; lokale queueconsumptie volgt nog.
+code en ontwerpdocumentatie. De lokale SQLite-audit bewaart de operationele
+provenance van de deterministische backlogverwerking. Historische Git-fiches
+blijven bewaard, maar zijn geen actuele consumenteninvoer.
 Bij uitzonderlijke, verrassende of twijfelachtige claims moet het gemakkelijk zijn om
 van een afgeleid resultaat terug te gaan naar de gebruikte bronfiches en hun
 oorspronkelijke bronnen.

@@ -20,8 +20,9 @@ class IngressQueue:
     def pending_for_day(self, db, day):
         """Read one caller-owned snapshot; reject unassignable pending records.
 
-        A valid other calendar date is ignored before fiche validation. Malformed
-        JSON or an invalid/missing date cannot safely be assigned to another day.
+        All pending JSON and dates are parsed strictly. Dates through the local
+        cutoff are eligible; future records remain pending. The consumer also
+        validates the complete schema of future records.
         """
         from datetime import date
         def unique(pairs):
@@ -47,7 +48,9 @@ class IngressQueue:
                     raise ValueError('Ongeldige payloaddatum')
             except (ValueError, TypeError) as error:
                 raise ValueError(f'Ongeldig queue-item queue:{identity}') from error
-            if parsed == day:
+            from daily import queue_fiche
+            queue_fiche(identity, payload, parsed)
+            if parsed <= day:
                 result.append((identity, payload))
         return result
 
