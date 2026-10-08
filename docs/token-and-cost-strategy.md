@@ -6,6 +6,19 @@ De grootste betaalde kost ontstaat wanneer intelligente modellen grote hoeveelhe
 
 Weekendkrant probeert daarom niet de kwaliteit van de synthesizer maximaal te verlagen, maar de hoeveelheid irrelevante context die hij moet verwerken.
 
+## Status en begrippen
+
+De bundelmeting is geïmplementeerd; Leonardo-calls, statebeheer, Kuifje-missies en
+kostenadministratie zijn doelontwerp. Zie [het ontwerpbesluit van 8 oktober 2026](leonardo-memory-and-orchestration.md).
+De huidige bundels stoppen per dag. Het doel is ongelezen parts per week/topic
+verder te vullen en logisch dossiergeheugen onafhankelijk daarvan te bewaren.
+
+35K is een gekozen inputgrens, geen bewezen optimaal callvolume. Slow burn betekent
+progressief nieuwe context verwerken met compacte state en tussenoutput. De winst
+moet komen van minder herlezen en minder output; kleine calls of een trager ritme
+maken dezelfde tokens niet vanzelf goedkoper. Herhaalde instructies, state en
+compressiecalls tellen ook mee. Het aanbiedritme vereist kosten- en kwaliteitsmeting.
+
 ## Kost per component
 
 ### Sherlock
@@ -40,6 +53,13 @@ maximale input         35k
 ```
 
 De tussenoutput moet compact blijven. Leonardo hoeft na elke draad geen afgewerkt artikel te schrijven; hij kan een compacte research state bijwerken. Pas aan het einde volgt een langere synthese.
+
+## Kuifje (gepland)
+
+Een missie krijgt alleen de vraag en relevante context. Resultaten keren met
+missie- en dossieridentiteit terug naar Leonardo: geldige state + oorspronkelijke
+missie + nieuwe bronnen. Oude broncontext wordt alleen gericht opnieuw opgehaald.
+Missies, herlezing, retries en compressie vallen onder dezelfde budgetboekhouding.
 
 ## Streaming synthese
 
@@ -90,7 +110,19 @@ Sherlock-output deze periode
 -> verwachte modelkost
 ```
 
-Een later budgetmechanisme kan op basis hiervan een harde week- of maandgrens afdwingen.
+Het geplande budgetmechanisme reserveert vóór uitvoering kosten voor begrensde
+input, output en eventuele tool-/redeneerkosten, en rekent na uitvoering af met
+werkelijke usage. Gelijktijdige aanvragen mogen hetzelfde budget niet dubbel
+uitgeven. Tarieven, modelconfiguratie en ramingen worden geversioneerd; concrete
+week- en maandgrenzen zijn nog te kiezen.
+
+De 35.000 geldt voor **input**. Output krijgt een afzonderlijke grens; input plus
+gereserveerde output moet binnen de contextcapaciteit van het gekozen model passen.
+De 5.000 reserve bevat alle overige input, inclusief state, missiecontext en
+berichtoverhead. Een state rond maximaal 4K past dus alleen als ook de rest binnen
+die reserve blijft. De callbouwer meet de complete request met de modeltokenizer;
+een overschrijding leidt tot wachten of herverdeling van nog niet aangeboden
+materiaal, nooit stilzwijgend afkappen of overschrijden.
 
 ## Dagelijkse bundeling versie 1
 
@@ -100,6 +132,8 @@ inclusief draadheader, bronpaden, hashes, byteaantallen en bronafscheidingen.
 Maximaal 30.000 tokens draad plus **5.000 gereserveerde tokens** voor alle overige
 Leonardo-input samen: instructies, dossierstate, berichtenstructuur en API-overhead.
 
+Momenteel beperkt run_daily() de invoer tot vandaag en start iedere dag nieuwe
+parts. Dagoverschrijdend vullen is gepland, niet geïmplementeerd.
 Het weven groepeert numeriek per topic en sorteert bronpaden lexicografisch. Het
 splitst uitsluitend tussen hele fiches. Een fiche die alleen al niet past, faalt
 de hele dag expliciet; er wordt geen tekst afgekapt. Ook identieke fiches blijven
