@@ -76,10 +76,12 @@ compatibiliteit; dit telt nu de nieuw geregistreerde partrevisies in deze run.
 ## Migratie en bewuste cut-over
 
 `PRAGMA user_version=0` is de bestaande onversioneerde productie-DB. De runtime
-maakt transactioneel de nieuwe tabellen, indexes en triggers en zet de versie
-op **1**. Heropenen is idempotent; onbekende nieuwere versies worden geweigerd.
+maakt transactioneel het partmodel plus offers en zet de versie op **2**.
+Schema 1 krijgt additief alleen de offertabel en bijbehorende triggers. Bestaande
+partrows, revisies en bronmemberships blijven exact behouden. Heropenen is
+idempotent; onbekende nieuwere versies worden geweigerd.
 Een verse DB krijgt legacy-, ingress- en parttabellen. Geen extern framework.
-Zie het [exacte schema en auditcontract](audit-trail.md#partschema-versie-1).
+Zie het [exacte schema en auditcontract](audit-trail.md#partschema-versie-2).
 
 Bestaande `ingress_queue`, `days`, `attempts`, `threads` en `sources` blijven
 intact. `YYYY-MM-DD_PPPP.txt` en hun provenance worden niet geconverteerd of
@@ -126,10 +128,31 @@ de foutregistratie mislukken; logging blijft zichtbaar. Bewaar database en
 succesvolle revisiebestanden samen. Verwijderde succesvolle files worden niet
 automatisch gereconstrueerd.
 
+## Expliciete lokale offer/seal-operatie
+
+`PartStore(db).offer(part_id, revision)` verwacht een concrete part-ID en exact
+zijn geregistreerde actieve revisie. De connection mag geen actieve transactie
+hebben: de operatie beheert zelf een korte `BEGIN IMMEDIATE`, commit en rollback.
+Ze retourneert een immutable `PartOffer(id, part_id, revision, created_at)`.
+Een identieke retry retourneert hetzelfde record met dezelfde ID en UTC-tijd.
+Een oude, fictieve of niet-actieve revisie wordt geweigerd.
+
+SQLite valideert de offerinsert en sluit de part in dezelfde statement via een
+trigger. Bij insert-, seal- of commitfout wordt de hele operatie teruggedraaid.
+Ook een reeds door overflow gesloten part met een actieve revisie is offerbaar.
+Een offer schrijft, kopieert of rendert geen revisiebestand. Hash, tokenmeting en
+membership blijven de bestaande geregistreerde provenance.
+
+Open parts mogen groeien via nieuwe revisies. Gesloten parts mogen geen bronnen
+meer krijgen. Sealed/offered betekent gesloten plus één lokaal persistent offer
+voor de exacte actieve revisie; het bewijst geen verzending of ontvangst door
+Leonardo. Na sealing maakt normale `daily` de volgende part wanneer geen andere
+part open is. Er is geen automatische selectie, scheduler of modelcall.
+
 ## Nog niet geïmplementeerd
 
-Aanbieden aan Leonardo, offered-lifecycle, rolling dossierstate, dossiers,
-Kuifje-missies, modelcalls, callbudgetten, aanbiedplanning en eindredactionele
+Daadwerkelijke Leonardo-calls, rolling dossierstate, dossiers,
+Kuifje-missies, callbudgetten, aanbiedplanning en eindredactionele
 weekdeadline volgen later. Een overflow sluit alleen bronaanvulling; er gebeurt
 geen automatische aanbieding. Deze stap voegt geen cronjob toe.
 

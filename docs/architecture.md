@@ -40,11 +40,12 @@ queue-ID)` en worden achter bestaande bronmembership toegevoegd. Overflow sluit
 de part definitief. Een partial unique index bewaakt maximaal één open part.
 
 `parts.py` bevat de kleine expliciete SQLite-opslaglaag en de mechanische planner.
-`PRAGMA user_version=1` voegt `parts`, `part_revisions`, `source_archive` en
-`revision_sources` toe zonder legacyrows te transformeren. Exacte bronbytes
+`PRAGMA user_version=2` maakt bij schema 0 het partmodel en voegt bij schema 1
+alleen `part_offers` en bijbehorende triggers toe, zonder bestaande rows te
+transformeren. Versie 2 is een no-op; nieuwere versies worden geweigerd. Exacte bronbytes
 blijven onafhankelijk van de transportqueue bestaan. De finale transactie
 controleert ook de geplande partstaat en verschuift de actieve revisie samen
-met provenance en processed-status. Zie [partschema](audit-trail.md#partschema-versie-1).
+met provenance en processed-status. Zie [partschema](audit-trail.md#partschema-versie-2).
 
 ## GitHub en discovery
 
@@ -84,9 +85,11 @@ Logginginitialisatiefouten stoppen de CLI met exitcode 1 en een stderr-diagnose.
 
 Geïmplementeerd: persistente backlog, cross-day week/topic-parts, open parts,
 immutable revisions, exact bronarchief, deterministische overflow en crashsafe
-registratie. Legacy-dagbestanden worden niet retroactief gemigreerd.
+registratie en expliciete lokale offer/seal-registratie. Legacy-dagbestanden worden niet retroactief gemigreerd.
 
 [Leonardo-geheugen en regie](leonardo-memory-and-orchestration.md) beschrijft ook
-het toekomstige ontwerp. Aanbieding en offered-lifecycle, dossiers, rolling
+het toekomstige ontwerp. Een offer bevriest de actieve revisie en sluit de part
+in één korte transactie, zonder files te wijzigen of een model aan te roepen.
+Een gesloten part zonder offer is ook nog offerbaar. Dossiers, rolling
 state, Kuifje, modelcalls, callbudgetten, aanbiedplanning en eindredactionele
 weekdeadline zijn nog niet geïmplementeerd.

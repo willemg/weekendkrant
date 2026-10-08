@@ -10,8 +10,12 @@ Weekendkrant probeert daarom niet de kwaliteit van de synthesizer maximaal te ve
 
 De bundelmeting is geïmplementeerd; Leonardo-calls, statebeheer, Kuifje-missies en
 kostenadministratie zijn doelontwerp. Zie [het ontwerpbesluit van 8 oktober 2026](leonardo-memory-and-orchestration.md).
-De huidige bundels stoppen per dag. Het doel is ongelezen parts per week/topic
-verder te vullen en logisch dossiergeheugen onafhankelijk daarvan te bewaren.
+De huidige bundels groeien over daggrenzen heen per ISO-week/topic via nieuwe
+immutable revisies, totdat overflow of een expliciet lokaal offer de part sluit.
+Een offer bevriest exact de actieve revisie en verwijst naar bestaande tokenmeting
+en provenance, zonder bytes opnieuw te renderen. Offered/sealed is geen bewijs
+van een Leonardo-call en veroorzaakt geen modelkosten. Aanbiedplanning en de
+callbouwer volgen later; logisch dossiergeheugen blijft daarvan onafhankelijk.
 
 35K is een gekozen inputgrens, geen bewezen optimaal callvolume. Slow burn betekent
 progressief nieuwe context verwerken met compacte state en tussenoutput. De winst

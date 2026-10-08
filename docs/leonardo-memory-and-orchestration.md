@@ -5,15 +5,16 @@
 Dit document bevat zowel huidig runtimegedrag als toekomstig doelontwerp.
 Nu geïmplementeerd: persistente backlog, cross-day week/topic-parts, maximaal
 één open part per week/topic, immutable revisions, exact bronarchief,
-deterministische overflow en crashsafe registratie.
+deterministische overflow, crashsafe registratie en lokale offer/seal-records.
 
 Nieuwe queue-items gaan naar ISO-week/topic-parts. Bestaande legacy-dagbestanden
 en `days/threads/sources` blijven historische output zonder conversie.
-SQLite schema-versie 1 bewaart parts, revisies, bronbytes en exacte memberships.
+SQLite schema-versie 2 bewaart parts, revisies, bronbytes, exacte memberships
+en immutable lokale revision-offers.
 Zie het [huidige runtimecontract](daily-runtime.md).
 
-Nog niet geïmplementeerd: aanbieden aan Leonardo, offered-lifecycle, rolling
-dossierstate, dossiers, Kuifje, modelcalls, callbudgetten, aanbiedplanning en
+Nog niet geïmplementeerd: daadwerkelijke Leonardo-calls, rolling
+dossierstate, dossiers, Kuifje, callbudgetten, aanbiedplanning en
 eindredactionele weekdeadline. De verdere secties daarover zijn doelontwerp.
 
 Het nieuwe uitgangspunt is:
@@ -76,8 +77,9 @@ vinden.
 
 De runtime bundelt nieuwe Sherlock-fiches
 **over daggrenzen heen, per ISO-week en topic**, in de laatste nog open part.
-Open betekent nu uitsluitend dat verdere bronaanvulling is toegestaan; er is
-nog geen offered-status of aanbiedlogica. De technische identiteit wordt week + topic + part; de aanmaakdatum mag
+Open betekent dat verdere bronaanvulling is toegestaan. Een expliciete lokale
+offer-operatie sluit de part en registreert zijn actieve revisie; automatische
+aanbiedplanning ontbreekt. De technische identiteit is week + topic + part; de aanmaakdatum mag
 zichtbaar blijven, maar sluit de part niet af. Verschillende topics worden
 niet samengevoegd om het budget vol te krijgen.
 
@@ -99,9 +101,16 @@ Ze leidt die koppelingen niet af uit titels, tekst of gelijke topicnummers.
 
 ## Levenscyclus van een part
 
-Een nog niet aangeboden part mag verder groeien. Zodra een concrete versie
-aan Leonardo wordt aangeboden, ligt die versie vast. Audit registreert de
-partidentiteit, revisie, bronvolgorde, exacte inhoudshash en tokenmeting.
+Een open part mag verder groeien via nieuwe immutable revisies. Een gesloten
+part krijgt geen verdere bronnen; overflow maakt nog geen offer. De expliciete
+`PartStore.offer(part_id, revision)` registreert exact de actieve revisie en
+sluit de part atomisch. Ook een overflow-gesloten part is offerbaar. Een identieke
+retry retourneert hetzelfde offer met dezelfde ID en timestamp.
+
+Sealed/offered betekent één lokaal persistent handoff-record. Er is nog geen
+Leonardo-call uitgevoerd en geen ontvangst bevestigd. Het record verwijst naar
+bestaande revisieprovenance met bronvolgorde, hash en tokenmeting; files worden
+niet herschreven. De daadwerkelijke toekomstige modelcall krijgt aparte audit.
 
 Nieuwe fiches gaan daarna naar een volgende part of een expliciet gekoppelde
 dossieraanvulling. Eerder aangeboden bytes worden niet stilzwijgend veranderd.
@@ -116,9 +125,9 @@ de vorige actieve revisie intact. Orphans zijn geen geregistreerde provenance.
 
 De stabiele identiteit is week/topic/part; het schema bewaart revisies en
 bronposities afzonderlijk. Het bronarchief bewaart exacte UTF-8 bytes zonder
-levensduurafhankelijkheid van ingress_queue. `PRAGMA user_version=1` migreert
+levensduurafhankelijkheid van ingress_queue. `PRAGMA user_version=2` migreert
 in-place zonder legacyrows te transformeren. Tabelnamen en bestandslayout staan
-in [audit-trail](audit-trail.md#partschema-versie-1) en [runtime](daily-runtime.md).
+in [audit-trail](audit-trail.md#partschema-versie-2) en [runtime](daily-runtime.md).
 
 ## Rolling state als contract
 
@@ -179,7 +188,7 @@ is, vraagt Leonardo gericht oorspronkelijke fiches op; die herlezing telt mee
 in het volgende budget. Missie en resultaten blijven traceerbaar naar de
 stateversie en partversies die aanleiding gaven tot het onderzoek.
 
-De huidige schema-versie 1 accepteert exact vier fichevelden. Missievelden mogen
+Het huidige ingress-payloadschema versie 1 accepteert exact vier fichevelden. Missievelden mogen
 daar nu dus niet zomaar bij. Een uitbreiding vergt een expliciet geversioneerd
 protocol en validatie in de volledige ingressketen.
 
@@ -266,9 +275,9 @@ missies en callaudit, met behoud van traceerbaarheid en beperkte schijfruimte.
 Schema, migratie en het cross-day vlechtwerk zijn geïmplementeerd, inclusief
 groei, overflow, retries, weekgrenzen en behoud van geregistreerde revisies.
 
-De volgende afzonderlijke PR definieert het protocol waarmee een concrete
-partrevision aan Leonardo kan worden aangeboden en auditbaar vastligt.
-Daarna volgen state-/actieprotocol, callbouwer, tokenlimieten, aanbiedplanning,
+De lokale offer/seal-grens is geïmplementeerd; zij bevriest één geregistreerde
+actieve revisie zonder externe uitvoering. Daarna volgen state-/actieprotocol,
+callbouwer, tokenlimieten, aanbiedplanning,
 kostenadministratie en uiteindelijk Kuifje-missies met expliciete dossiers.
 Deze toekomstige onderdelen krijgen hier nog geen nieuw runtimegedrag.
 
