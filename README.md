@@ -29,122 +29,60 @@ Zie de ontwerpdocumentatie:
 - [Audit trail en kwaliteitslabels](docs/audit-trail.md)
 - [Redactionele principes](docs/editorial-principles.md)
 
-## Status
+## Huidige runtime
 
-Het [ontwerpbesluit van 8 oktober 2026](docs/leonardo-memory-and-orchestration.md)
-werkt dagoverschrijdende parts, rolling state, Kuifje-missies en Ariadnes geheugen-
-en budgetbeheer uit. Dit is nog geen runtimefunctionaliteit: daily maakt vandaag
-aparte bestanden per topic en dag en doet geen modelcalls.
-
-De ingress-API en persistente SQLite-queue zijn geïmplementeerd met uitsluitend
-Python 3.9-standaardbibliotheek. Het doeltransport is
-`Sherlock -> HTTPS ingress-API -> SQLite queue -> Ariadne`.
-Git/GitHub dient voor code, weekbranches, worktrees, audit en krantartefacten,
-niet als primaire transportqueue.
-
-Ariadne `daily` consumeert rechtstreeks de SQLite-queue voor vandaag in
-Europe/Brussels. Sherlock gebruikt de Weekendkrant Ingress MCP-plugin.
 `Sherlock -> MCP ingress -> ingress_queue.pending -> Ariadne daily -> lokale draden -> ingress_queue.processed`
-Nul pending fiches voor vandaag is een succesvolle lege run. Na succes worden de
-gebruikte items `processed`; late arrivals blijven `pending`. Geen historische
-catch-up, manifest of polling.
-De nieuwe `ingress_tunnel.py` houdt een Cloudflare Quick Tunnel open en publiceert
-de actuele URL als `config/ingress-endpoint.json` op GitHub `main`. De MCP-plugin
-leest die vaste discoverypointer; Sherlock hoeft de tunnel-URL niet te kennen.
-Zie [ingress-runtime](docs/ingress-runtime.md) voor starten, authenticatie,
-de geïsoleerde publisher en de handmatig te installeren voorbeeld-unit.
 
-## Dagelijkse queue en wekelijkse werkruimte
+MCP/SQLite is de persistente ingressqueue. Pending items met `payload.date` tot en
+met vandaag in `Europe/Brussels` blijven verwerkbaar totdat ze succesvol processed
+zijn. De payloaddatum is provenance/ordening, geen eenmalig consumptievenster.
+Een fout laat werk pending; de volgende geschikte run haalt het vanzelf in.
+Geldige toekomstige fiches wachten. Een lege queue geeft success met nul draden.
 
-Zie [dagelijkse runtime en controles voor bibib](docs/daily-runtime.md).
-De oude `closed`-manifestroute is niet meer operationeel. `prepare-week` blijft
-voor redactioneel versiebeheer bestaan en is niet nodig voor Sherlock-transport.
-De cronjobs blijven dagelijks om 10:00 en zondag om 22:00 Belgische tijd.
-`app` blijft op `main`; `prepare-week` beheert maximaal één aparte weekworktree.
-Beide taken gebruiken hetzelfde Ariadne-slot. De auditretentie is acht ISO-weken
-maar ruimt geen queue-items op.
+Ariadne groepeert voorlopig per oorspronkelijke datum en topic en sorteert
+numeriek op queue-ID. Late fiches krijgen volgende legacy-parts op basis van
+SQLite-provenance; succesvolle draadbytes blijven intact. `days.status` sluit
+geen dagen af voor nieuwe consumptie. Zie [runtime en crashgedrag](docs/daily-runtime.md).
 
-## Weekwerkruimte voorbereiden
+`daily` is de enige operationele Ariadne-taak. Er zijn geen Git-operaties,
+weekbranches, beheerde weekworktree, weekrapport of automatische retentie nodig.
+Het lokale runtime-slot staat buiten de applicatierepository. Historische Git-data
+blijft behouden; bestaande SQLite-rijen worden niet opgeruimd en er is geen
+automatische `VACUUM`. Het doelontwerp uit PR #16 volgt in afzonderlijke stappen.
 
-Python 3.9 of nieuwer, Git en een lokale clone zijn vereist. Git 2.30.2 op bibib
-wordt ondersteund; een Git-upgrade is niet nodig. Dagelijkse verwerking
-gebruikt daarnaast de vastgelegde tokenizer uit `requirements.txt`.
-De installatie staat onder `/home/weekendkrant/app`. Maak daar eenmalig de venv aan:
+De Quick Tunnel-component publiceert de actuele endpoint-URL via
+`config/ingress-endpoint.json` op GitHub. De MCP-plugin leest die discoverypointer.
+Zie [ingress-runtime](docs/ingress-runtime.md); tunnel/plugin/Sherlock veranderen
+niet door deze cleanup.
+
+## Installatie en uitvoering
+
+Python 3.9 of nieuwer en de tokenizer uit `requirements.txt` zijn vereist.
+De installatie staat onder `/home/weekendkrant/app`:
 
 ```bash
 cd /home/weekendkrant/app
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
-```
-
-Normale gebruikers en de actieve cronjobs starten Ariadne via `start_ariadne.sh`.
-Beide uitvoerscripts gaan eerst naar de vaste repositoryroot en gebruiken rechtstreeks
-`/home/weekendkrant/app/.venv/bin/python`; handmatig activeren van `.venv` is niet nodig.
-Een ontbrekende venv/interpreter geeft een shellfout en een niet-nul exitcode.
-Voer vanuit de repositoryroot uit:
-
-```bash
-./start_ariadne.sh prepare-week --date 2026-10-04
-```
-
-Dit bereidt `ingress/2026_W40` voor, met `ingress/2026_W40/.gitkeep`
-en `audit/2026_W40/ingress-preparation.json`, en pusht de branch naar `origin`.
-`--date` gebruikt exact de opgegeven kalenderdatum en de bijbehorende ISO-week.
-De wekelijkse zondagavondtaak gebruikt in plaats daarvan:
-
-```bash
-/home/weekendkrant/app/start_ariadne.sh prepare-week --next-week
-```
-
-`--next-week` bepaalt de actuele datum expliciet in `Europe/Brussels` en kiest
-de maandag van de eerstvolgende ISO-week. `--date` en `--next-week` zijn wederzijds
-exclusief; één van beide is verplicht. De oude aanroep zonder subcommand vervalt.
-
-De taak vereist een schone werkboom, haalt `origin` op en werkt lokale `main`
-uitsluitend fast-forward bij tot `origin/main`. Nieuwe weekbranches beginnen op
-die actuele `main`; bestaande lokale of remote weekbranches worden veilig hergebruikt
-in de afzonderlijke weekworktree. Vóór een weekwissel wordt alleen die beheerde,
-schone worktree via Git verwijderd. Branches en oogst blijven behouden. Extra
-worktrees, lokale wijzigingen (ook genegeerde weekbestanden) of vergrendelde
-worktrees leiden tot veilig stoppen.
-Ariadne commit alleen de twee voorbereidingsbestanden indien nodig en pusht de
-weekbranch met upstream. Git-identiteit en niet-interactieve lees-/schrijfauthenticatie
-voor `origin` moeten vooraf zijn ingesteld. Alleen een geslaagde push geldt als succes.
-
-Herhalen bewaart oogst en auditrecord en maakt geen nutteloze extra commit.
-Een vuile werkboom, conflicterende metadata, divergente of lokaal vooruitgelopen
-`main`, of divergente weekhistory leidt tot stoppen. Een vooruitgelopen weekremote
-wordt uitsluitend fast-forward gevolgd; een lokale voorbereidingscommit na een
-mislukte push kan bij weekvoorbereiding opnieuw worden gepusht.
-Er is geen force-push, reset, automatische conflictmerge of weggooien van lokale
-wijzigingen. Gebruik één schrijver per clone. Bij een pushfout blijft een gemaakte
-commit lokaal behouden; na herstel van de fout kan dezelfde taak opnieuw worden uitgevoerd.
-
-Runtime-meldingen verschijnen in `/home/weekendkrant/logs/ariadne.log`, met
-automatische rotatie (1 MiB, vier reservebestanden; circa 5 MiB totaal).
-Het JSON-resultaat blijft als gestructureerde CLI-output op stdout verschijnen.
-De uitvoerende gebruiker moet de logmap kunnen aanmaken of erin kunnen schrijven;
-zie [de loggingconfiguratie](docs/architecture.md#logging).
-
-De handmatige preflight van `prepare-week --next-week` op `bibib` is geslaagd;
-de weekbranch staat op GitHub en de wekelijkse cronjob is ingesteld voor zondag
-om 22:00 Belgische tijd. Zie [het weekritme](docs/architecture.md#zondagavond-en-overgang-naar-de-volgende-week).
-
-Dagelijks handmatig starten:
-
-```bash
+./start_tests.sh
 ./start_ariadne.sh daily
 ```
 
-Dit kiest vandaag in `Europe/Brussels` en verwerkt één consistente snapshot van
-pending fiches voor die datum, zonder Git fetch of wachten op Sherlock.
-De hele dag slaagt of faalt; zie [transactie en crashgedrag](docs/daily-runtime.md#transactie-en-crashgedrag).
-Volg eerst de [preflight](docs/daily-runtime.md#handmatig-controleren-op-bibib).
-De zondagjob rapporteert onvolledige dagen zonder de volgende week te blokkeren.
+De wrappers gebruiken rechtstreeks de venv-interpreter; activeren is niet nodig.
+JSON verschijnt op stdout, logging in `/home/weekendkrant/logs/ariadne.log`
+(1 MiB, vier backups). DB, draden en runtime-lock staan buiten de applicatierepository.
+Zie [preflight en croncontract](docs/daily-runtime.md#installeren-en-handmatig-controleren-op-bibib).
 
-```bash
-./start_tests.sh
+Verwijder na merge handmatig de obsolete zondagregel op bibib:
+
+```cron
+0 22 * * 0 /home/weekendkrant/app/start_ariadne.sh prepare-week --next-week >/dev/null
 ```
 
-Zie [de afbakening van deze stap](docs/architecture.md#eerste-implementatiestap-weekvoorbereiding)
-en [het voorbereidingsrecord](docs/audit-trail.md#weekvoorbereiding-schema-1).
+Behoud de dagelijkse regel:
+
+```cron
+0 10 * * * /home/weekendkrant/app/start_ariadne.sh daily >/dev/null
+```
+
+De code wijzigt geen crontab en verwijdert geen bestaande worktrees of branches.

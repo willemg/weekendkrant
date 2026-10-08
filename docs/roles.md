@@ -113,15 +113,13 @@ De output moet uiteindelijk bruikbaar genoeg zijn om deterministisch door Ariadn
 
 Ariadne is geen agent maar een deterministisch script, bedoeld om via cron op een Raspberry Pi te draaien.
 
-Geïmplementeerd zijn de SQLite-queueconsument, de wekelijkse
-Git-weekvoorbereiding en de
+Geïmplementeerd zijn de SQLite-backlogconsument en de
 [dagelijkse deterministische verwerking](daily-runtime.md).
 
 ### Verantwoordelijkheden
 
-- weekbranches en worktrees voor redactionele/versioneringsoutput voorbereiden;
-- pending fiches voor vandaag in Europe/Brussels in één snapshot verwerken;
-- de repository uitsluitend bij weekvoorbereiding synchroniseren;
+- pending fiches tot en met vandaag in Europe/Brussels in één snapshot verwerken;
+- oude pending fiches automatisch meenemen zonder afzonderlijke herstelmodus;
 - dagelijks om 10:00 zonder polling starten; nul fiches is succes;
 - queue-items na geslaagde output en provenance atomisch processed markeren;
 - nieuwe Sherlock-output herkennen;
@@ -133,19 +131,18 @@ Git-weekvoorbereiding en de
   voor overige Leonardo-input; de toekomstige callbouwer moet de volledige
   request opnieuw meten en maximaal 35.000 inputtokens afdwingen;
 - verwerkingsstatus en provenance in een lokale SQLite-database administreren;
-- dagfouten voor de weekjob leesbaar bewaren, zonder de voorbereiding van de volgende
-  week door een onvolledige oogst te blokkeren;
+- mislukte pogingen zichtbaar bewaren terwijl queue-items pending blijven;
 - alle runtime-informatie via de centrale Python-`logging`configuratie schrijven,
   met levels en rotatie naar `/home/weekendkrant/logs/`.
 
 Tijdens de observatiefase zijn Ariadnes draden afgeleide werkproducten. Ze hoeven niet
 terug naar GitHub en moeten uit dezelfde ingress reproduceerbaar opnieuw opgebouwd
 kunnen worden.
-Dagelijkse verwerking en weekvoorbereiding delen een slot en starten steeds uit
-`app` op `main`; één aparte beheerde weekworktree bevat de ingressbranch.
-Er zijn maximaal twee geregistreerde worktrees. De wekelijkse SQLite-auditretentie laat de nieuwe transportqueue intact en
-bewaart de aflopende Belgische ISO-week plus de zeven voorgaande weken. Na een weekovergang haalt Ariadne geen oude weken in; late aanvullingen
-blijven pending in de queue.
+`daily` gebruikt een lokaal niet-blokkerend slot buiten de applicatierepository en
+voert geen Git-operaties uit. De fiche-datum blijft provenance. Late arrivals
+krijgen volgende legacy-parts op basis van succesvolle SQLite-provenance, zonder
+eerdere output te herschrijven. Er is geen dagafsluit-gating, zondagjob,
+weekrapport of automatische retentie. Bestaande data blijft behouden.
 
 ### Gepland geheugen- en budgetbeheer
 

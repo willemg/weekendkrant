@@ -9,7 +9,7 @@ from unittest.mock import patch
 import ariadne
 import daily
 from ingress_queue import IngressQueue
-from test_prepare_week_runtime import RuntimeGitFixture
+import tempfile
 
 DAY = date(2026, 10, 5)
 
@@ -20,16 +20,20 @@ def payload(**changes):
     return item
 
 
-class QueueDailyTests(RuntimeGitFixture):
+class QueueDailyTests(unittest.TestCase):
     def setUp(self):
-        super().setUp()
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name) / "app"
+        self.root.mkdir()
+        self.lock = self.root.parent / "ariadne.lock"
         self.db = self.root.parent / 'queue.sqlite3'
         self.output = self.root.parent / 'draden'
         self.queue = IngressQueue(self.db)
 
     def run_daily(self):
         return daily.run_daily(self.root, self.db, self.output,
-                               now=datetime(2026, 10, 4, 22, 1, tzinfo=timezone.utc))
+                               now=datetime(2026, 10, 4, 22, 1, tzinfo=timezone.utc), lock_path=self.lock)
 
     def rows(self, sql):
         with sqlite3.connect(self.db) as db:
@@ -37,53 +41,26 @@ class QueueDailyTests(RuntimeGitFixture):
 
     def assert_pending_error(self):
         self.assertEqual(self.rows('SELECT status FROM ingress_queue'), [('pending',), ('pending',)])
-        self.assertEqual(self.rows('SELECT status FROM days'), [('processing_error',)])
+        self.assertEqual(self.rows('SELECT status FROM attempts ORDER BY id DESC LIMIT 1'), [('processing_error',)])
         for table in ('sources', 'threads'):
             self.assertEqual(self.rows('SELECT count(*) FROM ' + table), [(0,)])
 
     def test_snapshot_provenance_dates_and_processed(self):
         first = self.queue.add(payload(topic=3))
         second = self.queue.add(payload(topic=2))
-        self.queue.add(payload(date='2026-10-04'))
-        self.queue.add(payload(date='2026-10-06'))
-        done = self.queue.add(payload())
-        with sqlite3.connect(self.db) as db:
-            db.execute("UPDATE ingress_queue SET status='processed' WHERE id=?", (done,))
-        before = self.git('status', '--porcelain'), self.git('rev-parse', 'HEAD')
-        real_git = ariadne._git
-        def no_transport(root, *args, **kwargs):
-            self.assertEqual(args[0], 'rev-parse', 'daily gebruikt Git uitsluitend voor clone_lock')
-            return real_git(root, *args, **kwargs)
-        with patch.object(ariadne, '_git', side_effect=no_transport):
-            result = self.run_daily()
+        future = self.queue.add(payload(date='2026-10-06'))
+        result = self.run_daily()
         self.assertEqual(result['threads'], 2)
-        self.assertEqual(before, (self.git('status', '--porcelain'), self.git('rev-parse', 'HEAD')))
-        self.assertFalse(self.weekroot.exists())
-        self.assertEqual(self.rows('SELECT status FROM ingress_queue ORDER BY id'),
-                         [('processed',), ('processed',), ('pending',), ('pending',), ('processed',)])
+        self.assertEqual(self.rows('SELECT id,status FROM ingress_queue ORDER BY id'),
+                         [(first, 'processed'), (second, 'processed'), (future, 'pending')])
         digest = hashlib.sha256(payload()['content'].encode()).hexdigest()
         self.assertEqual(self.rows('SELECT source_path,sha256 FROM sources ORDER BY source_path'),
                          [(f'queue:{first}', digest), (f'queue:{second}', digest)])
         self.assertEqual(self.rows('SELECT commit_sha,manifest_sha256 FROM days'), [(None, None)])
-        files = {p: p.read_bytes() for p in self.output.rglob('*.txt')}
         for topic, identity in ((3, first), (2, second)):
             path = self.output / '2026_W41' / f'topic_{topic}' / '2026-10-05_0001.txt'
-            self.assertIn(f'SOURCE queue:{identity}'.encode(), files[path])
-            self.assertIn(payload()['content'].encode(), files[path])
-        late = self.queue.add(payload())
-        with patch.object(daily, 'write_thread', side_effect=AssertionError('no-op')):
-            self.run_daily()
-        self.assertEqual(files, {p: p.read_bytes() for p in self.output.rglob('*.txt')})
-        self.assertEqual(self.rows(f'SELECT status FROM ingress_queue WHERE id={late}'), [('pending',)])
-        self.assertEqual(self.rows('SELECT count(*) FROM attempts'), [(1,)])
-
-    def test_empty_success_is_also_idempotent(self):
-        self.queue.add(payload(date='2026-10-04'))
-        self.assertEqual(self.run_daily()['threads'], 0)
-        self.queue.add(payload())
-        self.run_daily()
-        self.assertFalse(self.output.exists())
-        self.assertEqual(self.rows('SELECT status FROM ingress_queue'), [('pending',), ('pending',)])
+            self.assertIn(f'SOURCE queue:{identity}'.encode(), path.read_bytes())
+            self.assertIn(payload()['content'].encode(), path.read_bytes())
 
     def test_invalid_payloads_abort_entire_day(self):
         invalid = ['{', '[]', 'null', json.dumps({'date': str(DAY)}),
@@ -216,12 +193,12 @@ class QueueDailyTests(RuntimeGitFixture):
                 self.run_daily()
         self.assertEqual(self.rows('SELECT id,status FROM ingress_queue ORDER BY id'),
                          [(first, 'processed'), (second, 'pending')])
-        self.assertEqual(self.rows('SELECT status FROM days'), [('processing_error',)])
+        self.assertEqual(self.rows('SELECT status FROM attempts ORDER BY id DESC LIMIT 1'), [('processing_error',)])
         self.assertEqual(self.rows('SELECT count(*) FROM sources'), [(0,)])
         self.assertEqual(self.rows('SELECT count(*) FROM threads'), [(0,)])
 
     def test_shared_runtime_lock(self):
-        with ariadne.clone_lock(self.root):
+        with ariadne.runtime_lock(self.lock):
             with self.assertRaises(ValueError): self.run_daily()
 
 

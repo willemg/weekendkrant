@@ -5,13 +5,10 @@
 > Het actuele contract staat in [daily-runtime.md](daily-runtime.md).
 
 
-De nieuwe richting is HTTPS POST naar de ingress-API en een persistente SQLite-queue;
-GitHub is niet langer het gekozen fichetransport. De producerkant is beschikbaar,
-maar Sherlock en Ariadne `daily` worden in deze PR niet omgezet. Onderstaande
-instructies documenteren uitsluitend het contract van de bestaande Git-runtime.
-Pas de actieve taak hiermee niet als onderdeel van deze PR aan. Het toekomstige
-queuecontract voor dagafsluiting en lege oogst volgt bij de consumentenstap.
-Zie [ingress-runtime](ingress-runtime.md).
+De onderstaande instructies zijn uitsluitend geschiedenis van de voormalige
+Git-ingress. De actieve runtime gebruikt de persistente MCP/SQLite-queue, zonder
+`closed`-manifest of definitief gesloten kalenderdagen. Zie
+[ingress-runtime](ingress-runtime.md) en [daily-runtime](daily-runtime.md).
 
 ---
 

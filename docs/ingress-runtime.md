@@ -8,9 +8,9 @@ voor externe HTTPS-bereikbaarheid. De component downloadt of installeert geen
 binary en wijzigt geen services, router of firewall.
 
 SQLite is de persistente transportqueue. GitHub is niet langer het gekozen
-transportmechanisme voor Sherlock-fiches. Git blijft voor code, weekbranches,
-worktrees, auditbare redactionele output en krantartefacten. Een weekworktree is
-geen queue. Bestaande branches blijven behouden zolang de huidige runtime ze nodig heeft.
+transportmechanisme voor Sherlock-fiches. Git bewaart code, ontwerpdocumentatie
+en de discoverypointer. Historische ingressbranches en worktrees blijven bewaard,
+maar zijn geen Ariadne-runtime meer.
 
 **Geïmplementeerd:** producer-API, queueopslag, Quick Tunnel/discoverypublisher en
 Ariadnes lokale queueconsument.
@@ -19,10 +19,10 @@ POST betekent ontvangst (`pending`), geen verwerking. `daily` zet precies de
 gebruikte items pas na geslaagde dagelijkse verwerking op `processed`.
 De API accepteert JSON-objecten; Ariadne valideert het strikte versie-1-contract
 met exact `schema_version`, `topic` (1–3), `date` en `content`.
-`daily` verwerkt één snapshot voor vandaag in Europe/Brussels zonder polling of
-`closed`-manifest. Een lege dagsnapshot slaagt. Oudere/toekomstige fiches en late
-arrivals na dagsucces blijven pending. `prepare-week` blijft bestaan maar is geen
-transportvoorwaarde. Zie [dagelijkse runtime](daily-runtime.md).
+`daily` verwerkt één snapshot van geldige pending fiches tot en met vandaag in
+Europe/Brussels zonder polling of `closed`-manifest. Een lege snapshot slaagt.
+Oude en late fiches blijven verwerkbaar tot succes; toekomstige fiches wachten.
+`prepare-week` is verwijderd. Zie [dagelijkse runtime](daily-runtime.md).
 
 ## Starten op bibib
 
@@ -42,7 +42,7 @@ Een ontbrekend of leeg token stopt vóór het openen van SQLite. Er is geen
 CLI-tokenoptie; neem geen token op in code, repository of commandlineargumenten.
 Optionele argumenten zijn `--host`, `--port` en `--db`; standaard host is loopback,
 poort 8000. Tests gebruiken altijd een tijdelijke database en loopback met poort 0.
-De API heeft een eigen levensduur en gebruikt niet Ariadnes Git-`flock`;
+De API heeft een eigen levensduur en gebruikt niet Ariadnes lokale runtime-`flock`;
 SQLite beheert de korte databasetransacties.
 
 ## HTTP-contract
@@ -62,7 +62,7 @@ Stuur UTF-8 JSON met Content-Length, bij voorkeur `Content-Type: application/jso
 Requests krijgen een sockettimeout van 10 seconden. Deze kleine standaardbibliotheek-
 server verwerkt requests sequentieel. Iedere herhaalde POST maakt een nieuw item;
 er is geen deduplicatie, lease, retry of dead-lettermechanisme. Er is geen queue-
-opruiming; bestaande Ariadne-auditretentie verwijdert geen pending items.
+opruiming of automatische auditretentie; bestaande data blijft behouden.
 
 ## Modulegrenzen en tests
 
@@ -148,7 +148,7 @@ de commitidentiteit `weekendkrant <weekendkrant@bibib>`.
 Alle Git-opdrachten draaien in de tijdelijke map, nooit in `/home/weekendkrant/app`.
 Ook geërfde `GIT_*` overrides worden verwijderd. De publisher registreert geen
 extra worktree, gebruikt geen alternates/hardlinks naar de hoofdrepo en raakt
-geen branches, index, bestanden of fetchrefs van app/weekworktree aan.
+geen branches, index, bestanden of fetchrefs van de app aan.
 Alleen het discoverybestand wordt gestaged/gecommit, met message
 `Werk ingress-endpoint bij`. Identieke bytes veroorzaken geen commit of push.
 Push is uitsluitend `git push origin HEAD:refs/heads/main`.
