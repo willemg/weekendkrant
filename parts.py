@@ -51,6 +51,10 @@ BEGIN SELECT RAISE(ABORT,'Immutable part identity'); END;
 CREATE TRIGGER never_reopen BEFORE UPDATE OF is_open ON parts
 WHEN OLD.is_open=0 AND NEW.is_open=1
 BEGIN SELECT RAISE(ABORT,'Closed part cannot reopen'); END;
+CREATE TRIGGER closed_part_no_new_revision BEFORE INSERT ON part_revisions
+WHEN EXISTS (SELECT 1 FROM parts WHERE id=NEW.part_id
+             AND is_open=0 AND active_revision IS NOT NULL)
+BEGIN SELECT RAISE(ABORT,'Closed part cannot receive new revisions'); END;
 CREATE TRIGGER monotone_active_revision BEFORE UPDATE OF active_revision ON parts
 WHEN OLD.active_revision IS NOT NULL AND
      (NEW.active_revision IS NULL OR NEW.active_revision <= OLD.active_revision)
@@ -190,13 +194,16 @@ class PartStore:
                 self.db.execute('UPDATE parts SET is_open=0 WHERE week=? AND topic=? AND part=?',
                                 (week, topic, number))
         for plan, path in zip(plans, paths):
-            row = self.db.execute('SELECT id FROM parts WHERE week=? AND topic=? AND part=?',
+            row = self.db.execute('SELECT id,is_open,active_revision FROM parts WHERE week=? AND topic=? AND part=?',
                                   (plan.week, plan.topic, plan.part)).fetchone()
             if row is None:
                 identity = self.db.execute('INSERT INTO parts(week,topic,part,is_open) VALUES (?,?,?,?)',
                                           (plan.week, plan.topic, plan.part, int(plan.is_open))).lastrowid
             else:
-                identity = row[0]
+                identity, is_open, active_revision = row
+                if not is_open and active_revision is not None:
+                    raise ValueError(f'Gesloten part kan geen nieuwe revisie ontvangen: '
+                                     f'{plan.week}/topic_{plan.topic}/part_{plan.part}')
             data = plan.text.encode('utf-8')
             self.db.execute('INSERT INTO part_revisions VALUES (?,?,?,?,?,?,?)',
                             (identity, plan.revision, str(path), hashlib.sha256(data).hexdigest(),

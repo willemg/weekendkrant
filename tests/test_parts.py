@@ -265,6 +265,56 @@ class PartTests(PartFixture):
         self.assertEqual(self.rows('SELECT path FROM part_revisions WHERE revision=2'),
                          [(str(self.output / '2026_W41/topic_2/part_0001/rev_0001.txt') + '.external',)])
 
+    def closed_part_from_runtime(self):
+        for content in ('x' * 100, 'y' * 100, 'z' * 100):
+            self.add(content=content)
+        with patch.object(daily, 'token_count', side_effect=len), patch.object(daily, 'LIMIT', 5400):
+            self.run_day(5)
+        self.assertEqual(self.active(), [('2026_W41', 2, 1, 0, 1),
+                                         ('2026_W41', 2, 2, 0, 1),
+                                         ('2026_W41', 2, 3, 1, 1)])
+        self.assertEqual(self.rows('SELECT part_id,revision,position,queue_id FROM revision_sources ORDER BY part_id'),
+                         [(1, 1, 0, 1), (2, 1, 0, 2), (3, 1, 0, 3)])
+
+    def test_closed_part_rejects_storage_revision_and_preserves_provenance(self):
+        from datetime import date
+        from parts import PartStore, PlannedRevision, render
+        self.closed_part_from_runtime()
+        before = {table: self.rows('SELECT * FROM ' + table)
+                  for table in ('parts', 'part_revisions', 'revision_sources', 'source_archive')}
+        files = {p: p.read_bytes() for p in self.output.rglob('*.txt')}
+        source = daily.queue_fiche(1, dict(schema_version=1, topic=2, date='2026-10-05', content='x' * 100), date(2026, 10, 5))
+        text = render([source], '2026_W41', 2, 1, 2, 5000)
+        plan = PlannedRevision('2026_W41', 2, 1, 2, False, (source,), text, daily.token_count(text), 5000)
+        db = daily.database(self.db)
+        try:
+            store = PartStore(db)
+            snapshot = {('2026_W41', 2): store.state('2026_W41', 2)}
+            with self.assertRaisesRegex(ValueError, 'Gesloten part'), db:
+                db.execute('BEGIN IMMEDIATE')
+                store.register([plan], [self.output / 'forbidden.txt'], {}, snapshot, [])
+        finally:
+            db.close()
+        for table, rows in before.items():
+            self.assertEqual(self.rows('SELECT * FROM ' + table), rows)
+        for path, data in files.items():
+            self.assertEqual(path.read_bytes(), data)
+
+    def test_closed_part_rejects_direct_sql_revision(self):
+        self.closed_part_from_runtime()
+        before = self.rows('SELECT * FROM part_revisions')
+        with sqlite3.connect(self.db) as db:
+            with self.assertRaisesRegex(sqlite3.IntegrityError, 'Closed part'):
+                db.execute("INSERT INTO part_revisions SELECT part_id,2,path || '.forbidden',sha256,tokens,tokenizer,reserved_tokens FROM part_revisions WHERE part_id=1 AND revision=1")
+        self.assertEqual(self.rows('SELECT * FROM part_revisions'), before)
+        self.assertEqual(self.active()[0], ('2026_W41', 2, 1, 0, 1))
+
+    def test_multi_overflow_registers_first_revision_of_new_closed_parts(self):
+        self.closed_part_from_runtime()
+        self.assertEqual(self.rows('SELECT part_id,revision FROM part_revisions ORDER BY part_id'),
+                         [(1, 1), (2, 1), (3, 1)])
+        self.assertEqual(self.rows('PRAGMA user_version'), [(1,)])
+
     def test_python39_syntax(self):
         for path in Path('.').glob('*.py'):
             ast.parse(path.read_text(), feature_version=(3, 9))
