@@ -110,8 +110,8 @@ def database(path):
 
 def status(db, day, state, commit=None, manifest=None, error=None):
     db.execute('INSERT INTO days VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(day) DO UPDATE SET '
-               'status=excluded.status, commit_sha=excluded.commit_sha, '
-               'manifest_sha256=excluded.manifest_sha256, error=excluded.error',
+               'status=excluded.status, commit_sha=COALESCE(days.commit_sha,excluded.commit_sha), '
+               'manifest_sha256=COALESCE(days.manifest_sha256,excluded.manifest_sha256), error=excluded.error',
                (str(day), week_name(day), state, commit, manifest, error))
     db.execute('INSERT INTO attempts(day,status,error) VALUES (?,?,?)', (str(day), state, error))
 

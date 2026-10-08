@@ -269,5 +269,5 @@ missies en callaudit, met behoud van traceerbaarheid en beperkte schijfruimte.
    protocolversie, budgetreservering en opslag-/retentiebeleid.
 
 Bella kan deze stappen later afzonderlijk uitvoeren op branches met PR's.
-Deze documentatiewijziging verandert geen productiecode, cronjob, actieve
-Sherlock-taak of inrichting van bibib.
+Het oorspronkelijke ontwerpbesluit in PR #16 wijzigde geen productiecode,
+cronjob, actieve Sherlock-taak of inrichting van bibib.

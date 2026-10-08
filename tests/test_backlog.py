@@ -207,3 +207,28 @@ class BacklogTests(unittest.TestCase):
                     self.run_day()
                 self.assertEqual(self.rows('SELECT status FROM ingress_queue'), [('pending',)])
                 self.assertEqual(self.rows('SELECT count(*) FROM threads'), [(0,)])
+
+    def test_late_arrival_preserves_historical_day_git_provenance(self):
+        self.add(content='bestaande succesvolle draad')
+        self.run_day(5)
+        original = next(self.output.rglob('*.txt'))
+        original_bytes = original.read_bytes()
+        legacy_commit = 'a' * 40
+        legacy_manifest = 'b' * 64
+        with sqlite3.connect(self.db) as db:
+            db.execute('UPDATE days SET commit_sha=?,manifest_sha256=? WHERE day=?',
+                       (legacy_commit, legacy_manifest, '2026-10-05'))
+        identity = self.add(content='late queuefiche')
+        self.assertEqual(self.run_day()['threads'], 1)
+        self.assertEqual(self.rows(f'SELECT status FROM ingress_queue WHERE id={identity}'),
+                         [('processed',)])
+        self.assertEqual(self.rows('SELECT day,topic,part FROM threads ORDER BY part'),
+                         [('2026-10-05', 2, 1), ('2026-10-05', 2, 2)])
+        self.assertEqual(self.rows(f"SELECT day,source_path,thread_path FROM sources "
+                                  f"WHERE source_path='queue:{identity}'"),
+                         [('2026-10-05', f'queue:{identity}',
+                           str(original.with_name('2026-10-05_0002.txt')))])
+        self.assertEqual(original.read_bytes(), original_bytes)
+        self.assertIn('late queuefiche', original.with_name('2026-10-05_0002.txt').read_text())
+        self.assertEqual(self.rows('SELECT status,commit_sha,manifest_sha256 FROM days'),
+                         [('success', legacy_commit, legacy_manifest)])
