@@ -86,50 +86,65 @@ Het audit trail is niet alleen debugging-informatie. Het maakt zichtbaar:
 
 Daarmee wordt bronprovenance een structureel onderdeel van Weekendkrant.
 
+## Partschema versie 1
+
+De in-place migratie van `PRAGMA user_version=0` naar `1` voegt uitsluitend
+schema toe. Legacyrows blijven exact bestaan. Heropenen is idempotent.
+
+| Tabel | Contract |
+| --- | --- |
+| `parts` | Stabiel `id`, `week`, `topic`, `part`, `is_open`, `active_revision`. UNIQUE week/topic/part en partial UNIQUE week/topic WHERE is_open=1. Actieve revisie verwijst via composite FK naar dezelfde part. Gesloten parts worden nooit heropend; identiteit is immutable en de actieve pointer gaat alleen vooruit. |
+| `part_revisions` | Immutable `(part_id, revision)`, uniek absoluut bestandspad, SHA-256 van exacte filebytes, tokens, tokenizer, reserved_tokens. |
+| `source_archive` | Queue-ID als unieke provenance-identiteit, schema_version, oorspronkelijke date/topic, exacte UTF-8 content als BLOB en content-SHA-256. Geen FK naar ingress_queue. |
+| `revision_sources` | Per part/revision exact queue-ID en positie; UNIQUE positie én queue-ID binnen die revisie. FKs naar partrevision en bronarchief. |
+
+UPDATE/DELETE-triggers bewaken immutable revisies, bronarchief en membership.
+INSERT in reeds actieve of oudere revision-membership wordt geweigerd.
+De opslag-API weigert een bestaande queue-ID met andere bytes of metadata.
+Nieuw bronlidmaatschap wordt volledig geregistreerd voordat de actieve pointer
+verschuift, binnen dezelfde transactie. Revisions zijn zonder queuepayloads
+reproduceerbaar uit archief, geordende memberships en serializatiemetadata.
+
+Iedere bronafscheiding noemt queue-ID, oorspronkelijke datum, SHA-256 en
+aantal UTF-8 bytes. Het partformaat `WEEKENDKRANT-PART-1` noemt ISO-week,
+topic, partnummer, revisienummer, tokenizer en reserve, zonder eigen datum.
+Nieuwe bronvolgorde is `(payload.date, numerieke queue-ID)`; bestaande posities
+blijven intact bij append-only revisiegroei.
+
+Files ontstaan zonder SQLite write-transactie. Een korte finale transactie
+controleert queue- en partstaat opnieuw en commit bronarchief, revisies,
+memberships, partsluiting, actieve pointer en processed-status samen.
+Een fout laat de vorige actieve revisie actief en eigen queue-items pending.
+Losse files zonder geregistreerde provenance zijn orphans, nooit actieve output.
+Zie [runtime en crashgedrag](daily-runtime.md#transactie-en-crashgedrag).
+
 ## Legacy SQLite-audittabellen
 
-Deze tabellen blijven bestaan om bestaande data en huidige afgeleide output
-leesbaar te houden tot het aparte part-/revisieschema wordt ontworpen:
+`days`, `threads` en `sources` blijven exact historische provenance; nieuwe
+partverwerking schrijft daar niets meer in. Bestaande Git-hashes en
+manifestverwijzingen blijven intact. `attempts` bewaart nog zichtbare
+runtimefouten met uitvoerdatum en UTC-tijd, zonder nieuwe success-records.
+Het is geen partauditmodel en geen selectie- of dagafsluitmechanisme.
 
-- `days`: oorspronkelijke fichedatum, ISO-week en auditstatus voor geproduceerde
-  output. `commit_sha` en `manifest_sha256` zijn NULL voor queueverwerking.
-  Historische fout-/timeoutrecords blijven bewaard. Status bestuurt geen selectie.
-- `attempts`: geslaagde outputregistraties en mislukte pogingen met fout en UTC-tijd.
-  Success wordt per geproduceerde oorspronkelijke datum geregistreerd; fouten
-  krijgen de uitvoerdatum. Lege runs voegen niets toe. Een late mislukte poging
-  wijzigt eerdere succesvolle `days`-provenance niet.
-- `threads`: absoluut pad, oorspronkelijke datum, topic, part, SHA-256, gemeten
-  tokens, tokenizer en reserve. Gecommitte records bepalen volgende partnummers.
-- `sources`: oorspronkelijke datum, `source_path` zoals `queue:2`, SHA-256 van de
-  exacte UTF-8 contentbytes, draadpad en bronpositie. De bronvolgorde volgt
-  numerieke queue-ID binnen datum/topic.
-
-Files worden atomisch geschreven zonder SQLite write-transactie. Daarna
-controleert één korte `BEGIN IMMEDIATE` alle snapshot-IDs opnieuw en registreert
-provenance en processed-status samen. Fouten rollbacken die update; een volgende
-run ziet oude pending fiches vanzelf opnieuw. Files zonder provenance kunnen
-achterblijven en worden voor dezelfde snapshot deterministisch opnieuw geschreven.
-Late arrivals krijgen volgende parts zonder bestaande succesvolle bytes te wijzigen.
-
-`week_report`, `prune_history`, de achtwekenregel en automatische `VACUUM` zijn
-verwijderd. Startup verwijdert geen bestaande rijen. Het historische Git-record
-`ingress-preparation.json` wordt niet meer aangemaakt en is geen actieve runtime.
-Historische branches en worktrees worden door deze cleanup niet verwijderd.
-Bewaar database en succesvolle draden samen; zie [crashgedrag](daily-runtime.md#transactie-en-crashgedrag).
+Oude `YYYY-MM-DD_PPPP.txt` worden niet geconverteerd of geherinterpreteerd.
+Nieuw verwerkte queue-items beginnen in het nieuwe schema bij part 1/revision 1
+wanneer hun week/topic nog geen nieuwe-style part heeft. Geen oude rows of files
+worden opgeruimd; er is geen automatische retentie of VACUUM.
 
 ## Geplande dossier-, state- en callaudit
 
 Het [ontwerpbesluit van 8 oktober 2026](leonardo-memory-and-orchestration.md)
 scheidt dagelijkse consumptie van dagoverschrijdende parts en langlevende dossiers.
-Het toekomstige schema moet bronlidmaatschap over meerdere dagen kunnen registreren,
-met partrevisies, hashes, stateversies en expliciete dossier- en missie-identifiers.
+Het geïmplementeerde partmodel registreert nu bronlidmaatschap over meerdere
+dagen met immutable revisies. Stateversies, expliciete dossier-/missie-identifiers
+en concrete aanbieding aan Leonardo zijn nog niet geïmplementeerd.
 
 Iedere modelcall moet traceerbaar zijn naar prompt/modelconfiguratie, de werkelijk
 aangeboden partversies en input-state, eventuele missiecontext, output en gebruik.
 Reeds aangeboden versies blijven intact. Ook het laten groeien van een nog niet
 aangeboden part mag een eerder succesvol geregistreerde versie niet ongeldig
-maken bij een mislukte DB-commit. Hiervoor is apart migratie- en crashherstelontwerp
-nodig; de huidige dagtabellen implementeren dit nog niet.
+maken bij een mislukte DB-commit. Het nieuwe partmodel bewaart geregistreerde revisies al crashsafe; concrete
+callaudit en offered-lifecycle volgen in een aparte stap.
 
 Er is nu geen automatische retentie. Actieve state, open missies en benodigd
 bronbewijs vragen een afzonderlijk, begrensd bewaarbeleid; dat wordt later ontworpen.

@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 
 from ariadne import LOCK_PATH, runtime_lock, week_name
 from ingress_queue import IngressQueue
+from parts import PartStore, migrate, weave
 
 DB_PATH = Path('/home/weekendkrant/weekendkrant.sqlite3')
 OUTPUT_PATH = Path('/home/weekendkrant/draden')
@@ -38,6 +39,8 @@ class Fiche:
     topic: int
     data: bytes
     sha256: str
+    date: str = ''
+    schema_version: int = 1
 
 
 def queue_fiche(identity, payload, day):
@@ -49,39 +52,8 @@ def queue_fiche(identity, payload, day):
             or not isinstance(payload['content'], str) or not payload['content'].strip()):
         raise ValueError(f'Ongeldige fiche: queue:{identity}')
     data = payload['content'].encode('utf-8')
-    return Fiche(f'queue:{identity}', payload['topic'], data, hashlib.sha256(data).hexdigest())
-
-
-def weave(fiches, week, day, count=token_count, limit=LIMIT, reserve=RESERVE, first_parts=None):
-    first_parts = {} if first_parts is None else first_parts
-    threads = []
-    current = []
-    current_topic = None
-    part = 1
-    def render(items, topic, number):
-        head = f'WEEKENDKRANT-DRAAD-1\nweek: {week}\ndate: {day}\ntopic: {topic}\npart: {number}\ntokenizer: {TOKENIZER}\nreserved_tokens: {reserve}\n\n'
-        return head + ''.join(f'\n--- SOURCE {f.path} sha256={f.sha256} bytes={len(f.data)} ---\n' +
-                              f.data.decode('utf-8') + '\n--- END SOURCE ---\n' for f in items)
-    def finish():
-        text = render(current, current_topic, part)
-        threads.append({'topic': current_topic, 'part': part, 'text': text,
-                        'tokens': count(text), 'sources': list(current)})
-    for fiche in sorted(fiches, key=lambda f: (f.topic, int(f.path.removeprefix('queue:')))):
-        if fiche.topic != current_topic:
-            if current:
-                finish()
-            current, current_topic, part = [], fiche.topic, first_parts.get(fiche.topic, 1)
-        if count(render(current + [fiche], current_topic, part)) + reserve > limit:
-            if current:
-                finish()
-                current = []
-                part += 1
-            if count(render([fiche], current_topic, part)) + reserve > limit:
-                raise ValueError(f'Eén fiche overschrijdt tokenbudget: {fiche.path}')
-        current.append(fiche)
-    if current:
-        finish()
-    return threads
+    return Fiche(f'queue:{identity}', payload['topic'], data,
+                 hashlib.sha256(data).hexdigest(), str(day), payload['schema_version'])
 
 
 def database(path):
@@ -105,18 +77,16 @@ def database(path):
             sha256 TEXT NOT NULL, thread_path TEXT NOT NULL REFERENCES threads(path),
             position INTEGER NOT NULL, PRIMARY KEY(day, source_path));
     ''')
+    try:
+        migrate(db)
+        IngressQueue(path)
+    except Exception:
+        db.close()
+        raise
     return db
 
 
-def status(db, day, state, commit=None, manifest=None, error=None):
-    db.execute('INSERT INTO days VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(day) DO UPDATE SET '
-               'status=excluded.status, commit_sha=COALESCE(days.commit_sha,excluded.commit_sha), '
-               'manifest_sha256=COALESCE(days.manifest_sha256,excluded.manifest_sha256), error=excluded.error',
-               (str(day), week_name(day), state, commit, manifest, error))
-    db.execute('INSERT INTO attempts(day,status,error) VALUES (?,?,?)', (str(day), state, error))
-
-
-def write_thread(path, data):
+def write_thread(path, data, replace_orphan=False):
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, name = tempfile.mkstemp(prefix='.ariadne-', dir=path.parent)
     try:
@@ -124,7 +94,16 @@ def write_thread(path, data):
             stream.write(data)
             stream.flush()
             os.fsync(stream.fileno())
-        os.replace(name, path)
+        # The caller holds the runtime lock and permits replacement ONLY after
+        # checking that this path has no registered revision provenance.
+        # A deterministic retry can reuse an identical orphan without rewriting it.
+        try:
+            os.link(name, path)
+        except FileExistsError:
+            if path.read_bytes() != data:
+                if not replace_orphan:
+                    raise ValueError(f'Revisionpad bevat andere bytes: {path}')
+                os.replace(name, path)
         directory = os.open(path.parent, os.O_RDONLY)
         try:
             os.fsync(directory)
@@ -156,48 +135,52 @@ def run_daily(root, db_path=DB_PATH, output=OUTPUT_PATH, now=None, lock_path=LOC
             # Materialize one snapshot without retaining a SQLite write lock.
             items = queue.pending_for_day(db, day)
             grouped = {}
+            new_sources = []
             for identity, payload in items:
                 original_day = date.fromisoformat(payload['date'])
-                grouped.setdefault(original_day, []).append(queue_fiche(identity, payload, original_day))
+                fiche = queue_fiche(identity, payload, original_day)
+                grouped.setdefault((week_name(original_day), fiche.topic), []).append(fiche)
+                new_sources.append(fiche)
             if not items:
                 logger.info('Geen verwerkbare pending fiches: datum=%s', day)
                 return {'date': str(day), 'week': week, 'status': 'success', 'threads': 0}
-            written = []
-            for original_day, fiches in sorted(grouped.items()):
-                original_week = week_name(original_day)
-                # Committed provenance, never orphan files, determines numbering.
-                first_parts = dict(db.execute(
-                    'SELECT topic,MAX(part)+1 FROM threads WHERE day=? GROUP BY topic',
-                    (str(original_day),)).fetchall())
-                threads = weave(fiches, original_week, original_day, first_parts=first_parts)
-                for thread in threads:
-                    path = outside_repo(root, output / original_week / f'topic_{thread["topic"]}' /
-                                        f'{original_day}_{thread["part"]:04d}.txt')
-                    # Also protect registered paths if output configuration changes.
-                    if db.execute('SELECT 1 FROM threads WHERE path=?', (str(path),)).fetchone():
-                        raise ValueError(f'Draadpad heeft al succesvolle provenance: {path}')
-                    data = thread['text'].encode('utf-8')
-                    write_thread(path, data)
-                    written.append((original_day, thread, path, hashlib.sha256(data).hexdigest()))
+            store = PartStore(db)
+            snapshots, existing = {}, {}
+            # A short read transaction gives a coherent part/membership snapshot.
+            # Release it BEFORE planning, tokenization, or filesystem operations.
+            db.execute('BEGIN')
+            try:
+                for key in sorted(grouped):
+                    snapshots[key] = store.state(*key)
+                    existing[key] = store.active_sources(snapshots[key])
+            finally:
+                db.rollback()
+            plans, closures = [], {}
+            for (original_week, topic), fiches in sorted(grouped.items()):
+                key = (original_week, topic)
+                revisions, closures[key] = weave(
+                    fiches, original_week, topic, snapshots[key], existing[key],
+                    count=token_count, limit=LIMIT, reserve=RESERVE)
+                plans.extend(revisions)
+            paths = []
+            for plan in plans:
+                path = outside_repo(root, output / plan.week / f'topic_{plan.topic}' /
+                                    f'part_{plan.part:04d}' / f'rev_{plan.revision:04d}.txt')
+                if db.execute('SELECT 1 FROM part_revisions WHERE path=?', (str(path),)).fetchone():
+                    raise ValueError(f'Revisionpad heeft al succesvolle provenance: {path}')
+                write_thread(path, plan.text.encode('utf-8'), replace_orphan=True)
+                paths.append(path)
             # Only the final provenance/status update takes a SQLite write lock.
             db.execute('BEGIN IMMEDIATE')
             for identity, _ in items:
                 row = db.execute('SELECT status FROM ingress_queue WHERE id=?', (identity,)).fetchone()
                 if row != ('pending',):
                     raise ValueError(f'Queue-item niet pending: queue:{identity}')
-            for original_day in sorted(grouped):
-                status(db, original_day, 'success')
-            for original_day, thread, path, digest in written:
-                db.execute('INSERT INTO threads VALUES (?,?,?,?,?,?,?,?)',
-                           (str(path), str(original_day), thread['topic'], thread['part'],
-                            digest, thread['tokens'], TOKENIZER, RESERVE))
-                for position, fiche in enumerate(thread['sources']):
-                    db.execute('INSERT INTO sources VALUES (?,?,?,?,?)',
-                               (str(original_day), fiche.path, fiche.sha256, str(path), position))
+            store.register(plans, paths, closures, snapshots, new_sources)
             queue.mark_processed(db, [identity for identity, _ in items])
             db.commit()
-            logger.info('Dagverwerking geslaagd: datum=%s fiches=%s draden=%s', day, len(items), len(written))
-            return {'date': str(day), 'week': week, 'status': 'success', 'threads': len(written)}
+            logger.info('Dagverwerking geslaagd: datum=%s fiches=%s draden=%s', day, len(items), len(plans))
+            return {'date': str(day), 'week': week, 'status': 'success', 'threads': len(plans)}
         except Exception as error:
             db.rollback()
             try:

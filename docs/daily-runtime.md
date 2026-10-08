@@ -33,37 +33,59 @@ Geen verwerkbare items geeft JSON `success` met `threads: 0`, zonder files te
 herschrijven, items te consumeren of een fictieve afgesloten dag te registreren.
 Een later ontvangen fiche voor dezelfde datum blijft gewoon verwerkbaar.
 
-`days` blijft legacy audit/provenance voor werkelijk geproduceerde output.
-Geen `days.status`, `attempts` of ontbrekend dagrecord bestuurt de queue.
-Een succesvolle uitvoer registreert de oorspronkelijke fichedatums in `days`.
-Een mislukte poging wordt afzonderlijk in `attempts` geregistreerd met de
-uitvoerdatum; eerder succesvolle dagprovenance blijft intact. Historische
-foutrecords blijven bewaard. Er is geen weekrapport of zeven-dagenvolledigheidsregel.
+`days`, `threads` en `sources` blijven historische legacyprovenance. Nieuwe
+partverwerking schrijft daar niets meer in. `attempts` bewaart alleen nog
+zichtbare runtimefouten met uitvoerdatum; het is geen partauditmodel.
+Geen dagstatus of ontbrekend dagrecord bestuurt de queue.
 
-## Deterministische legacy-parts
+## Week/topic-parts en immutable revisies
 
-Tot het nieuwe partmodel wordt gebouwd, groepeert Ariadne per oorspronkelijke
-fichedatum en topic. Binnen iedere groep bepaalt de numerieke queue-ID de
-bronvolgorde: `queue:2` komt vóór `queue:10`. Geen semantische sortering of
-inhoudelijke deduplicatie. Hele fiches blijven intact.
+De stabiele partidentiteit is `(ISO-weekjaar/week, topic, partnummer)`.
+Nieuwe bronnen binnen een week/topic volgen `(payload.date, numerieke queue-ID)`.
+Bestaande bronnen blijven altijd eerst in hun geregistreerde volgorde staan;
+een late oudere datum herschikt dus niets. Fiches blijven ondeelbaar.
 
-Output staat onder `/home/weekendkrant/draden/YYYY_Www/topic_N/YYYY-MM-DD_PPPP.txt`.
-Week en datum in het pad en de draadheader volgen de oorspronkelijke fichedatum,
-ook bij verwerking in een latere week. Nieuwe parts beginnen bij
-`MAX(threads.part) + 1` voor dezelfde oorspronkelijke datum/topic, of 1 wanneer
-geen provenance bestaat. Alleen gecommitte SQLite-provenance telt, geen toevallig
-bestand op disk. Reeds geregistreerde draadpaden worden beschermd.
+Er is maximaal één open part per week/topic. Past de volgende fiche niet,
+dan sluit de huidige part definitief en begint de volgende. Geen bin-packing
+of heropening. De volgende run vult alleen de nog open part. Een weekwissel
+maakt een andere identiteit; een oude week kan nog late fiches ontvangen in
+haar open part. Backlog van meerdere weken kan in één snapshot worden verwerkt.
 
-Late fiches voegen nieuwe parts toe en wijzigen geen succesvolle draad.
-Een retry van dezelfde snapshot krijgt dezelfde geplande paden en bytes zolang
-voor die parts nog geen succesvolle provenance bestaat. Losse files na een fout
-kunnen daarom deterministisch worden vervangen. Een gewijzigde snapshot kan
-andere nieuwe bytes opleveren; eerder geregistreerde output blijft intact.
+Outputlayout:
 
-`tiktoken==0.12.0` met `cl100k_base` meet de volledige geserialiseerde draad,
-inclusief header en bronafscheidingen. Draad plus 5.000 reserve is maximaal
-35.000 inputtokens. Een te grote hele fiche faalt expliciet; niets wordt afgekapt.
-Het toekomstige week/topic-partmodel met immutable revisies is nog niet gebouwd.
+```text
+/home/weekendkrant/draden/2026_W41/topic_2/part_0001/rev_0001.txt
+/home/weekendkrant/draden/2026_W41/topic_2/part_0001/rev_0002.txt
+```
+
+De nieuwe header is `WEEKENDKRANT-PART-1`, met week, topic, part, revision,
+tokenizer en reserved_tokens. Een part heeft geen eigen `date:`. Iedere
+source-afscheiding bevat `queue:<id>`, oorspronkelijke datum, content-SHA-256
+en bytegrootte. De exacte UTF-8 fichebytes worden zonder normalisatie bewaard.
+
+`tiktoken==0.12.0` / `cl100k_base` meet de volledige serialization inclusief
+header en source-metadata. Maximaal 35.000 inputtokens waarvan 5.000 reserve:
+de bronpart gebruikt maximaal 30.000 tokens. Eén onmogelijke fiche faalt de
+volledige snapshot zichtbaar; niets wordt afgekapt of processed gemarkeerd.
+
+Elke groei maakt een nieuwe revisie. Revision 1 blijft byte-for-byte behouden,
+met dezelfde hash, tokenmeting, bronposities en bronvolgorde. De actieve pointer
+verschuift pas bij succesvolle DB-commit. JSON behoudt het veld `threads` voor
+compatibiliteit; dit telt nu de nieuw geregistreerde partrevisies in deze run.
+
+## Migratie en bewuste cut-over
+
+`PRAGMA user_version=0` is de bestaande onversioneerde productie-DB. De runtime
+maakt transactioneel de nieuwe tabellen, indexes en triggers en zet de versie
+op **1**. Heropenen is idempotent; onbekende nieuwere versies worden geweigerd.
+Een verse DB krijgt legacy-, ingress- en parttabellen. Geen extern framework.
+Zie het [exacte schema en auditcontract](audit-trail.md#partschema-versie-1).
+
+Bestaande `ingress_queue`, `days`, `attempts`, `threads` en `sources` blijven
+intact. `YYYY-MM-DD_PPPP.txt` en hun provenance worden niet geconverteerd of
+geherinterpreteerd. Nieuwe succesvol verwerkte items gaan uitsluitend naar het
+partmodel, dat zonder nieuwe-style part bij part 1/revision 1 begint.
+Geen retentie, DELETE, Git-cleanup of VACUUM hoort bij deze migratie.
 
 ## Transactie en crashgedrag
 
@@ -73,19 +95,43 @@ applicatierepository. Er zijn geen Git-commando's, branchcontroles of
 weekworktree-operaties nodig voor `daily`; ook een gewone applicatiemap volstaat.
 DB, output en lock mogen niet in de applicatierepository staan.
 
-Selectie, payloadvalidatie, `weave()` en filesystemwrites houden geen SQLite
-write-transactie open. De producer kan via een afzonderlijke connection blijven
-invoegen. Files worden via tempfile, file-fsync, atomische rename en directory-fsync
-geschreven. Pas daarna begint een korte `BEGIN IMMEDIATE` voor de finale update.
-Die controleert alle oorspronkelijke snapshot-IDs opnieuw op pending en commit provenance plus exact die IDs als processed in één transactie.
-Na de snapshot toegevoegde items vallen buiten deze verwerking.
+Selectie en payloadvalidatie houden geen SQLite write-transactie open. Een korte
+read-transactie leest coherente partstaat en actieve bronmembership; die eindigt
+vóór planning, tokenisatie en filewrites. De producer kan tijdens die bewerkingen
+via een andere connection invoegen. Na de snapshot toegevoegde IDs vallen buiten
+de run. Alleen de oorspronkelijke snapshot wordt verwerkt.
 
-Een fout, inclusief commitfout, rollbackt queue- en provenance-updates. De fout
-wordt gelogd en de CLI stopt niet-nul. Bij een onbeschrijfbare DB kan ook de
-foutregistratie mislukken; logging blijft zichtbaar. Filesystem en SQLite zijn
-geen gezamenlijke atomische transactie: losse bytes zonder provenance kunnen
-achterblijven. Bewaar succesvolle draden en database samen. Verwijderde
-succesvolle files worden niet automatisch gereconstrueerd.
+Nieuwe files worden via tempfile, file-fsync, atomische hard-link-publicatie en
+directory-fsync geschreven. Een identieke orphan wordt hergebruikt. Een gewijzigde
+snapshot mag andere bytes op een nog ongeregistreerd pad atomisch vervangen;
+geregistreerde revisiepaden worden vooraf geweigerd. Alle consumenten moeten
+hetzelfde runtime-slot gebruiken. Geen bestaande succesvolle file wordt vervangen.
+
+Pas daarna start een korte `BEGIN IMMEDIATE`. Binnen die transactie worden alle
+snapshot-IDs opnieuw op pending gecontroleerd én alle betrokken week/topic-
+partstaten vergeleken met de geplande snapshot. Gewijzigde actieve revisies,
+open/closed-staat of partinventaris worden geweigerd. Bronarchief, nieuwe parts,
+revisies, memberships, sluiting, actieve pointers en exact de snapshot-IDs als
+processed worden samen gecommit.
+
+Bij file-, registratie-, pointer- of commitfout blijven eigen queue-items pending
+en de oude actieve revisies intact. De DB-provenance van de hele snapshot is
+all-or-nothing. Eerder geregistreerde revisies worden nooit gewijzigd.
+Ongeregistreerde files mogen als orphan achterblijven; zij zijn geen actieve
+of gepubliceerde provenance. Retry van dezelfde snapshot en geregistreerde
+DB-staat geeft dezelfde geplande revision/path/bytes.
+
+De fout wordt gelogd en de CLI stopt niet-nul. Bij een onbeschrijfbare DB kan ook
+de foutregistratie mislukken; logging blijft zichtbaar. Bewaar database en
+succesvolle revisiebestanden samen. Verwijderde succesvolle files worden niet
+automatisch gereconstrueerd.
+
+## Nog niet geïmplementeerd
+
+Aanbieden aan Leonardo, offered-lifecycle, rolling dossierstate, dossiers,
+Kuifje-missies, modelcalls, callbudgetten, aanbiedplanning en eindredactionele
+weekdeadline volgen later. Een overflow sluit alleen bronaanvulling; er gebeurt
+geen automatische aanbieding. Deze stap voegt geen cronjob toe.
 
 ## Installeren en handmatig controleren op bibib
 

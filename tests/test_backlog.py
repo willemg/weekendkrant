@@ -42,13 +42,13 @@ class BacklogTests(unittest.TestCase):
         self.add('2026-10-06')
         self.add('2026-10-07')
         self.add('2026-10-04')
-        self.assertEqual(self.run_day()['threads'], 3)
+        self.assertEqual(self.run_day()['threads'], 2)
         self.assertEqual(self.rows('SELECT status FROM ingress_queue ORDER BY id'),
                          [('processed',), ('processed',), ('pending',), ('processed',)])
-        self.assertEqual(self.rows('SELECT DISTINCT day FROM sources ORDER BY day'),
+        self.assertEqual(self.rows('SELECT DISTINCT date FROM source_archive ORDER BY date'),
                          [('2026-10-04',), ('2026-10-05',), ('2026-10-06',)])
         for path in self.output.rglob('*.txt'):
-            self.assertIn('date: ' + path.name[:10], path.read_text())
+            self.assertIn('WEEKENDKRANT-PART-1', path.read_text())
 
     def test_late_arrivals_append_after_registered_parts_and_preserve_bytes(self):
         self.add()
@@ -58,14 +58,14 @@ class BacklogTests(unittest.TestCase):
         self.add(content='late')
         self.run_day()
         self.assertEqual(original.read_bytes(), data)
-        self.assertIn('late', original.with_name('2026-10-05_0002.txt').read_text())
-        self.assertEqual(self.rows('SELECT part FROM threads ORDER BY part'), [(1,), (2,)])
+        self.assertIn('late', original.with_name('rev_0002.txt').read_text())
+        self.assertEqual(self.rows('SELECT revision FROM part_revisions ORDER BY revision'), [(1,), (2,)])
 
     def test_numbering_ignores_orphan_files_and_retry_after_db_failure(self):
         self.add()
         self.run_day(5)
         directory = next(self.output.rglob('*.txt')).parent
-        orphan = directory / '2026-10-05_0099.txt'
+        orphan = directory / 'rev_0099.txt'
         orphan.write_text('orphan')
         identity = self.add(content='late')
         with sqlite3.connect(self.db) as db:
@@ -73,15 +73,15 @@ class BacklogTests(unittest.TestCase):
                        "BEGIN SELECT RAISE(ABORT, 'db failure'); END")
         with self.assertRaises(sqlite3.IntegrityError):
             self.run_day()
-        planned = directory / '2026-10-05_0002.txt'
+        planned = directory / 'rev_0002.txt'
         data = planned.read_bytes()
-        self.assertEqual(self.rows('SELECT part FROM threads'), [(1,)])
+        self.assertEqual(self.rows('SELECT revision FROM part_revisions'), [(1,)])
         with sqlite3.connect(self.db) as db:
             db.execute('DROP TRIGGER refuse')
         self.run_day(7)
         self.assertEqual(planned.read_bytes(), data)
         self.assertEqual(orphan.read_text(), 'orphan')
-        self.assertEqual(self.rows('SELECT part FROM threads ORDER BY part'), [(1,), (2,)])
+        self.assertEqual(self.rows('SELECT revision FROM part_revisions ORDER BY revision'), [(1,), (2,)])
 
     def test_snapshot_includes_backlog_without_runtime_changes(self):
         self.add()
@@ -96,7 +96,7 @@ class BacklogTests(unittest.TestCase):
         for i in range(10):
             self.add(content=str(i))
         self.run_day()
-        self.assertEqual(self.rows('SELECT source_path FROM sources ORDER BY position'),
+        self.assertEqual(self.rows("SELECT 'queue:' || queue_id FROM revision_sources ORDER BY position"),
                          [(f'queue:{i}',) for i in range(1, 11)])
 
     def test_empty_run_has_no_day_closure_or_writes(self):
@@ -135,7 +135,7 @@ class BacklogTests(unittest.TestCase):
             self.run_day(5)
         self.assertEqual(self.rows('SELECT status FROM ingress_queue ORDER BY id'),
                          [('processed',), ('pending',)])
-        self.assertEqual(self.rows('SELECT status FROM days'), [('success',)])
+        self.assertEqual(self.rows('SELECT * FROM days'), [])
 
     def test_success_provenance_survives_late_failure(self):
         self.add()
@@ -144,25 +144,22 @@ class BacklogTests(unittest.TestCase):
         with patch.object(daily, 'weave', side_effect=ValueError('budget')):
             with self.assertRaises(ValueError):
                 self.run_day(5)
-        self.assertEqual(self.rows('SELECT status FROM days'), [('success',)])
+        self.assertEqual(self.rows('SELECT * FROM days'), [])
         self.assertEqual(self.rows('SELECT status FROM attempts ORDER BY id'),
-                         [('success',), ('processing_error',)])
+                         [('processing_error',)])
         self.run_day(5)
-        self.assertEqual(self.rows('SELECT part FROM threads ORDER BY part'), [(1,), (2,)])
+        self.assertEqual(self.rows('SELECT revision FROM part_revisions ORDER BY revision'), [(1,), (2,)])
 
-    def test_late_fiche_starts_at_three_after_two_committed_parts(self):
-        self.add(content='a')
-        self.add(content='b')
-        real_weave = daily.weave
-        def split(*args, **kwargs):
-            return real_weave(*args, **kwargs, count=len, limit=350, reserve=100)
-        with patch.object(daily, 'weave', side_effect=split):
+    def test_overflow_retry_uses_registered_parts_not_orphan_names(self):
+        self.add(content='a' * 100)
+        self.add(content='b' * 100)
+        with patch.object(daily, 'token_count', side_effect=len), patch.object(daily, 'LIMIT', 5400):
             self.run_day(5)
-        self.assertEqual(self.rows('SELECT part FROM threads ORDER BY part'), [(1,), (2,)])
+        self.assertEqual(self.rows('SELECT part FROM parts ORDER BY part'), [(1,), (2,)])
         before = {p: p.read_bytes() for p in self.output.rglob('*.txt')}
         self.add(content='late')
         self.run_day()
-        self.assertEqual(self.rows('SELECT part FROM threads ORDER BY part'), [(1,), (2,), (3,)])
+        self.assertEqual(self.rows('SELECT part,active_revision FROM parts ORDER BY part'), [(1, 1), (2, 2)])
         for path, data in before.items():
             self.assertEqual(path.read_bytes(), data)
 
@@ -209,26 +206,24 @@ class BacklogTests(unittest.TestCase):
                 self.assertEqual(self.rows('SELECT count(*) FROM threads'), [(0,)])
 
     def test_late_arrival_preserves_historical_day_git_provenance(self):
-        self.add(content='bestaande succesvolle draad')
+        db = daily.database(self.db)
+        legacy_commit = 'a' * 40
+        legacy_manifest = 'b' * 64
+        with db:
+            db.execute('INSERT INTO days VALUES (?,?,?,?,?,?)',
+                       ('2026-10-05', '2026_W41', 'success', legacy_commit, legacy_manifest, None))
+        db.close()
+        self.add(content='nieuwe fiche')
         self.run_day(5)
         original = next(self.output.rglob('*.txt'))
         original_bytes = original.read_bytes()
-        legacy_commit = 'a' * 40
-        legacy_manifest = 'b' * 64
-        with sqlite3.connect(self.db) as db:
-            db.execute('UPDATE days SET commit_sha=?,manifest_sha256=? WHERE day=?',
-                       (legacy_commit, legacy_manifest, '2026-10-05'))
         identity = self.add(content='late queuefiche')
         self.assertEqual(self.run_day()['threads'], 1)
-        self.assertEqual(self.rows(f'SELECT status FROM ingress_queue WHERE id={identity}'),
-                         [('processed',)])
-        self.assertEqual(self.rows('SELECT day,topic,part FROM threads ORDER BY part'),
-                         [('2026-10-05', 2, 1), ('2026-10-05', 2, 2)])
-        self.assertEqual(self.rows(f"SELECT day,source_path,thread_path FROM sources "
-                                  f"WHERE source_path='queue:{identity}'"),
-                         [('2026-10-05', f'queue:{identity}',
-                           str(original.with_name('2026-10-05_0002.txt')))])
+        self.assertEqual(self.rows(f'SELECT status FROM ingress_queue WHERE id={identity}'), [('processed',)])
+        self.assertEqual(self.rows('SELECT revision FROM part_revisions ORDER BY revision'), [(1,), (2,)])
+        self.assertEqual(self.rows('SELECT * FROM threads'), [])
+        self.assertEqual(self.rows('SELECT * FROM sources'), [])
         self.assertEqual(original.read_bytes(), original_bytes)
-        self.assertIn('late queuefiche', original.with_name('2026-10-05_0002.txt').read_text())
+        self.assertIn('late queuefiche', original.with_name('rev_0002.txt').read_text())
         self.assertEqual(self.rows('SELECT status,commit_sha,manifest_sha256 FROM days'),
                          [('success', legacy_commit, legacy_manifest)])

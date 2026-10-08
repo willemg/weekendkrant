@@ -13,14 +13,14 @@ import daily
 class WeaveTests(unittest.TestCase):
     def test_weave_stable_split_and_oversize(self):
         fiches = [daily.Fiche(f'queue:{i}', 2, b'x' * 150, 'abc') for i in range(3)]
-        first = daily.weave(fiches, '2026_W41', date(2026, 10, 5), count=len, limit=700, reserve=100)
-        second = daily.weave(list(reversed(fiches)), '2026_W41', date(2026, 10, 5), count=len, limit=700, reserve=100)
+        first = daily.weave(fiches, '2026_W41', 2, (), (), count=len, limit=700, reserve=100)[0]
+        second = daily.weave(list(reversed(fiches)), '2026_W41', 2, (), (), count=len, limit=700, reserve=100)[0]
         self.assertEqual(first, second)
         self.assertGreater(len(first), 1)
-        self.assertEqual(sum(len(t['sources']) for t in first), 3)
-        self.assertTrue(all(len(t['text']) + 100 <= 700 for t in first))
+        self.assertEqual(sum(len(t.sources) for t in first), 3)
+        self.assertTrue(all(len(t.text) + 100 <= 700 for t in first))
         with self.assertRaisesRegex(ValueError, 'fiche'):
-            daily.weave(fiches, '2026_W41', date(2026, 10, 5), count=len, limit=200, reserve=100)
+            daily.weave(fiches, '2026_W41', 2, (), (), count=len, limit=200, reserve=100)
 
     def test_brussels_date(self):
         self.assertEqual(daily.local_day(datetime(2026, 10, 4, 22, 1, tzinfo=timezone.utc)), date(2026, 10, 5))
@@ -28,14 +28,14 @@ class WeaveTests(unittest.TestCase):
     def test_real_tokenizer_bounds_full_serialized_threads(self):
         data = ('één bron https://example.org/ <|endoftext|>\n' * 1500).encode()
         fiches = [daily.Fiche(f'queue:{i}', 2, data, 'a' * 64) for i in range(2)]
-        result = daily.weave(fiches, '2026_W41', date(2026, 10, 5))
+        result = daily.weave(fiches, '2026_W41', 2, (), (), daily.token_count, daily.LIMIT, daily.RESERVE)[0]
         self.assertEqual(len(result), 2)
         for thread in result:
-            self.assertEqual(thread['tokens'], daily.token_count(thread['text']))
-            self.assertLessEqual(thread['tokens'] + daily.RESERVE, daily.LIMIT)
+            self.assertEqual(thread.tokens, daily.token_count(thread.text))
+            self.assertLessEqual(thread.tokens + daily.RESERVE, daily.LIMIT)
         with self.assertRaisesRegex(ValueError, 'fiche'):
             daily.weave([daily.Fiche('queue:99', 1, data * 2, 'b' * 64)],
-                        '2026_W41', date(2026, 10, 5))
+                        '2026_W41', 1, (), (), daily.token_count, daily.LIMIT, daily.RESERVE)
 
 
 class DailyCliTests(unittest.TestCase):
