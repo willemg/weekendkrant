@@ -2,16 +2,19 @@
 
 ## Status en besluit van 8 oktober 2026
 
-Dit document legt het doelontwerp vast. Het implementeert geen modelcalls,
-weekoverschrijdende dossiers, Kuifje-missies of nieuw databaseschema.
+Dit document bevat zowel huidig runtimegedrag als toekomstig doelontwerp.
+Nu geïmplementeerd: persistente backlog, cross-day week/topic-parts, maximaal
+één open part per week/topic, immutable revisions, exact bronarchief,
+deterministische overflow en crashsafe registratie.
 
-Na de architecturale cleanup verwerkt `daily` een persistente backlogsnapshot:
-pending fiches tot en met vandaag, gegroepeerd per oorspronkelijke datum/topic.
-Legacy-output blijft `YYYY-MM-DD_PPPP.txt`. Late fiches krijgen volgende parts
-op basis van SQLite-provenance; bestaande succesvolle bytes blijven intact.
-Een kleine draad van gisteren wordt dus niet verder gevuld. `threads` en
-`sources` blijven aan de oorspronkelijke fichedatum gekoppeld. Dit is het
-[huidige runtimecontract](daily-runtime.md), niet het gewenste eindontwerp.
+Nieuwe queue-items gaan naar ISO-week/topic-parts. Bestaande legacy-dagbestanden
+en `days/threads/sources` blijven historische output zonder conversie.
+SQLite schema-versie 1 bewaart parts, revisies, bronbytes en exacte memberships.
+Zie het [huidige runtimecontract](daily-runtime.md).
+
+Nog niet geïmplementeerd: aanbieden aan Leonardo, offered-lifecycle, rolling
+dossierstate, dossiers, Kuifje, modelcalls, callbudgetten, aanbiedplanning en
+eindredactionele weekdeadline. De verdere secties daarover zijn doelontwerp.
 
 Het nieuwe uitgangspunt is:
 
@@ -71,18 +74,20 @@ langlevend inhoudelijk dossier. Een topic is evenmin automatisch één coherent
 verhaal: Leonardo kan in dezelfde topicbundel meerdere onafhankelijke sporen
 vinden.
 
-Voor de eerstvolgende verbetering bundelt Ariadne nieuwe Sherlock-fiches
-**over daggrenzen heen, per week en topic**, in de laatste nog niet aangeboden
-part. De technische identiteit wordt week + topic + part; de aanmaakdatum mag
+De runtime bundelt nieuwe Sherlock-fiches
+**over daggrenzen heen, per ISO-week en topic**, in de laatste nog open part.
+Open betekent nu uitsluitend dat verdere bronaanvulling is toegestaan; er is
+nog geen offered-status of aanbiedlogica. De technische identiteit wordt week + topic + part; de aanmaakdatum mag
 zichtbaar blijven, maar sluit de part niet af. Verschillende topics worden
 niet samengevoegd om het budget vol te krijgen.
 
 Ariadne voegt in een vastgelegde deterministische volgorde hele fiches toe.
 Past de volgende fiche niet, dan sluit ze de part en begint een volgende.
 Ze zoekt geen combinatie die de resterende ruimte optimaal vult en beoordeelt
-geen semantische verwantschap. De cleanup sorteert per oorspronkelijke datum/topic en numerieke queue-ID.
-De sorteersleutel van het nieuwe week/topic-model moet bij implementatie
-expliciet worden vastgelegd en getest.
+geen semantische verwantschap. Nieuwe bronnen volgen expliciet
+`(payload.date, numerieke queue-ID)`; eerder opgeslagen bronnen blijven in hun
+bestaande volgorde. Een late arrival wordt achteraan toegevoegd. Gesloten parts
+worden nooit heropend; een oudere week kan nog haar open part laten groeien.
 
 Een kleine part is toegestaan. Er wordt niet gewacht op precies 30.000 tokens
 als een publicatiedeadline of toegestaan onderzoeksmoment aanbieding vereist.
@@ -103,18 +108,17 @@ dossieraanvulling. Eerder aangeboden bytes worden niet stilzwijgend veranderd.
 Ook een vervolgcall die opnieuw dezelfde bronnen nodig heeft verwijst naar
 de werkelijk gebruikte versies.
 
-Voor groeiende parts is het huidige bestand-eerst/DB-daarna-protocol niet
-zonder meer voldoende. Een bestaande succesvolle part overschrijven vóór
-DB-commit kan de eerder geregistreerde hash ongeldig maken als de commit faalt.
-De implementatie moet daarom bestaande geregistreerde versies behouden,
-bijvoorbeeld via nieuwe revisiebestanden en een korte transactionele update
-van de actieve verwijzing. Losse niet-geregistreerde revisies zijn geen
-gepubliceerde output.
+Het geïmplementeerde bestand-eerst/DB-daarna-protocol schrijft iedere groei
+als nieuw immutable revisiebestand. De korte finale transactie controleert de
+queue-snapshot en oorspronkelijke partstaat opnieuw en registreert nieuwe
+bronnen, membership, revisies, sluiting en actieve pointer samen. Een fout laat
+de vorige actieve revisie intact. Orphans zijn geen geregistreerde provenance.
 
-Provenance moet kunnen aangeven welke fiches van verschillende dagen in
-welke partrevisie zitten. Dagstatus en consumptie-identiteit blijven afzonderlijk
-van dossier- en partidentiteit. Hiervoor zijn een schema- en migratieontwerp
-nodig; dit document kiest nog geen definitieve tabelnamen of bestandslayout.
+De stabiele identiteit is week/topic/part; het schema bewaart revisies en
+bronposities afzonderlijk. Het bronarchief bewaart exacte UTF-8 bytes zonder
+levensduurafhankelijkheid van ingress_queue. `PRAGMA user_version=1` migreert
+in-place zonder legacyrows te transformeren. Tabelnamen en bestandslayout staan
+in [audit-trail](audit-trail.md#partschema-versie-1) en [runtime](daily-runtime.md).
 
 ## Rolling state als contract
 
@@ -259,15 +263,14 @@ missies en callaudit, met behoud van traceerbaarheid en beperkte schijfruimte.
 
 ## Volgende implementatiestappen
 
-1. Ontwerp schema, migratie en crashherstel voor dagoverschrijdende week/topic-parts,
-   met behoud van dagsnapshot, korte write-transactie en exacte provenance.
-2. Bouw en test dat vlechtwerk, inclusief groei, overflow, retries, weekwissel
-   en intacte eerder aangeboden versies.
-3. Definieer Leonardo's state- en actieprotocol en de concrete callbouwer,
-   tokenlimieten, aanbiedplanning en kostenadministratie.
-4. Voeg Kuifje-missies en terugkeer naar expliciete dossiers toe, met aparte
-   protocolversie, budgetreservering en opslag-/retentiebeleid.
+Schema, migratie en het cross-day vlechtwerk zijn geïmplementeerd, inclusief
+groei, overflow, retries, weekgrenzen en behoud van geregistreerde revisies.
 
-Bella kan deze stappen later afzonderlijk uitvoeren op branches met PR's.
-Het oorspronkelijke ontwerpbesluit in PR #16 wijzigde geen productiecode,
-cronjob, actieve Sherlock-taak of inrichting van bibib.
+De volgende afzonderlijke PR definieert het protocol waarmee een concrete
+partrevision aan Leonardo kan worden aangeboden en auditbaar vastligt.
+Daarna volgen state-/actieprotocol, callbouwer, tokenlimieten, aanbiedplanning,
+kostenadministratie en uiteindelijk Kuifje-missies met expliciete dossiers.
+Deze toekomstige onderdelen krijgen hier nog geen nieuw runtimegedrag.
+
+Deze runtime-stap wijzigt geen cronjob, actieve Sherlock-taak, MCP-plugin of
+inrichting van bibib en doet geen modelcalls.

@@ -42,7 +42,7 @@ class QueueDailyTests(unittest.TestCase):
     def assert_pending_error(self):
         self.assertEqual(self.rows('SELECT status FROM ingress_queue'), [('pending',), ('pending',)])
         self.assertEqual(self.rows('SELECT status FROM attempts ORDER BY id DESC LIMIT 1'), [('processing_error',)])
-        for table in ('sources', 'threads'):
+        for table in ('source_archive', 'part_revisions', 'revision_sources', 'parts'):
             self.assertEqual(self.rows('SELECT count(*) FROM ' + table), [(0,)])
 
     def test_snapshot_provenance_dates_and_processed(self):
@@ -54,11 +54,11 @@ class QueueDailyTests(unittest.TestCase):
         self.assertEqual(self.rows('SELECT id,status FROM ingress_queue ORDER BY id'),
                          [(first, 'processed'), (second, 'processed'), (future, 'pending')])
         digest = hashlib.sha256(payload()['content'].encode()).hexdigest()
-        self.assertEqual(self.rows('SELECT source_path,sha256 FROM sources ORDER BY source_path'),
+        self.assertEqual(self.rows("SELECT 'queue:' || queue_id,sha256 FROM source_archive ORDER BY queue_id"),
                          [(f'queue:{first}', digest), (f'queue:{second}', digest)])
-        self.assertEqual(self.rows('SELECT commit_sha,manifest_sha256 FROM days'), [(None, None)])
+        self.assertEqual(self.rows('SELECT * FROM days'), [])
         for topic, identity in ((3, first), (2, second)):
-            path = self.output / '2026_W41' / f'topic_{topic}' / '2026-10-05_0001.txt'
+            path = self.output / '2026_W41' / f'topic_{topic}' / 'part_0001' / 'rev_0001.txt'
             self.assertIn(f'SOURCE queue:{identity}'.encode(), path.read_bytes())
             self.assertIn(payload()['content'].encode(), path.read_bytes())
 
@@ -95,9 +95,9 @@ class QueueDailyTests(unittest.TestCase):
         self.queue.add(payload(topic=2)); self.queue.add(payload(topic=3))
         real_write = daily.write_thread
         written = {}
-        def fail_second(path, data):
+        def fail_second(path, data, **kwargs):
             if written: raise OSError('disk full')
-            real_write(path, data)
+            real_write(path, data, **kwargs)
             written[path] = data
         with patch.object(daily, 'write_thread', side_effect=fail_second):
             with self.assertRaises(OSError): self.run_daily()
@@ -115,7 +115,7 @@ class QueueDailyTests(unittest.TestCase):
         self.assert_pending_error()
         with sqlite3.connect(self.db) as db: db.execute('DROP TRIGGER refuse')
         self.run_daily()
-        self.assertEqual(self.rows('SELECT count(*) FROM sources'), [(2,)])
+        self.assertEqual(self.rows('SELECT count(*) FROM source_archive'), [(2,)])
 
     def test_commit_failure_rolls_back_and_registers_error(self):
         self.queue.add(payload()); self.queue.add(payload(topic=3))
@@ -138,16 +138,16 @@ class QueueDailyTests(unittest.TestCase):
                 self.run_daily()
         self.assert_pending_error()
         self.run_daily()
-        self.assertEqual(self.rows('SELECT count(*) FROM sources'), [(2,)])
+        self.assertEqual(self.rows('SELECT count(*) FROM source_archive'), [(2,)])
 
     def test_items_are_pending_until_files_and_provenance_can_commit(self):
         self.queue.add(payload()); self.queue.add(payload(topic=3))
         original_write = daily.write_thread
-        def inspect_then_write(path, data):
+        def inspect_then_write(path, data, **kwargs):
             self.assertEqual(self.rows('SELECT status FROM ingress_queue'), [('pending',), ('pending',)])
-            self.assertEqual(self.rows('SELECT count(*) FROM sources'), [(0,)])
+            self.assertEqual(self.rows('SELECT count(*) FROM source_archive'), [(0,)])
             self.assertEqual(self.rows('SELECT count(*) FROM days'), [(0,)])
-            original_write(path, data)
+            original_write(path, data, **kwargs)
         with patch.object(daily, 'write_thread', side_effect=inspect_then_write):
             self.run_daily()
 
@@ -169,7 +169,7 @@ class QueueDailyTests(unittest.TestCase):
         self.assertEqual(self.rows('SELECT id,status FROM ingress_queue ORDER BY id'),
                          [(first, 'processed'), (second, 'processed')] +
                          [(identity, 'pending') for identity in arrivals])
-        self.assertEqual(self.rows('SELECT source_path FROM sources ORDER BY source_path'),
+        self.assertEqual(self.rows("SELECT 'queue:' || queue_id FROM source_archive ORDER BY queue_id"),
                          [(f'queue:{first}',), (f'queue:{second}',)])
         for path in self.output.rglob('*.txt'):
             self.assertNotIn('Na de snapshot', path.read_text())
@@ -194,8 +194,8 @@ class QueueDailyTests(unittest.TestCase):
         self.assertEqual(self.rows('SELECT id,status FROM ingress_queue ORDER BY id'),
                          [(first, 'processed'), (second, 'pending')])
         self.assertEqual(self.rows('SELECT status FROM attempts ORDER BY id DESC LIMIT 1'), [('processing_error',)])
-        self.assertEqual(self.rows('SELECT count(*) FROM sources'), [(0,)])
-        self.assertEqual(self.rows('SELECT count(*) FROM threads'), [(0,)])
+        self.assertEqual(self.rows('SELECT count(*) FROM source_archive'), [(0,)])
+        self.assertEqual(self.rows('SELECT count(*) FROM part_revisions'), [(0,)])
 
     def test_shared_runtime_lock(self):
         with ariadne.runtime_lock(self.lock):

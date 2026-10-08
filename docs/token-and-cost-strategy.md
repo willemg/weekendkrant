@@ -132,14 +132,13 @@ inclusief draadheader, bronpaden, hashes, byteaantallen en bronafscheidingen.
 Maximaal 30.000 tokens draad plus **5.000 gereserveerde tokens** voor alle overige
 Leonardo-input samen: instructies, dossierstate, berichtenstructuur en API-overhead.
 
-Momenteel verwerkt run_daily() pending fiches tot en met vandaag, gegroepeerd
-per oorspronkelijke datum/topic. Late fiches krijgen volgende legacy-parts;
-bestaande succesvolle draden worden niet verder gevuld. Dagoverschrijdend vullen
-is gepland, niet geïmplementeerd. Binnen datum/topic is de volgorde de numerieke
-queue-ID (`queue:2` vóór `queue:10`). Het
-splitst uitsluitend tussen hele fiches. Een fiche die alleen al niet past, faalt
-de hele dag expliciet; er wordt geen tekst afgekapt. Ook identieke fiches blijven
-behouden. De provenance registreert per draad de telling, tokenizer en reserve.
+`run_daily()` verwerkt pending fiches tot en met vandaag per ISO-week/topic.
+De open part groeit over daggrenzen via nieuwe immutable revisies. Nieuwe
+bronnen volgen `(payload.date, numerieke queue-ID)` en worden achter bestaande
+bronnen geplaatst. Overflow sluit de part definitief; splitsen gebeurt alleen
+tussen hele fiches. Eén onmogelijke fiche faalt de hele snapshot zonder afkappen.
+Ook identieke fiches blijven behouden. Provenance registreert per revisie de
+volledige telling, tokenizer, reserve en exacte geordende bronmembership.
 
 Deze PR doet geen Leonardo-calls en kent nog geen definitieve instructies of
 modelkeuze. De reserve is daarom een bindend budget voor de latere callbouwer.

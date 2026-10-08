@@ -113,7 +113,8 @@ De output moet uiteindelijk bruikbaar genoeg zijn om deterministisch door Ariadn
 
 Ariadne is geen agent maar een deterministisch script, bedoeld om via cron op een Raspberry Pi te draaien.
 
-Geïmplementeerd zijn de SQLite-backlogconsument en de
+Geïmplementeerd zijn de SQLite-backlogconsument, cross-day week/topic-parts
+met immutable revisies en exact bronarchief, en de
 [dagelijkse deterministische verwerking](daily-runtime.md).
 
 ### Verantwoordelijkheden
@@ -140,16 +141,18 @@ terug naar GitHub en moeten uit dezelfde ingress reproduceerbaar opnieuw opgebou
 kunnen worden.
 `daily` gebruikt een lokaal niet-blokkerend slot buiten de applicatierepository en
 voert geen Git-operaties uit. De fiche-datum blijft provenance. Late arrivals
-krijgen volgende legacy-parts op basis van succesvolle SQLite-provenance, zonder
-eerdere output te herschrijven. Er is geen dagafsluit-gating, zondagjob,
+groeien de open part van hun ISO-week/topic via een nieuwe revisie; bestaande
+bronvolgorde en eerdere geregistreerde revisies blijven intact. Overflow sluit
+een part definitief. Er is geen dagafsluit-gating, zondagjob,
 weekrapport of automatische retentie. Bestaande data blijft behouden.
 
 ### Gepland geheugen- en budgetbeheer
 
 Volgens het [doelontwerp van 8 oktober 2026](leonardo-memory-and-orchestration.md)
 wordt Ariadne ook beheerder van Leonardo's persistente state en contextaanbieding:
-state letterlijk opslaan en versioneren, omvang meten, nog niet aangeboden parts
-over daggrenzen vullen, budget reserveren en werkelijk gebruik afrekenen.
+state letterlijk opslaan en versioneren, omvang meten, concrete revisies
+aanbieden, budget reserveren en werkelijk gebruik afrekenen. Het vullen van open
+bronparts over daggrenzen is al geïmplementeerd.
 Kuifje-resultaten volgen expliciete missie- en dossieridentifiers. Dit is nog
 niet geïmplementeerd. Leonardo beslist over betekenis, compressie en inhoudelijke
 verbanden; Ariadne controleert formaat, omvang, koppelingen en toegestane acties.

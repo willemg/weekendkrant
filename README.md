@@ -39,16 +39,25 @@ zijn. De payloaddatum is provenance/ordening, geen eenmalig consumptievenster.
 Een fout laat werk pending; de volgende geschikte run haalt het vanzelf in.
 Geldige toekomstige fiches wachten. Een lege queue geeft success met nul draden.
 
-Ariadne groepeert voorlopig per oorspronkelijke datum en topic en sorteert
-numeriek op queue-ID. Late fiches krijgen volgende legacy-parts op basis van
-SQLite-provenance; succesvolle draadbytes blijven intact. `days.status` sluit
-geen dagen af voor nieuwe consumptie. Zie [runtime en crashgedrag](docs/daily-runtime.md).
+Ariadne bundelt per **ISO-week + topic** en laat de open part over daggrenzen
+groeien. Nieuwe fiches volgen `(payload.date, numerieke queue-ID)`; bestaande
+bronnen blijven in hun opgeslagen volgorde. Overflow sluit de part definitief
+en begint de volgende. Per week/topic is maximaal één part open.
+
+Elke groei schrijft een nieuw immutable revisiebestand. SQLite bewaart het
+exacte bronarchief, revisiehashes, tokenmetingen, bronposities en de actieve
+revisie. De korte eindtransactie registreert alles samen met queue-status.
+`PRAGMA user_version=1` migreert bestaande databases in-place zonder oude
+rijen of dagbestanden te veranderen. Vanaf deze cut-over gebruiken nieuwe items
+uitsluitend het partmodel; het eerste item maakt part 1/revision 1.
+Zie [runtime en crashgedrag](docs/daily-runtime.md).
 
 `daily` is de enige operationele Ariadne-taak. Er zijn geen Git-operaties,
 weekbranches, beheerde weekworktree, weekrapport of automatische retentie nodig.
 Het lokale runtime-slot staat buiten de applicatierepository. Historische Git-data
 blijft behouden; bestaande SQLite-rijen worden niet opgeruimd en er is geen
-automatische `VACUUM`. Het doelontwerp uit PR #16 volgt in afzonderlijke stappen.
+automatische `VACUUM`. Leonardo-aanbieding, offered-lifecycle, dossiers, rolling state, Kuifje, modelcalls,
+budgetten en eindredactionele planning volgen in afzonderlijke stappen.
 
 De Quick Tunnel-component publiceert de actuele endpoint-URL via
 `config/ingress-endpoint.json` op GitHub. De MCP-plugin leest die discoverypointer.

@@ -20,8 +20,8 @@ consumptievenster. Succesvolle dagrecords blokkeren nooit nieuw pending werk.
 | Pad | Functie |
 | --- | --- |
 | `/home/weekendkrant/app/` | Applicatiecode, startscripts, tests en `.venv`. |
-| `/home/weekendkrant/weekendkrant.sqlite3` | Persistente ingressqueue en legacy verwerkingsprovenance. |
-| `/home/weekendkrant/draden/` | Afgeleide draadbestanden per oorspronkelijke datum/topic. |
+| `/home/weekendkrant/weekendkrant.sqlite3` | Ingressqueue, bronarchief, partrevisies en historische legacyprovenance. |
+| `/home/weekendkrant/draden/` | Immutable revisiebestanden per ISO-week/topic/part. |
 | `/home/weekendkrant/ariadne.lock` | Niet-blokkerend lokaal één-consument-slot, onafhankelijk van Git. |
 | `/home/weekendkrant/logs/ariadne.log` | Runtimelogging. |
 | `/home/weekendkrant/.cache/tiktoken/` | Encodingcache voor de vastgelegde tokenizer. |
@@ -34,10 +34,17 @@ registreert provenance en processed-status samen. Producer en consument gebruike
 aparte SQLite-connections; toevoegingen tijdens weven of schrijven wachten niet
 op een langdurige consumenten-write-lock.
 
-Nieuwe output groepeert per oorspronkelijke datum/topic en numerieke queue-ID.
-Het volgende legacy-partnummer volgt uit gecommitte `threads`-provenance.
-Late fiches krijgen volgende parts; succesvolle files blijven intact. Retry van
-dezelfde snapshot hergebruikt dezelfde nog niet geregistreerde paden en bytes.
+Nieuwe output groepeert per ISO-week + topic. De open part groeit over dagen
+via nieuwe immutable revisies. Nieuwe bronnen volgen `(payload.date, numerieke
+queue-ID)` en worden achter bestaande bronmembership toegevoegd. Overflow sluit
+de part definitief. Een partial unique index bewaakt maximaal één open part.
+
+`parts.py` bevat de kleine expliciete SQLite-opslaglaag en de mechanische planner.
+`PRAGMA user_version=1` voegt `parts`, `part_revisions`, `source_archive` en
+`revision_sources` toe zonder legacyrows te transformeren. Exacte bronbytes
+blijven onafhankelijk van de transportqueue bestaan. De finale transactie
+controleert ook de geplande partstaat en verschuift de actieve revisie samen
+met provenance en processed-status. Zie [partschema](audit-trail.md#partschema-versie-1).
 
 ## GitHub en discovery
 
@@ -60,9 +67,9 @@ Er is geen wekelijkse volledigheidscontrole, automatische achtwekenretentie of
 `VACUUM`. Een ontbrekend dagrecord is op zichzelf geen fout. Pending is werk;
 processed is succesvol geconsumeerd. Bestaande SQLite-data blijft behouden.
 
-`days`, `attempts`, `threads` en `sources` blijven voorlopig legacy audit en
-provenance; `days.status` bestuurt de queue niet. Een nieuw bewaarbeleid volgt
-apart met het dossier-/partmodel.
+`days`, `threads` en `sources` blijven historische legacyprovenance zonder nieuwe
+partwrites. `attempts` bewaart runtimefouten; geen dagstatus bestuurt de queue.
+Een nieuw bewaarbeleid volgt apart.
 
 ## Logging
 
@@ -73,10 +80,13 @@ Geen lifecyclelogging op stdout; daar staat het gestructureerde JSON-resultaat.
 De uitvoerende gebruiker moet de logmap kunnen aanmaken of beschrijven.
 Logginginitialisatiefouten stoppen de CLI met exitcode 1 en een stderr-diagnose.
 
-## Volgende stap: doelontwerp uit PR #16
+## Geïmplementeerd en gepland
 
-[Leonardo-geheugen en regie](leonardo-memory-and-orchestration.md) blijft het
-doelontwerp. Het persistente week/topic-partmodel met immutable revisies,
-rolling state, callbuilder, kostenadministratie en Kuifje-missies zijn nog niet
-geïmplementeerd. Deze cleanup houdt de legacy-datum/topic-output en introduceert
-geen nieuw part-/revisieschema of modelcalls.
+Geïmplementeerd: persistente backlog, cross-day week/topic-parts, open parts,
+immutable revisions, exact bronarchief, deterministische overflow en crashsafe
+registratie. Legacy-dagbestanden worden niet retroactief gemigreerd.
+
+[Leonardo-geheugen en regie](leonardo-memory-and-orchestration.md) beschrijft ook
+het toekomstige ontwerp. Aanbieding en offered-lifecycle, dossiers, rolling
+state, Kuifje, modelcalls, callbudgetten, aanbiedplanning en eindredactionele
+weekdeadline zijn nog niet geïmplementeerd.
