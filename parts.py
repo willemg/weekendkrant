@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import hashlib
 import sqlite3
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 TOKENIZER = 'cl100k_base'
 
 SCHEMA = '''
@@ -64,6 +64,34 @@ WHEN NEW.revision <= (SELECT active_revision FROM parts WHERE id=NEW.part_id)
 BEGIN SELECT RAISE(ABORT,'Immutable revision membership'); END;
 '''
 
+OFFER_SCHEMA = '''
+CREATE TABLE part_offers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    part_id INTEGER NOT NULL UNIQUE,
+    revision INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    FOREIGN KEY(part_id,revision) REFERENCES part_revisions(part_id,revision)
+);
+CREATE TRIGGER validate_part_offer BEFORE INSERT ON part_offers
+BEGIN
+    SELECT RAISE(ABORT,'Part already offered') WHERE EXISTS
+        (SELECT 1 FROM part_offers WHERE part_id=NEW.part_id OR id=NEW.id);
+    SELECT RAISE(ABORT,'Offer requires registered active revision') WHERE NOT EXISTS
+        (SELECT 1 FROM parts p JOIN part_revisions r
+         ON r.part_id=p.id AND r.revision=p.active_revision
+         WHERE p.id=NEW.part_id AND p.active_revision=NEW.revision);
+END;
+CREATE TRIGGER seal_part_offer AFTER INSERT ON part_offers
+BEGIN UPDATE parts SET is_open=0 WHERE id=NEW.part_id AND is_open=1; END;
+CREATE TRIGGER immutable_part_offers_update BEFORE UPDATE ON part_offers
+BEGIN SELECT RAISE(ABORT,'Immutable offer'); END;
+CREATE TRIGGER immutable_part_offers_delete BEFORE DELETE ON part_offers
+BEGIN SELECT RAISE(ABORT,'Immutable offer'); END;
+CREATE TRIGGER offered_active_revision BEFORE UPDATE OF active_revision ON parts
+WHEN EXISTS (SELECT 1 FROM part_offers WHERE part_id=OLD.id)
+BEGIN SELECT RAISE(ABORT,'Offered revision cannot change'); END;
+'''
+
 
 def migrate(db):
     version = db.execute('PRAGMA user_version').fetchone()[0]
@@ -71,7 +99,9 @@ def migrate(db):
         raise ValueError('Onbekende nieuwere SQLite schema-versie')
     if version == SCHEMA_VERSION:
         return
-    # One transactional DDL migration; legacy rows are never touched.
+    if db.in_transaction:
+        raise ValueError('Migratie vereist een connection zonder actieve transactie')
+    # One transactional, additive DDL migration; existing rows are never touched.
     immutable = ''
     for table in ('part_revisions', 'source_archive', 'revision_sources'):
         for operation in ('UPDATE', 'DELETE'):
@@ -79,11 +109,20 @@ def migrate(db):
                           f'BEFORE {operation} ON {table} '
                           "BEGIN SELECT RAISE(ABORT,'Immutable provenance'); END;\n")
     try:
-        db.executescript('BEGIN IMMEDIATE;\n' + SCHEMA + immutable +
+        initial = SCHEMA + immutable if version == 0 else ''
+        db.executescript('BEGIN IMMEDIATE;\n' + initial + OFFER_SCHEMA +
                          f'PRAGMA user_version={SCHEMA_VERSION};\nCOMMIT;')
     except Exception:
         db.rollback()
         raise
+
+
+@dataclass(frozen=True)
+class PartOffer:
+    id: int
+    part_id: int
+    revision: int
+    created_at: str
 
 
 @dataclass(frozen=True)
@@ -150,6 +189,38 @@ def weave(fiches, week, topic, state, existing, count, limit, reserve):
 class PartStore:
     def __init__(self, db):
         self.db = db
+
+    def offer(self, part_id, revision):
+        """Persist one exact active revision and seal its part; no model call.
+
+        Owns a short transaction. An identical retry returns the original offer,
+        including its stable ID and timestamp. Stale revision requests fail.
+        """
+        if self.db.in_transaction:
+            raise ValueError('Offer vereist een connection zonder actieve transactie')
+        if type(part_id) is not int or type(revision) is not int or revision < 1:
+            raise ValueError('Offer vereist integer part-ID en positieve revision')
+        self.db.execute('BEGIN IMMEDIATE')
+        try:
+            active = self.db.execute('''SELECT p.active_revision FROM parts p
+                JOIN part_revisions r ON r.part_id=p.id AND r.revision=p.active_revision
+                WHERE p.id=?''', (part_id,)).fetchone()
+            if active != (revision,):
+                raise ValueError('Offer vereist de geregistreerde actieve revision')
+            row = self.db.execute('''SELECT id,part_id,revision,created_at
+                FROM part_offers WHERE part_id=?''', (part_id,)).fetchone()
+            if row is None:
+                self.db.execute('INSERT INTO part_offers(part_id,revision) VALUES (?,?)',
+                                (part_id, revision))
+                row = self.db.execute('''SELECT id,part_id,revision,created_at
+                    FROM part_offers WHERE part_id=?''', (part_id,)).fetchone()
+            elif row[2] != revision:
+                raise ValueError('Part werd reeds onder een andere revision aangeboden')
+            self.db.commit()
+            return PartOffer(*row)
+        except Exception:
+            self.db.rollback()
+            raise
 
     def state(self, week, topic):
         return tuple(self.db.execute(

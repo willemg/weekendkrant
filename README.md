@@ -47,7 +47,7 @@ en begint de volgende. Per week/topic is maximaal één part open.
 Elke groei schrijft een nieuw immutable revisiebestand. SQLite bewaart het
 exacte bronarchief, revisiehashes, tokenmetingen, bronposities en de actieve
 revisie. De korte eindtransactie registreert alles samen met queue-status.
-`PRAGMA user_version=1` migreert bestaande databases in-place zonder oude
+`PRAGMA user_version=2` migreert schema 0 of 1 additief in-place zonder oude
 rijen of dagbestanden te veranderen. Vanaf deze cut-over gebruiken nieuwe items
 uitsluitend het partmodel; het eerste item maakt part 1/revision 1.
 Zie [runtime en crashgedrag](docs/daily-runtime.md).
@@ -56,7 +56,11 @@ Zie [runtime en crashgedrag](docs/daily-runtime.md).
 weekbranches, beheerde weekworktree, weekrapport of automatische retentie nodig.
 Het lokale runtime-slot staat buiten de applicatierepository. Historische Git-data
 blijft behouden; bestaande SQLite-rijen worden niet opgeruimd en er is geen
-automatische `VACUUM`. Leonardo-aanbieding, offered-lifecycle, dossiers, rolling state, Kuifje, modelcalls,
+automatische `VACUUM`. Het lokale offer/seal-mechanisme is geïmplementeerd:
+`PartStore.offer(part_id, revision)` registreert exact de actieve revisie en sluit
+de part atomisch; een identieke retry retourneert hetzelfde immutable offer.
+Ook overflow-gesloten parts zijn offerbaar. Dit bewijst geen ontvangst door een
+model. Nieuwe fiches gaan naar de volgende part. Dossiers, rolling state, Kuifje, modelcalls,
 budgetten en eindredactionele planning volgen in afzonderlijke stappen.
 
 De Quick Tunnel-component publiceert de actuele endpoint-URL via
