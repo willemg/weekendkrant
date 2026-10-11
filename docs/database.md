@@ -1,14 +1,15 @@
 # SQLite-database
 
 De database bewaart operationele state van Weekendkrant: ontvangst en verwerking
-van ingress, dagpogingen en de onveranderlijke provenance van parts en offers.
+van ingress, dagpogingen, de onveranderlijke provenance van parts en offers,
+en Sherlock-runs met daadwerkelijk gereviewde bronpagina's.
 Het canonieke productiepad is `/home/weekendkrant/weekendkrant.sqlite3`.
 Het databasebestand (inclusief eventuele journal/WAL-bestanden) hoort niet in Git.
 Schema en migraties staan wel in Git; er worden geen productiegegevens meegeleverd.
 
 ## Eén migratieketen
 
-`database.py` beheert alle DDL en `PRAGMA user_version`. De actuele versie is **3**.
+`database.py` beheert alle DDL en `PRAGMA user_version`. De actuele versie is **4**.
 De genummerde SQL-bestanden in `migrations/` zijn de bron van waarheid:
 
 | Versie | Migratie | Verantwoordelijkheid |
@@ -16,12 +17,16 @@ De genummerde SQL-bestanden in `migrations/` zijn de bron van waarheid:
 | 1 | `001_parts_base.sql` | Historische parts, revisions, bronarchief, lidmaatschap en immutabilityregels |
 | 2 | `002_part_offers.sql` | Historische offers en sealing-/immutabilitytriggers |
 | 3 | `003_unified_runtime_schema.sql` | Voorheen ongeversioneerde daily- en ingress-tabellen |
+| 4 | `004_sherlock_state.sql` | Sherlock-runs en daadwerkelijk gereviewde bronpagina's |
 
 De historische nummering blijft behouden. Versie 0 kan een lege database zijn,
 maar ook reeds de voorheen ongeversioneerde runtime-tabellen bevatten.
 Versies 1 en 2 worden additief aangevuld. Versie 3 accepteert bestaande
 runtime-tabellen met het historische schema en maakt ontbrekende tabellen aan.
 Een afwijkende bestaande runtime-tabel wordt geweigerd, zonder deze te herbouwen.
+Migratie 4 voegt alleen `sherlock_runs` en `sherlock_sources` toe; bestaande
+schemaobjecten en gegevens blijven ongemoeid. Een scratch-build doorloopt dezelfde
+keten. Op de actuele versie is opnieuw migreren een no-op.
 Een onbekende hogere versie wordt geweigerd.
 
 Elke stap draait in een eigen `BEGIN IMMEDIATE`-transactie. De versie wordt binnen
@@ -48,11 +53,12 @@ commando is veilig opnieuw uitvoerbaar en migreert bestaande databases:
 ```
 
 Maak vóór een productie-upgrade een consistente SQLite-back-up (bijvoorbeeld met
-SQLite's backup-API). Stop voor de eerste uitrol de schrijvende diensten en cronruns,
-voer de migratie uit en start ze daarna weer. De PR-tests gebruiken uitsluitend
-synthetische legacydatabases; de echte database op bibib moet bij uitrol nog worden
-gecontroleerd. Controleer versie en referentiële integriteit met
-`PRAGMA user_version` en `PRAGMA foreign_key_check`.
+SQLite's backup-API). Stop indien nodig schrijvende diensten en cronruns om
+gelijktijdige wijzigingen tijdens de upgrade te voorkomen. Voer de centrale
+migratie uit met het bovenstaande commando en start gestopte diensten daarna
+weer. Controleer vervolgens `PRAGMA user_version`, `PRAGMA integrity_check`
+(verwacht `ok`) en `PRAGMA foreign_key_check` (verwacht een leeg resultaat).
+De tests gebruiken uitsluitend synthetische databases.
 
 Runtime gebruikt dezelfde `migrate(connection)` via `daily.database()` en
 `IngressQueue`. De publieke `parts.migrate` en `parts.SCHEMA_VERSION` zijn
@@ -72,6 +78,8 @@ compatibiliteitsexports uit de centrale module; ze beheren geen eigen schema.
 | `threads` | Historische draadregistraties, dag, topic/part, hash en tokenbudget |
 | `sources` | Historische bronregistraties en positie binnen een draad |
 | `ingress_queue` | Ontvangen JSON-payloads, ontvangstmoment en verwerkingsstatus |
+| `sherlock_runs` | Oplopende run-ID, topic, start-/eindtijd en uitvoeringsstatus |
+| `sherlock_sources` | Unieke canonieke bron-URL, oorspronkelijke URL, run/topic, reviewtijd, optionele titel, outcome en rationale |
 
 De partidentiteit is uniek; `one_open_part` staat maximaal één open part per
 week/topic toe. Revisies hebben unieke paden, positieve revisienummers en
@@ -83,6 +91,64 @@ actieve revisies en verzegelen membership. Zes provenance-triggers verbieden
 updates/verwijderingen van revisies, bronarchief en membership. Vijf offer-triggers
 valideren en verzegelen het aanbod en verbieden wijzigen/verwijderen ervan.
 Alle bestaande constraints en defaults zijn ongewijzigd overgenomen.
+
+## Minimale Sherlock-state
+
+`sherlock_state.SherlockState(connection)` gebruikt de centrale migratieketen bij
+initialisatie. De caller beheert en sluit de connection. Elke publieke operatie
+vereist een connection zonder actieve transactie. Mutaties beheren zelf een korte
+`BEGIN IMMEDIATE`, commit en rollback; een fout commit geen gedeeltelijke operatie.
+Runcontrole en broninsert vallen onder dezelfde schrijflock, zodat afsluiten en
+registreren niet langs elkaar heen kunnen lopen. De opslaglaag bevat geen DDL.
+
+- `start_run(topic)` accepteert integer 1, 2 of 3 en retourneert een oplopende ID.
+- `finish_run(run_id, status)` sluit een `running` run precies één keer af als
+  `completed` of `failed`, met eindtijd. Onbekende of afgesloten runs worden geweigerd.
+- `already_reviewed(url)` canonicaliseert en retourneert een boolean. Deze lookup
+  reserveert niets; tussen lookup en registratie kan een andere run dezelfde bron
+  registreren. De unieke URL-constraint beslist bij insert.
+- `record_reviewed_source(run_id, topic, url, outcome, rationale, title=None)`
+  canonicaliseert binnen de opslaggrens en retourneert de canonieke URL. Alleen een
+  bestaande `running` run met hetzelfde topic is toegestaan. Outcome en rationale
+  moeten niet-lege tekst zijn en blijven exact bewaard; de titel mag ontbreken.
+
+Ongeldige invoer of runstate geeft `ValueError`. Een duplicate canonieke URL geeft
+`sqlite3.IntegrityError` en overschrijft geen eerdere audit. Topic en runstatus
+hebben databaseconstraints; een running run heeft geen eindtijd, een afgesloten
+run wel. `run_id` is een foreign key. De opslaglaag bewaakt aanvullend de topicmatch
+met de run en weigert registratie na afsluiting. Alle door de opslaglaag geschreven
+timestamps zijn UTC ISO 8601: `YYYY-MM-DDTHH:MM:SS.ffffff+00:00`.
+
+Registreer uitsluitend pagina's die daadwerkelijk inhoudelijk gereviewd zijn.
+Een zoekresultaat, snippet of ongeopende kandidaat is geen gereviewde bron.
+De caller is verantwoordelijk voor die inhoudelijke voorwaarde; de opslaglaag kan
+niet vaststellen of een pagina gelezen is. Outcome en rationale zijn compacte,
+controleerbare beslisnotities, geen opslag van interne redeneerprocessen.
+Reeds geregistreerde reviews blijven bewaard als de run later faalt. Bij afbreken
+vóór registratie blijft de bron beschikbaar voor een volgende run. Een afgebroken
+run kan `running` blijven totdat een caller hem expliciet afsluit; er is geen TTL
+of automatisch herstelmechanisme.
+
+### URL-identiteit
+
+De pure standaardbibliotheekfunctie `canonicalize_url(url)` accepteert absolute
+HTTP(S)-URLs met een geldige hostname en zonder credentials. Onbruikbare URLs,
+witruimte/controltekens, backslashes, ongeldige procent-escaping en ongeldige
+poorten worden expliciet geweigerd. Scheme en hostname worden lowercase, de
+standaardpoort (HTTP 80, HTTPS 443) en fragmenten verdwijnen. Querykeys worden
+voor herkenning percent-gedecodeerd en hoofdletterongevoelig vergeleken:
+`utm_*`, `fbclid`, `gclid` en `trk` worden verwijderd. Alle overige queryvelden
+behouden hun volgorde, herhalingen en oorspronkelijke encoding. Paden worden
+niet herschreven; trailing slashes blijven betekenisvol.
+
+Bijvoorbeeld: `https://Example.COM:443/article?id=42&utm_source=x#deel` wordt
+`https://example.com/article?id=42`. De oorspronkelijke aangeleverde URL blijft
+apart in de audit staan. De canonieke URL is uniek over alle runs en topics heen.
+Een andere URL over hetzelfde verhaal blijft een afzonderlijke toegestane bron.
+
+Geen netwerkrequests, redirect-/AMP-detectie, domeinspecifieke regels of semantische
+story-deduplicatie. Ook kandidaat-/claimstate, leases, retries, scheduling, APIs,
+agentintegratie en Leonardo-state vallen buiten deze opslaglaag.
 
 ## Volgende schemawijzigingen
 
