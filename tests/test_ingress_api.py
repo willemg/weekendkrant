@@ -19,7 +19,7 @@ class HTTPTests(unittest.TestCase):
         self.path = Path(self.tmp.name) / 'queue.sqlite3'
         connect = sqlite3.connect
         def temporary_connect(path, *args, **kwargs):
-            if Path(path) != self.path:
+            if path != ':memory:' and Path(path) != self.path:
                 raise AssertionError('Test mag alleen eigen tijdelijke database openen')
             return connect(path, *args, **kwargs)
         guard = patch('sqlite3.connect', side_effect=temporary_connect)

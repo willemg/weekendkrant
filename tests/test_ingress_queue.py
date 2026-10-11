@@ -16,7 +16,7 @@ class QueueTests(unittest.TestCase):
         self.path = Path(self.tmp.name) / 'queue.sqlite3'
         connect = sqlite3.connect
         def temporary_connect(path, *args, **kwargs):
-            if Path(path) != self.path:
+            if path != ':memory:' and Path(path) != self.path:
                 raise AssertionError('Test mag alleen eigen tijdelijke database openen')
             return connect(path, *args, **kwargs)
         guard = patch('sqlite3.connect', side_effect=temporary_connect)
@@ -52,8 +52,7 @@ class QueueTests(unittest.TestCase):
 
     def test_existing_database_tables_preserved(self):
         with sqlite3.connect(self.path) as db:
-            db.execute('CREATE TABLE days (day TEXT)')
-            db.execute("INSERT INTO days VALUES ('2026-10-07')")
+            db.execute("INSERT INTO days(day,week,status) VALUES ('2026-10-07','2026_W41','success')")
         IngressQueue(self.path).add({})
         with sqlite3.connect(self.path) as db:
             self.assertEqual(db.execute('SELECT day FROM days').fetchone()[0], '2026-10-07')

@@ -99,3 +99,7 @@ Behoud de dagelijkse regel:
 ```
 
 De code wijzigt geen crontab en verwijdert geen bestaande worktrees of branches.
+
+## Database
+
+Zie [docs/database.md](docs/database.md) voor het canonieke SQLite-schema, scratch-build en migraties.
