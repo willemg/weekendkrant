@@ -102,6 +102,19 @@ class SherlockState:
             identity = cursor.lastrowid
         return identity
 
+    def start_next_run(self):
+        """Atomically rotate topics based on the latest created run."""
+        with self._write():
+            previous = self.db.execute(
+                'SELECT topic FROM sherlock_runs ORDER BY id DESC LIMIT 1'
+            ).fetchone()
+            topic = 1 if previous is None else (previous[0] % 3) + 1
+            cursor = self.db.execute(
+                'INSERT INTO sherlock_runs(topic,started_at) VALUES (?,?)',
+                (topic, _now()))
+            identity = cursor.lastrowid
+        return identity, topic
+
     def finish_run(self, run_id, status):
         """Close a running run exactly once as completed or failed."""
         _run_id(run_id)
@@ -119,6 +132,25 @@ class SherlockState:
         canonical = canonicalize_url(url)
         return self.db.execute('SELECT 1 FROM sherlock_sources WHERE canonical_url=?',
                                (canonical,)).fetchone() is not None
+
+    def filter_unreviewed(self, urls):
+        """Return first-seen input URLs whose canonical page has not been reviewed."""
+        self._idle()
+        if not isinstance(urls, list):
+            raise ValueError('URLs moeten een lijst zijn')
+        if len(urls) > 50:
+            raise ValueError('Maximaal 50 URLs per batch')
+        canonical_to_original = {}
+        for url in urls:
+            canonical_to_original.setdefault(canonicalize_url(url), url)
+        if not canonical_to_original:
+            return []
+        placeholders = ','.join('?' for _ in canonical_to_original)
+        reviewed = {row[0] for row in self.db.execute(
+            f'SELECT canonical_url FROM sherlock_sources WHERE canonical_url IN ({placeholders})',
+            tuple(canonical_to_original))}
+        return [original for canonical, original in canonical_to_original.items()
+                if canonical not in reviewed]
 
     def record_reviewed_source(self, run_id, topic, url, outcome, rationale, title=None):
         """Record an actually reviewed page and return its canonical URL.

@@ -4,6 +4,7 @@ import sqlite3
 import tempfile
 from pathlib import Path
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 
 from sherlock_state import SherlockState, canonicalize_url
 
@@ -90,6 +91,28 @@ class SherlockStateTests(unittest.TestCase):
                 self.store.finish_run(bad_id, 'failed')
         self.assertEqual(self.db.execute('SELECT status FROM sherlock_runs').fetchone(), ('running',))
 
+    def test_start_next_run_rotates_from_created_runs_including_failed(self):
+        created = [self.store.start_next_run() for _ in range(4)]
+        self.assertEqual([(topic, run_id) for run_id, topic in created],
+                         [(1, 1), (2, 2), (3, 3), (1, 4)])
+        self.store.finish_run(created[1][0], 'failed')
+        run_id, topic = self.store.start_next_run()
+        self.assertEqual((run_id, topic), (5, 2))
+
+    def test_concurrent_start_next_run_assigns_unique_ordered_topics(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'concurrent.sqlite3'
+            with sqlite3.connect(path) as db:
+                SherlockState(db)
+            def start(_):
+                with sqlite3.connect(path, timeout=10) as db:
+                    return SherlockState(db).start_next_run()
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                results = list(pool.map(start, range(18)))
+            self.assertEqual(sorted(run_id for run_id, _ in results), list(range(1, 19)))
+            self.assertEqual({run_id: topic for run_id, topic in results},
+                             {i: ((i - 1) % 3) + 1 for i in range(1, 19)})
+
     def test_database_topic_and_status_constraints(self):
         for sql in ("INSERT INTO sherlock_runs(topic,started_at) VALUES (4,'now')",
                     "INSERT INTO sherlock_runs(topic,started_at,status) VALUES (1,'now','anything')"):
@@ -108,6 +131,24 @@ class SherlockStateTests(unittest.TestCase):
         self.assertEqual(row[5:], (None, '  afgewezen  ', 'Geen onafhankelijk bewijs.\nWel geopend.'))
         self.store.finish_run(identity, 'failed')
         self.assertTrue(self.store.already_reviewed('https://example.com/a'))
+
+    def test_filter_unreviewed_preserves_first_input_and_filters_by_canonical_page(self):
+        run = self.store.start_run(1)
+        self.record(run)
+        urls = ['https://example.com/new?utm_source=x',
+                'https://example.com/a?gclid=1',
+                'https://example.com/new#section',
+                'https://different.example/same-story']
+        self.assertEqual(self.store.filter_unreviewed(urls),
+                         [urls[0], urls[3]])
+        self.assertEqual(self.store.filter_unreviewed([]), [])
+
+    def test_filter_unreviewed_rejects_bad_batch_and_urls(self):
+        for urls in ('https://example.com', [None], ['/relative'], ['https://example.com/%zz']):
+            with self.subTest(urls=urls), self.assertRaises(ValueError):
+                self.store.filter_unreviewed(urls)
+        with self.assertRaises(ValueError):
+            self.store.filter_unreviewed(['https://example.com/%d' % i for i in range(51)])
 
     def test_duplicate_rejected_across_runs_and_topics_without_overwriting(self):
         self.record(self.store.start_run(1), title='Oorspronkelijk')

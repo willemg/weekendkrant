@@ -81,6 +81,67 @@ class HTTPTests(unittest.TestCase):
         self.assertEqual(self.request('POST', '/ingress', '{}', self.token,
                                      {'Content-Length': '-1'})[0], 400)
 
+    def test_sherlock_endpoints_require_ingress_bearer_token(self):
+        for path in ('/sherlock/runs', '/sherlock/sources/filter',
+                     '/sherlock/sources', '/sherlock/runs/finish'):
+            with self.subTest(path=path):
+                status, body = self.request('POST', path, '{}')
+                self.assertEqual((status, body), (401, {'error': 'unauthorized'}))
+
+    def test_sherlock_run_rotation_source_filter_registration_and_finish(self):
+        created = []
+        for topic in (1, 2, 3):
+            status, body = self.request('POST', '/sherlock/runs', '{}', self.token)
+            self.assertEqual(status, 201)
+            self.assertEqual(body['topic'], topic)
+            created.append(body['run_id'])
+        status, body = self.request('POST', '/sherlock/runs', '{}', self.token)
+        self.assertEqual((status, body['topic']), (201, 1))
+        run_id = body['run_id']
+
+        payload = {'run_id': run_id, 'topic': 1,
+                   'url': 'https://Example.com/a?utm_source=x',
+                   'title': None, 'outcome': 'afgewezen', 'rationale': 'Geen bewijs.'}
+        status, body = self.request('POST', '/sherlock/sources', json.dumps(payload), self.token)
+        self.assertEqual((status, body), (201, {'canonical_url': 'https://example.com/a'}))
+        status, body = self.request('POST', '/sherlock/sources/filter', json.dumps({
+            'urls': ['https://example.com/a?gclid=x', 'https://example.com/b?utm_source=x',
+                     'https://example.com/b#fragment']}), self.token)
+        self.assertEqual((status, body), (200, {
+            'unreviewed': ['https://example.com/b?utm_source=x']}))
+        status, body = self.request('POST', '/sherlock/runs/finish', json.dumps({
+            'run_id': run_id, 'status': 'completed'}), self.token)
+        self.assertEqual((status, body), (200, {'run_id': run_id, 'status': 'completed'}))
+
+        duplicate_run, duplicate_meta = self.request('POST', '/sherlock/runs', '{}', self.token)
+        self.assertEqual((duplicate_run, duplicate_meta['topic']), (201, 2))
+        duplicate = dict(payload, run_id=duplicate_meta['run_id'], topic=2)
+        status, body = self.request('POST', '/sherlock/sources', json.dumps(duplicate), self.token)
+        self.assertEqual((status, body), (409, {'error': 'source_conflict'}))
+        payload['url'] = 'https://example.com/b'
+        status, body = self.request('POST', '/sherlock/sources', json.dumps(payload), self.token)
+        self.assertEqual((status, body), (409, {'error': 'run_conflict'}))
+        status, body = self.request('POST', '/sherlock/runs/finish', json.dumps({
+            'run_id': run_id, 'status': 'failed'}), self.token)
+        self.assertEqual(status, 409)
+
+    def test_sherlock_rejects_bad_json_schema_and_topic_mismatch(self):
+        for body in ('{', '[]', '{"urls":"bad"}'):
+            status, _ = self.request('POST', '/sherlock/sources/filter', body, self.token)
+            self.assertEqual(status, 400)
+        self.assertEqual(self.request('POST', '/sherlock/sources/filter', '{"urls":[]}', self.token)[0], 200)
+        status, started = self.request('POST', '/sherlock/runs', '{}', self.token)
+        self.assertEqual(status, 201)
+        wrong_topic = {'run_id': started['run_id'], 'topic': 2, 'url': 'https://example.com/a',
+                       'outcome': 'afgewezen', 'rationale': 'Geen bewijs.'}
+        status, body = self.request('POST', '/sherlock/sources', json.dumps(wrong_topic), self.token)
+        self.assertEqual((status, body), (409, {'error': 'run_conflict'}))
+
+    def test_sherlock_database_failure_returns_503(self):
+        with patch('ingress_api.SherlockState.start_next_run', side_effect=sqlite3.OperationalError('down')):
+            status, body = self.request('POST', '/sherlock/runs', '{}', self.token)
+        self.assertEqual((status, body), (503, {'error': 'database_unavailable'}))
+
 
 class ConfigTests(unittest.TestCase):
     def test_environment_and_overrides_without_opening_runtime_db(self):
