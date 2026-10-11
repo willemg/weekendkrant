@@ -7,6 +7,7 @@ import unittest
 from unittest.mock import patch
 
 import daily
+from database import SCHEMA_VERSION
 from parts import PartStore, migrate, render
 from test_parts import PartFixture
 
@@ -171,7 +172,7 @@ class OfferMigrationTests(unittest.TestCase):
         db = sqlite3.connect(':memory:')
         self.addCleanup(db.close)
         migrate(db)
-        self.assertEqual(db.execute('PRAGMA user_version').fetchone(), (3,))
+        self.assertEqual(db.execute('PRAGMA user_version').fetchone(), (SCHEMA_VERSION,))
         schema = db.execute('SELECT * FROM sqlite_master ORDER BY name').fetchall()
         statements = []
         db.set_trace_callback(statements.append)
@@ -218,7 +219,7 @@ class OfferMigrationTests(unittest.TestCase):
         statements = []
         db.set_trace_callback(statements.append)
         migrate(db)
-        self.assertEqual(db.execute('PRAGMA user_version').fetchone(), (3,))
+        self.assertEqual(db.execute('PRAGMA user_version').fetchone(), (SCHEMA_VERSION,))
         for t, rows in before.items():
             self.assertEqual(db.execute('SELECT * FROM ' + t).fetchall(), rows)
         for row in schema:

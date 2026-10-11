@@ -9,6 +9,7 @@ import unittest
 from unittest.mock import patch
 
 import daily
+from database import SCHEMA_VERSION
 from ingress_queue import IngressQueue
 
 
@@ -313,7 +314,7 @@ class PartTests(PartFixture):
         self.closed_part_from_runtime()
         self.assertEqual(self.rows('SELECT part_id,revision FROM part_revisions ORDER BY part_id'),
                          [(1, 1), (2, 1), (3, 1)])
-        self.assertEqual(self.rows('PRAGMA user_version'), [(3,)])
+        self.assertEqual(self.rows('PRAGMA user_version'), [(SCHEMA_VERSION,)])
 
     def test_python39_syntax(self):
         for path in Path('.').glob('*.py'):
@@ -362,13 +363,13 @@ class MigrationTests(PartFixture):
         self.assertEqual(self.rows('SELECT status FROM ingress_queue WHERE id=?', (identity,)), [('processed',)])
         self.assertEqual(legacyfile.read_bytes(), b'legacy bytes')
         self.assertEqual(self.active(), [('2026_W41', 2, 1, 1, 1)])
-        self.assertEqual(self.rows('PRAGMA user_version'), [(3,)])
+        self.assertEqual(self.rows('PRAGMA user_version'), [(SCHEMA_VERSION,)])
         self.assertFalse(any(s.lstrip().upper().startswith(('DELETE', 'VACUUM')) for s in statements))
 
     def test_fresh_database_and_version(self):
         self.db.unlink()
         db = daily.database(self.db)
-        self.assertEqual(db.execute('PRAGMA user_version').fetchone(), (3,))
+        self.assertEqual(db.execute('PRAGMA user_version').fetchone(), (SCHEMA_VERSION,))
         self.assertIn(('parts',), db.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall())
         db.close()
 

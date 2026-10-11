@@ -48,8 +48,8 @@ class DatabaseTests(unittest.TestCase):
         expected = self.schema(self.db)
         with sqlite3.connect(':memory:') as fresh:
             database.migrate(fresh)
-            self.assertEqual(self.schema(fresh), expected)
-            self.assertEqual(fresh.execute('PRAGMA user_version').fetchone(), (3,))
+            self.assertEqual([row for row in self.schema(fresh) if not row[1].startswith('sherlock_')], expected)
+            self.assertEqual(fresh.execute('PRAGMA user_version').fetchone(), (database.SCHEMA_VERSION,))
             self.assertEqual(fresh.execute('PRAGMA foreign_keys').fetchone(), (1,))
             before = list(fresh.iterdump())
             database.migrate(fresh)
@@ -70,7 +70,7 @@ class DatabaseTests(unittest.TestCase):
                 database.migrate(self.db)
                 for t, rows in before.items():
                     self.assertEqual(self.db.execute('SELECT * FROM '+t).fetchall(), rows)
-                self.assertEqual(self.db.execute('PRAGMA user_version').fetchone(), (3,))
+                self.assertEqual(self.db.execute('PRAGMA user_version').fetchone(), (database.SCHEMA_VERSION,))
                 self.assertEqual(self.db.execute('PRAGMA foreign_key_check').fetchall(), [])
                 with sqlite3.connect(':memory:') as fresh:
                     database.migrate(fresh)
@@ -134,7 +134,7 @@ class DatabaseTests(unittest.TestCase):
                     return db.execute('PRAGMA user_version').fetchone()[0]
             with ThreadPoolExecutor(max_workers=2) as workers:
                 futures = [workers.submit(build) for _ in range(2)]
-                self.assertEqual([f.result(timeout=10) for f in futures], [3, 3])
+                self.assertEqual([f.result(timeout=10) for f in futures], [database.SCHEMA_VERSION] * 2)
             with sqlite3.connect(path) as db:
                 self.assertEqual(db.execute('PRAGMA integrity_check').fetchone(), ('ok',))
 
@@ -145,4 +145,43 @@ class DatabaseTests(unittest.TestCase):
                 result = subprocess.run([__import__('sys').executable, 'database.py', '--db', str(path)], capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stderr)
             with sqlite3.connect(path) as db:
-                self.assertEqual(db.execute('PRAGMA user_version').fetchone(), (3,))
+                self.assertEqual(db.execute('PRAGMA user_version').fetchone(), (database.SCHEMA_VERSION,))
+
+    def test_v3_to_v4_preserves_full_existing_schema_and_data(self):
+        self.legacy(2)
+        self.db.execute('PRAGMA user_version=3')
+        old_schema = self.schema(self.db)
+        tables = [row[0] for row in self.db.execute("SELECT name FROM sqlite_master WHERE type='table'")]
+        before = {t: self.db.execute('SELECT * FROM '+t).fetchall() for t in tables}
+        database.migrate(self.db)
+        self.assertEqual(self.db.execute('PRAGMA user_version').fetchone(), (4,))
+        for table, rows in before.items():
+            self.assertEqual(self.db.execute('SELECT * FROM '+table).fetchall(), rows)
+        self.assertEqual([r for r in self.schema(self.db) if not r[1].startswith('sherlock_')], old_schema)
+        self.assertEqual({r[1] for r in self.schema(self.db)} - {r[1] for r in old_schema},
+                         {'sherlock_runs', 'sherlock_sources'})
+        with sqlite3.connect(':memory:') as fresh:
+            database.migrate(fresh)
+            self.assertEqual(fresh.execute('PRAGMA user_version').fetchone(), (4,))
+            self.assertEqual(self.schema(fresh), self.schema(self.db))
+        snapshot = list(self.db.iterdump())
+        statements = []
+        self.db.set_trace_callback(statements.append)
+        database.migrate(self.db)
+        self.assertFalse(any(s.lstrip().upper().startswith(('CREATE', 'INSERT', 'UPDATE', 'BEGIN')) for s in statements))
+        self.assertEqual(list(self.db.iterdump()), snapshot)
+        self.assertEqual(self.db.execute('PRAGMA foreign_key_check').fetchall(), [])
+
+    def test_failed_fourth_migration_rolls_back_schema_and_version(self):
+        self.legacy(2)
+        self.db.execute('PRAGMA user_version=3')
+        before = list(self.db.iterdump())
+        original = database.migration_sql
+        def broken(version):
+            return original(version) + '; CREATE TABLE sherlock_runs(conflict);'
+        with patch('database.migration_sql', side_effect=broken):
+            with self.assertRaises(sqlite3.OperationalError):
+                database.migrate(self.db)
+        self.assertEqual(list(self.db.iterdump()), before)
+        self.assertEqual(self.db.execute('PRAGMA user_version').fetchone(), (3,))
+        self.assertFalse(self.db.in_transaction)
