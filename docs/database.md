@@ -53,13 +53,12 @@ commando is veilig opnieuw uitvoerbaar en migreert bestaande databases:
 ```
 
 Maak vóór een productie-upgrade een consistente SQLite-back-up (bijvoorbeeld met
-SQLite's backup-API). Stop voor de eerste uitrol de schrijvende diensten en cronruns,
-voer de migratie uit en start ze daarna weer. De tests gebruiken uitsluitend
-synthetische databases. De beheerder heeft de productie-upgrade naar versie 3
-op 11 oktober 2026 bevestigd: `integrity_check` gaf `ok` en `foreign_key_check`
-was leeg. De upgrade naar versie 4 is een afzonderlijke uitrolstap. Controleer
-na iedere upgrade `PRAGMA user_version`, `PRAGMA integrity_check` en
-`PRAGMA foreign_key_check`.
+SQLite's backup-API). Stop indien nodig schrijvende diensten en cronruns om
+gelijktijdige wijzigingen tijdens de upgrade te voorkomen. Voer de centrale
+migratie uit met het bovenstaande commando en start gestopte diensten daarna
+weer. Controleer vervolgens `PRAGMA user_version`, `PRAGMA integrity_check`
+(verwacht `ok`) en `PRAGMA foreign_key_check` (verwacht een leeg resultaat).
+De tests gebruiken uitsluitend synthetische databases.
 
 Runtime gebruikt dezelfde `migrate(connection)` via `daily.database()` en
 `IngressQueue`. De publieke `parts.migrate` en `parts.SCHEMA_VERSION` zijn
