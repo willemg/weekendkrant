@@ -47,9 +47,10 @@ en begint de volgende. Per week/topic is maximaal één part open.
 Elke groei schrijft een nieuw immutable revisiebestand. SQLite bewaart het
 exacte bronarchief, revisiehashes, tokenmetingen, bronposities en de actieve
 revisie. De korte eindtransactie registreert alles samen met queue-status.
-`PRAGMA user_version=2` migreert schema 0 of 1 additief in-place zonder oude
-rijen of dagbestanden te veranderen. Vanaf deze cut-over gebruiken nieuwe items
-uitsluitend het partmodel; het eerste item maakt part 1/revision 1.
+`database.py` en de genummerde migraties in `migrations/` beheren het volledige
+SQLite-schema; zie [databasebeheer](docs/database.md). Bestaande rijen en
+historische dagbestanden blijven behouden. Nieuwe items gebruiken uitsluitend
+het partmodel; het eerste item maakt part 1/revision 1.
 Zie [runtime en crashgedrag](docs/daily-runtime.md).
 
 `daily` is de enige operationele Ariadne-taak. Er zijn geen Git-operaties,

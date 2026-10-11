@@ -66,7 +66,8 @@ opruiming of automatische auditretentie; bestaande data blijft behouden.
 
 ## Modulegrenzen en tests
 
-- `ingress_queue.IngressQueue(db_path)`: schema aanmaken, `add(payload)` en `pending_count()`;
+- `ingress_queue.IngressQueue(db_path)`: schema initialiseren via de centrale
+  `database.migrate()` (zie [databasebeheer](database.md)), `add(payload)` en `pending_count()`;
   elke operatie opent en sluit een eigen SQLite-connectie.
 - `ingress_api.Config`: environmenttoken en configureerbare host/poort/database.
 - `ingress_api.create_server(config)`: testbare HTTPServer; het CLI-entrypoint draait `serve_forever()`.

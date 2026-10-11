@@ -75,13 +75,16 @@ compatibiliteit; dit telt nu de nieuw geregistreerde partrevisies in deze run.
 
 ## Migratie en bewuste cut-over
 
-`PRAGMA user_version=0` is de bestaande onversioneerde productie-DB. De runtime
-maakt transactioneel het partmodel plus offers en zet de versie op **2**.
-Schema 1 krijgt additief alleen de offertabel en bijbehorende triggers. Bestaande
-partrows, revisies en bronmemberships blijven exact behouden. Heropenen is
-idempotent; onbekende nieuwere versies worden geweigerd.
-Een verse DB krijgt legacy-, ingress- en parttabellen. Geen extern framework.
-Zie het [exacte schema en auditcontract](audit-trail.md#partschema-versie-2).
+De runtime gebruikt de centrale `database.migrate()` via `daily.database()` en
+`IngressQueue`. `database.py` en de genummerde migraties in `migrations/` beheren
+het volledige SQLite-schema voor zowel nieuwe als bestaande databases.
+`parts.py`, `daily.py` en `ingress_queue.py` beheren geen eigen DDL.
+De actuele schemaversie en migratiedetails staan uitsluitend in
+[databasebeheer](database.md). Zie daarnaast het
+[partmodel en provenancecontract](audit-trail.md#partmodel-en-provenance).
+
+Bestaande parts, revisies en bronmemberships blijven exact behouden. Heropenen
+is idempotent; onbekende nieuwere versies worden geweigerd.
 
 Bestaande `ingress_queue`, `days`, `attempts`, `threads` en `sources` blijven
 intact. `YYYY-MM-DD_PPPP.txt` en hun provenance worden niet geconverteerd of
