@@ -1,5 +1,6 @@
 """Lokale HTTP-producerinterface voor de persistente ingressqueue."""
 import argparse
+from contextlib import closing
 from dataclasses import dataclass, field
 import hmac
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -9,6 +10,11 @@ from pathlib import Path
 import sqlite3
 
 from ingress_queue import IngressQueue
+from sherlock_state import SherlockState
+
+
+class PayloadTooLarge(Exception):
+    pass
 
 
 @dataclass(frozen=True)
@@ -67,7 +73,9 @@ def create_server(config):
             self.reply(200, {'status': 'ok', 'pending': count})
 
         def do_POST(self):
-            if self.path != '/ingress':
+            routes = {'/ingress', '/sherlock/runs', '/sherlock/sources/filter',
+                      '/sherlock/sources', '/sherlock/runs/finish'}
+            if self.path not in routes:
                 self.reply(404, {'error': 'not_found'})
                 return
             authorization = self.headers.get('Authorization', '')
@@ -76,30 +84,83 @@ def create_server(config):
                 self.reply(401, {'error': 'unauthorized'})
                 return
             try:
-                # Geen chunked bodies; begrens geheugen en blokkerend lezen.
-                if self.headers.get('Transfer-Encoding') is not None:
-                    raise ValueError('Unsupported transfer encoding')
-                lengths = self.headers.get_all('Content-Length', [])
-                if len(lengths) != 1 or not lengths[0].isascii() or not lengths[0].isdigit():
-                    raise ValueError('Invalid Content-Length')
-                length = int(lengths[0])
-                if length > 1024 * 1024:
-                    self.reply(413, {'error': 'payload_too_large'})
-                    return
-                raw = self.rfile.read(length)
-                if len(raw) != length:
-                    raise ValueError('Incomplete body')
-                def reject_constant(value):
-                    raise ValueError('Invalid JSON constant')
-                payload = json.loads(raw.decode('utf-8'), parse_constant=reject_constant)
-                item_id = queue.add(payload)
+                payload = self.read_json()
+            except PayloadTooLarge:
+                self.reply(413, {'error': 'payload_too_large'})
+                return
             except (ValueError, TypeError, UnicodeError, RecursionError):
                 self.reply(400, {'error': 'invalid_json_object'})
                 return
-            except sqlite3.Error:
-                self.reply(503, {'error': 'queue_unavailable'})
+            if self.path == '/ingress':
+                try:
+                    item_id = queue.add(payload)
+                except (ValueError, TypeError, UnicodeError, RecursionError):
+                    self.reply(400, {'error': 'invalid_json_object'})
+                    return
+                except sqlite3.Error:
+                    self.reply(503, {'error': 'queue_unavailable'})
+                    return
+                self.reply(201, {'id': item_id})
                 return
-            self.reply(201, {'id': item_id})
+
+            try:
+                self.handle_sherlock(payload)
+            except sqlite3.IntegrityError:
+                self.reply(409, {'error': 'source_conflict'})
+            except sqlite3.Error:
+                self.reply(503, {'error': 'database_unavailable'})
+            except ValueError as error:
+                message = str(error)
+                if message in ('Onbekende of reeds afgesloten run',
+                               'Bron vereist een running run met hetzelfde topic'):
+                    self.reply(409, {'error': 'run_conflict'})
+                else:
+                    self.reply(400, {'error': 'invalid_request'})
+
+        def read_json(self):
+            # Shared ingress limits: no chunked bodies, bounded reads, socket timeout.
+            if self.headers.get('Transfer-Encoding') is not None:
+                raise ValueError('Unsupported transfer encoding')
+            lengths = self.headers.get_all('Content-Length', [])
+            if len(lengths) != 1 or not lengths[0].isascii() or not lengths[0].isdigit():
+                raise ValueError('Invalid Content-Length')
+            length = int(lengths[0])
+            if length > 1024 * 1024:
+                raise PayloadTooLarge()
+            raw = self.rfile.read(length)
+            if len(raw) != length:
+                raise ValueError('Incomplete body')
+            def reject_constant(value):
+                raise ValueError('Invalid JSON constant')
+            payload = json.loads(raw.decode('utf-8'), parse_constant=reject_constant)
+            if not isinstance(payload, dict):
+                raise ValueError('Expected JSON object')
+            return payload
+
+        def handle_sherlock(self, payload):
+            def schema(required, optional=()):
+                if set(payload) - set(required) - set(optional) or not set(required) <= set(payload):
+                    raise ValueError('Invalid request fields')
+            with closing(sqlite3.connect(config.db_path, timeout=5)) as db:
+                state = SherlockState(db)
+                if self.path == '/sherlock/runs':
+                    schema(set())
+                    run_id, topic = state.start_next_run()
+                    self.reply(201, {'run_id': run_id, 'topic': topic})
+                elif self.path == '/sherlock/sources/filter':
+                    schema({'urls'})
+                    urls = state.filter_unreviewed(payload['urls'])
+                    self.reply(200, {'unreviewed': urls})
+                elif self.path == '/sherlock/sources':
+                    schema({'run_id', 'topic', 'url', 'outcome', 'rationale'}, {'title'})
+                    canonical = state.record_reviewed_source(
+                        payload['run_id'], payload['topic'], payload['url'],
+                        payload['outcome'], payload['rationale'], payload.get('title'))
+                    self.reply(201, {'canonical_url': canonical})
+                else:
+                    schema({'run_id', 'status'})
+                    state.finish_run(payload['run_id'], payload['status'])
+                    self.reply(200, {'run_id': payload['run_id'], 'status': payload['status']})
 
     return HTTPServer((config.host, config.port), Handler)
 

@@ -58,6 +58,29 @@ SQLite beheert de korte databasetransacties.
 | SQLite niet beschikbaar tijdens een request | `503`, zonder interne foutdetails. |
 | `GET /queue` of onbekend pad | `404`; er bestaat geen publieke queue-leesinterface. |
 
+### Sherlock-state endpoints
+
+De vier Sherlock-POST endpoints gebruiken hetzelfde `Authorization: Bearer <token>`-
+token en dezelfde bodylimiet, Content-Length-, transfer-encoding- en sockettimeout-
+controles als `/ingress`:
+
+| Request | Resultaat |
+| --- | --- |
+| `POST /sherlock/runs` met `{}` | `201`, `run_id` en het volgende topic (1 → 2 → 3 → 1). De selectie en INSERT gebeuren atomair in `BEGIN IMMEDIATE`, op basis van de laatst aangemaakte run, ook wanneer die `failed` is. |
+| `POST /sherlock/sources/filter` met `{"urls": [...]}` | `200`, `unreviewed` met de eerste oorspronkelijke input-URL per canonical URL. Maximaal 50 geldige absolute HTTP(S)-URLs. Deze read-only filter slaat niets op en reserveert niets. |
+| `POST /sherlock/sources` | `201`, canonical URL na registratie van een daadwerkelijk gereviewde bron; duplicate canonical URL geeft `409`. Een run moet `running` zijn en topic moet overeenkomen. |
+| `POST /sherlock/runs/finish` met status `completed` of `failed` | `200`; onbekende of reeds afgesloten runs en topic-mismatch geven `409`. |
+
+Malformed JSON, onjuist schema en ongeldige URLs geven `400`; databasefouten geven
+`503`. Sherlock-state is bewust source-level: alleen de concrete pagina-URL wordt
+onthouden. Een andere pagina over hetzelfde verhaal blijft een afzonderlijke bron;
+er is geen story-deduplicatie. Zie [databasebeheer](database.md) voor het schema
+en de bestaande schema-versie 4.
+
+Deze endpoints leveren uitsluitend server-side contracten. Deze wijziging activeert
+geen Sherlock-integratie en wijzigt geen scheduler, MCP/plugin-definitie of
+agentprompt; die volgen afzonderlijk.
+
 Stuur UTF-8 JSON met Content-Length, bij voorkeur `Content-Type: application/json`.
 Requests krijgen een sockettimeout van 10 seconden. Deze kleine standaardbibliotheek-
 server verwerkt requests sequentieel. Iedere herhaalde POST maakt een nieuw item;
