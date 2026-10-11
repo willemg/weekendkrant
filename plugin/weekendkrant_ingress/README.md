@@ -1,11 +1,10 @@
 # Weekendkrant Ingress
 
-Niet-geheime Weekendkrant-broncode wordt uitsluitend in `willemg/weekendkrant`
-onderhouden. ChatGPT Sites is deployment/runtime, geen alternatieve source of
-truth. Wijzigingen moeten eerst via een GitHub-PR gereviewd en gemerged worden;
-publicatie van die gereviewde versie naar de bestaande ChatGPT Site is een
-afzonderlijke stap. Deze feature-PR wijzigt of publiceert de actieve Site niet.
-Er is geen automatische deploymentflow ingericht.
+Ontwikkeling en tests gebeuren uitsluitend bij de canonieke GitHub-bron in
+`willemg/weekendkrant`. ChatGPT Sites is runtime/deployment, geen ontwikkelbron.
+Deployment bestaat uit synchronisatie van één gemergede commit, gevolgd door
+publicatie. Zie [het canonieke deploymentdocument](../../docs/plugin-deployment.md)
+voor de werkwijze, architecturale motivatie en deploymentidentiteit.
 
 ## Vijf MCP-tools
 

@@ -52,8 +52,16 @@ Zie [partmodel en provenance](audit-trail.md#partmodel-en-provenance).
 
 ## GitHub en discovery
 
-GitHub bewaart code en ontwerpdocumentatie en publiceert de discoverypointer.
-Het is geen fichequeue en geen onderdeel van Ariadnes verwerking.
+`willemg/weekendkrant` is de enige source of truth voor alle niet-geheime code
+en ontwerpdocumentatie en publiceert de discoverypointer. Het is geen fichequeue
+en geen onderdeel van Ariadnes verwerking.
+
+ChatGPT Sites is de stabiele MCP-runtime/deploymentlaag; de Quick Tunnel naar
+bibib mag dankzij discovery een dynamische URL behouden. Plugin-deployment
+bestaat momenteel uit synchronisatie van één gemergede GitHub-commit naar Sites,
+gevolgd door afzonderlijke publicatie. Ontwikkeling en tests gebeuren bij de
+GitHub-bron. Zie [pluginbronbeheer en deployment](plugin-deployment.md) voor de
+canonieke werkwijze en de motivatie voor deze twee stappen.
 
 `cloudflared Quick Tunnel -> actuele URL -> config/ingress-endpoint.json op GitHub -> MCP-plugin`
 
