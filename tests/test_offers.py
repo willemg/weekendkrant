@@ -167,11 +167,11 @@ class OfferTests(PartFixture):
 
 
 class OfferMigrationTests(unittest.TestCase):
-    def test_zero_to_two_and_two_noop(self):
+    def test_zero_to_current_and_current_noop(self):
         db = sqlite3.connect(':memory:')
         self.addCleanup(db.close)
         migrate(db)
-        self.assertEqual(db.execute('PRAGMA user_version').fetchone(), (2,))
+        self.assertEqual(db.execute('PRAGMA user_version').fetchone(), (3,))
         schema = db.execute('SELECT * FROM sqlite_master ORDER BY name').fetchall()
         statements = []
         db.set_trace_callback(statements.append)
@@ -218,7 +218,7 @@ class OfferMigrationTests(unittest.TestCase):
         statements = []
         db.set_trace_callback(statements.append)
         migrate(db)
-        self.assertEqual(db.execute('PRAGMA user_version').fetchone(), (2,))
+        self.assertEqual(db.execute('PRAGMA user_version').fetchone(), (3,))
         for t, rows in before.items():
             self.assertEqual(db.execute('SELECT * FROM ' + t).fetchall(), rows)
         for row in schema:
@@ -244,7 +244,7 @@ class OfferMigrationTests(unittest.TestCase):
 
     def test_newer_schema_refused_without_changes(self):
         db = self.v1()
-        db.execute('PRAGMA user_version=3')
+        db.execute('PRAGMA user_version=99')
         before = list(db.iterdump())
         with self.assertRaises(ValueError):
             migrate(db)

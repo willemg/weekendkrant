@@ -86,12 +86,13 @@ Het audit trail is niet alleen debugging-informatie. Het maakt zichtbaar:
 
 Daarmee wordt bronprovenance een structureel onderdeel van Weekendkrant.
 
-## Partschema versie 2
+## Partmodel en provenance
 
-De transactionele in-place migratie van schema 0 naar 2 maakt het partmodel
-plus offers. Van schema 1 naar 2 worden alleen `part_offers` en offertriggers
-toegevoegd. Bestaande tabellen, rows en bronbytes worden niet herschreven of
-gereconstrueerd. Versie 2 is een no-op; onbekende nieuwere versies falen.
+Het partmodel legt de identiteit, revisies, bronbytes en lokale offers vast
+volgens onderstaand provenancecontract. Het is onderdeel van het centrale
+SQLite-schema, beheerd door `database.py` en de genummerde migraties in
+`migrations/`. Zie [databasebeheer](database.md) voor het canonieke schema,
+de actuele totale schemaversie en de migratieketen.
 
 | Tabel | Contract |
 | --- | --- |
@@ -144,7 +145,7 @@ runtimefouten met uitvoerdatum en UTC-tijd, zonder nieuwe success-records.
 Het is geen partauditmodel en geen selectie- of dagafsluitmechanisme.
 
 Oude `YYYY-MM-DD_PPPP.txt` worden niet geconverteerd of geherinterpreteerd.
-Nieuw verwerkte queue-items beginnen in het nieuwe schema bij part 1/revision 1
+Nieuw verwerkte queue-items beginnen in het partmodel bij part 1/revision 1
 wanneer hun week/topic nog geen nieuwe-style part heeft. Geen oude rows of files
 worden opgeruimd; er is geen automatische retentie of VACUUM.
 

@@ -5,17 +5,14 @@ import json
 from pathlib import Path
 import sqlite3
 
+from database import migrate
+
 
 class IngressQueue:
     def __init__(self, db_path):
         self.db_path = Path(db_path)
         with closing(sqlite3.connect(self.db_path)) as db, db:
-            db.execute('''CREATE TABLE IF NOT EXISTS ingress_queue (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                received_at TEXT NOT NULL,
-                payload TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'pending'
-            )''')
+            migrate(db)
 
     def pending_for_day(self, db, day):
         """Read one caller-owned snapshot; reject unassignable pending records.

@@ -39,13 +39,16 @@ via nieuwe immutable revisies. Nieuwe bronnen volgen `(payload.date, numerieke
 queue-ID)` en worden achter bestaande bronmembership toegevoegd. Overflow sluit
 de part definitief. Een partial unique index bewaakt maximaal één open part.
 
-`parts.py` bevat de kleine expliciete SQLite-opslaglaag en de mechanische planner.
-`PRAGMA user_version=2` maakt bij schema 0 het partmodel en voegt bij schema 1
-alleen `part_offers` en bijbehorende triggers toe, zonder bestaande rows te
-transformeren. Versie 2 is een no-op; nieuwere versies worden geweigerd. Exacte bronbytes
-blijven onafhankelijk van de transportqueue bestaan. De finale transactie
-controleert ook de geplande partstaat en verschuift de actieve revisie samen
-met provenance en processed-status. Zie [partschema](audit-trail.md#partschema-versie-2).
+`database.py` en de genummerde migraties in `migrations/` zijn eigenaar van het
+volledige SQLite-schema en de migratieketen. Zie [databasebeheer](database.md)
+voor het canonieke schema, de actuele versie en migratiedetails.
+`parts.py` bevat de part-opslaglogica en de mechanische planner, maar beheert
+geen eigen DDL; ook `daily.py` en `ingress_queue.py` gebruiken de centrale migratiecode.
+
+Exacte bronbytes blijven onafhankelijk van de transportqueue bestaan.
+De finale transactie controleert ook de geplande partstaat en verschuift de
+actieve revisie samen met provenance en processed-status.
+Zie [partmodel en provenance](audit-trail.md#partmodel-en-provenance).
 
 ## GitHub en discovery
 

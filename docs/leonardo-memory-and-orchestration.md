@@ -9,9 +9,10 @@ deterministische overflow, crashsafe registratie en lokale offer/seal-records.
 
 Nieuwe queue-items gaan naar ISO-week/topic-parts. Bestaande legacy-dagbestanden
 en `days/threads/sources` blijven historische output zonder conversie.
-SQLite schema-versie 2 bewaart parts, revisies, bronbytes, exacte memberships
-en immutable lokale revision-offers.
-Zie het [huidige runtimecontract](daily-runtime.md).
+Het huidige centrale SQLite-schema bewaart parts, revisies, bronbytes, exacte
+memberships en immutable lokale revision-offers. Schema en migratieketen worden
+beheerd door `database.py` en `migrations/`; de canonieke details staan in
+[databasebeheer](database.md). Zie het [huidige runtimecontract](daily-runtime.md).
 
 Nog niet geïmplementeerd: daadwerkelijke Leonardo-calls, rolling
 dossierstate, dossiers, Kuifje, callbudgetten, aanbiedplanning en
@@ -125,9 +126,10 @@ de vorige actieve revisie intact. Orphans zijn geen geregistreerde provenance.
 
 De stabiele identiteit is week/topic/part; het schema bewaart revisies en
 bronposities afzonderlijk. Het bronarchief bewaart exacte UTF-8 bytes zonder
-levensduurafhankelijkheid van ingress_queue. `PRAGMA user_version=2` migreert
-in-place zonder legacyrows te transformeren. Tabelnamen en bestandslayout staan
-in [audit-trail](audit-trail.md#partschema-versie-2) en [runtime](daily-runtime.md).
+levensduurafhankelijkheid van ingress_queue. De canonieke migratieketen behoudt
+bestaande legacyrijen; zie [databasebeheer](database.md) voor schema en migraties.
+Het partcontract en de bestandslayout staan in
+[audit-trail](audit-trail.md#partmodel-en-provenance) en [runtime](daily-runtime.md).
 
 ## Rolling state als contract
 

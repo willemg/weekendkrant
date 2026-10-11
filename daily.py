@@ -11,7 +11,8 @@ from zoneinfo import ZoneInfo
 
 from ariadne import LOCK_PATH, runtime_lock, week_name
 from ingress_queue import IngressQueue
-from parts import PartStore, migrate, weave
+from parts import PartStore, weave
+from database import migrate
 
 DB_PATH = Path('/home/weekendkrant/weekendkrant.sqlite3')
 OUTPUT_PATH = Path('/home/weekendkrant/draden')
@@ -60,26 +61,8 @@ def database(path):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     db = sqlite3.connect(path)
-    db.execute('PRAGMA foreign_keys=ON')
-    db.executescript('''
-        CREATE TABLE IF NOT EXISTS days (
-            day TEXT PRIMARY KEY, week TEXT NOT NULL, status TEXT NOT NULL,
-            commit_sha TEXT, manifest_sha256 TEXT, error TEXT);
-        CREATE TABLE IF NOT EXISTS attempts (
-            id INTEGER PRIMARY KEY, day TEXT NOT NULL, status TEXT NOT NULL,
-            error TEXT, recorded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
-        CREATE TABLE IF NOT EXISTS threads (
-            path TEXT PRIMARY KEY, day TEXT NOT NULL REFERENCES days(day),
-            topic INTEGER NOT NULL, part INTEGER NOT NULL, sha256 TEXT NOT NULL,
-            tokens INTEGER NOT NULL, tokenizer TEXT NOT NULL, reserved_tokens INTEGER NOT NULL);
-        CREATE TABLE IF NOT EXISTS sources (
-            day TEXT NOT NULL REFERENCES days(day), source_path TEXT NOT NULL,
-            sha256 TEXT NOT NULL, thread_path TEXT NOT NULL REFERENCES threads(path),
-            position INTEGER NOT NULL, PRIMARY KEY(day, source_path));
-    ''')
     try:
         migrate(db)
-        IngressQueue(path)
     except Exception:
         db.close()
         raise
