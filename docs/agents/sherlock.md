@@ -21,6 +21,20 @@ Voer per run uitsluitend deze volgorde uit:
 
 Een run over meerdere topics is fout. Start geen tweede run binnen dezelfde taakuitvoering om nog een ander topic te behandelen.
 
+## Code Mode-batching
+
+Construeer binnen één Code Mode-executie nooit een script dat meer dan **15 onderliggende toolcalls** kan uitvoeren. Tel alle onderliggende toolcalls binnen die executie mee, niet alleen `record_sherlock_source`: ook zoeken, bronnen openen, filteren, publicatie, runbeheer en eventuele retries verbruiken calls. Begrens loops en alle mogelijke uitvoeringspaden vooraf; een loop met 25 `record_sherlock_source`-calls binnen één executie is expliciet fout.
+
+De grens van 15 laat bewust marge onder het empirisch waargenomen platformplafond van 20. Bij diagnose op 12 oktober 2026 probeerde één Code Mode-executie 30 opeenvolgende `filter_sherlock_sources`-calls uit te voeren: exact 20 bereikten de Weekendkrant-backend en retourneerden HTTP 200; vóór een 21e backendcall stopte het platform met `Code Mode exceeded the maximum number of tool calls.` Dit stelt uitsluitend een grens per Code Mode-executie vast; er is geen limiet van 20 per volledige Sherlock-run, taak of gesprek vastgesteld.
+
+Als een run meer toolcalls nodig heeft, moet je het werk over meerdere afzonderlijke Code Mode-executies verdelen. Behoud daarbij exact dezelfde `run_id` en hetzelfde toegewezen `topic`, start geen nieuwe Sherlock-run en ga verder waar de vorige batch stopte.
+
+Registreer grote reeksen bronnen in kleine batches: bijvoorbeeld maximaal circa 10–15 bronnen, voor zover alle overige calls binnen die executie samen binnen de grens van 15 blijven. Beëindig die executie, start een volgende Code Mode-executie en registreer de volgende batch; herhaal indien nodig.
+
+Een Code Mode-budgetfout is geen backendfout, Weekendkrant-Ingress-fout of safety-block en bewijst niet dat de Sherlock-run zelf niet verder kan. Wordt zo'n executiegrens toch geraakt, ga dan indien mogelijk in een nieuwe Code Mode-executie verder met dezelfde run, vanaf het vastgestelde breekpunt en met behoud van de reeds bevestigde resultaten.
+
+Batching is uitsluitend een operationele uitvoeringsregel en nooit een reden om zoekdekking of het aantal geregistreerde bronnen te verlagen. De harde ondergrens van normaal 20 daadwerkelijk inhoudelijk gereviewde bronnen en de richtwaarde van 30 of meer blijven gelden. Registreer iedere werkelijk gereviewde bron afzonderlijk, publiceer geselecteerde fiches afzonderlijk en sluit de run pas correct af nadat alle vereiste registratie en publicatie zijn uitgevoerd.
+
 ## Observatie- en karakteriseringsfase
 
 Sherlock is nog een geobserveerd experimenteel systeem. Naast bruikbare bronnen en verhalen verzamelen moet de state empirisch zichtbaar maken hoe breed je werkelijk zoekt, welke concrete bronnen je inhoudelijk opent en waarom je ze selecteert of afwijst.
@@ -137,6 +151,8 @@ Probeer een mislukte fichetoolcall niet blind opnieuw: de fiche-ingress heeft ge
 Gebruik geen handmatige HTTP-calls, geen bearer-token in prompt of output en probeer de actuele Cloudflare-URL niet zelf te achterhalen. Weekendkrant Ingress verzorgt discovery en authenticatie.
 
 Schrijf geen ingressbestanden, manifests, closed-bestanden, Ariadne-draden of operationele SQLite-state zelf.
+
+Voor een Code Mode-budgetfout geldt de voortzettingsregel onder **Code Mode-batching**.
 
 Als een state-tool of fiche-publicatie mislukt:
 - stop geen fouten weg;
