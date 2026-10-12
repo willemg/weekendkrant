@@ -5,12 +5,22 @@ from dataclasses import dataclass, field
 import hmac
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
+import logging
 import os
 from pathlib import Path
 import sqlite3
 
 from ingress_queue import IngressQueue
 from sherlock_state import SherlockState
+
+
+TOOL_ROUTES = {
+    '/ingress': 'submit_weekendkrant_fiche',
+    '/sherlock/runs': 'start_sherlock_run',
+    '/sherlock/sources/filter': 'filter_sherlock_sources',
+    '/sherlock/sources': 'record_sherlock_source',
+    '/sherlock/runs/finish': 'finish_sherlock_run',
+}
 
 
 class PayloadTooLarge(Exception):
@@ -53,13 +63,35 @@ def create_server(config):
 
         def reply(self, status, body):
             data = json.dumps(body).encode('utf-8')
+            if getattr(self, 'audit_tool', None):
+                # Ook authenticatie- en parsefouten hebben de backend bereikt.
+                if not self.audit_received:
+                    self.audit_event('received')
             self.send_response(status)
             self.send_header('Content-Type', 'application/json; charset=utf-8')
             self.send_header('Content-Length', str(len(data)))
             if status == 401:
                 self.send_header('WWW-Authenticate', 'Bearer')
             self.end_headers()
+            if getattr(self, 'audit_tool', None):
+                if self.audit_tool == 'start_sherlock_run' and status == 201:
+                    self.audit_run_id = body['run_id']
+                # De HTTP-status is verstuurd; log geen response-inhoud.
+                self.audit_event('finished', status)
             self.wfile.write(data)
+
+        def audit_event(self, phase, status=None):
+            message = 'weekendkrant_tool_call phase=%s tool=%s'
+            values = [phase, self.audit_tool]
+            if self.audit_run_id is not None:
+                message += ' run_id=%s'
+                values.append(self.audit_run_id)
+            if status is not None:
+                message += ' http_status=%s'
+                values.append(status)
+            logging.getLogger(__name__).info(message, *values)
+            if phase == 'received':
+                self.audit_received = True
 
         def do_GET(self):
             if self.path != '/health':
@@ -73,9 +105,10 @@ def create_server(config):
             self.reply(200, {'status': 'ok', 'pending': count})
 
         def do_POST(self):
-            routes = {'/ingress', '/sherlock/runs', '/sherlock/sources/filter',
-                      '/sherlock/sources', '/sherlock/runs/finish'}
-            if self.path not in routes:
+            self.audit_tool = TOOL_ROUTES.get(self.path)
+            self.audit_run_id = None
+            self.audit_received = False
+            if self.audit_tool is None:
                 self.reply(404, {'error': 'not_found'})
                 return
             authorization = self.headers.get('Authorization', '')
@@ -91,6 +124,12 @@ def create_server(config):
             except (ValueError, TypeError, UnicodeError, RecursionError):
                 self.reply(400, {'error': 'invalid_json_object'})
                 return
+            if self.audit_tool in ('record_sherlock_source', 'finish_sherlock_run'):
+                # Alleen een integer is metadata; ongeldige waarden kunnen inhoud bevatten.
+                run_id = payload.get('run_id')
+                if type(run_id) is int:
+                    self.audit_run_id = run_id
+            self.audit_event('received')
             if self.path == '/ingress':
                 try:
                     item_id = queue.add(payload)
@@ -166,6 +205,8 @@ def create_server(config):
 
 
 def main(argv=None):
+    logging.basicConfig(level=logging.INFO,
+                        format='%(asctime)s %(levelname)s %(name)s %(message)s')
     try:
         config = Config.from_environment(argv)
     except ValueError as error:
@@ -179,3 +220,4 @@ def main(argv=None):
 
 if __name__ == '__main__':
     main()
+

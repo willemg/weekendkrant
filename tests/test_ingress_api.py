@@ -142,6 +142,111 @@ class HTTPTests(unittest.TestCase):
             status, body = self.request('POST', '/sherlock/runs', '{}', self.token)
         self.assertEqual((status, body), (503, {'error': 'database_unavailable'}))
 
+    def audit_request(self, path, payload, tool, status, body, run_id=None,
+                      finished_run_id=None, token=None):
+        with self.assertLogs('ingress_api', level='INFO') as logs:
+            result = self.request('POST', path, json.dumps(payload),
+                                  self.token if token is None else token)
+        self.assertEqual(result, (status, body))
+        received = 'weekendkrant_tool_call phase=received tool=' + tool
+        finished = 'weekendkrant_tool_call phase=finished tool=' + tool
+        if run_id is not None:
+            received += ' run_id=' + str(run_id)
+        if finished_run_id is None:
+            finished_run_id = run_id
+        if finished_run_id is not None:
+            finished += ' run_id=' + str(finished_run_id)
+        finished += ' http_status=' + str(status)
+        self.assertEqual([record.getMessage() for record in logs.records],
+                         [received, finished])
+        self.assertTrue(all(record.created > 0 for record in logs.records))
+        audit = '\n'.join(logs.output)
+        self.assertNotIn(self.token, audit)
+        return audit
+
+    def start_audit_run(self):
+        status, started = self.request('POST', '/sherlock/runs', '{}', self.token)
+        self.assertEqual(status, 201)
+        return started['run_id']
+
+    def test_audit_start_logs_created_run_only_on_finished(self):
+        self.audit_request('/sherlock/runs', {}, 'start_sherlock_run', 201,
+                           {'run_id': 1, 'topic': 1}, finished_run_id=1)
+
+    def test_audit_record_source_logs_metadata_without_content(self):
+        run_id = self.start_audit_run()
+        payload = {'run_id': run_id, 'topic': 1,
+                   'url': 'https://example.com/private-audit-source',
+                   'title': 'Geheime testtitel', 'outcome': 'afgewezen',
+                   'rationale': 'Geheime testmotivatie'}
+        audit = self.audit_request('/sherlock/sources', payload,
+                                   'record_sherlock_source', 201,
+                                   {'canonical_url': payload['url']}, run_id)
+        for field in ('url', 'title', 'outcome', 'rationale'):
+            self.assertNotIn(payload[field], audit)
+
+    def test_audit_finish_logs_run_and_success_status(self):
+        run_id = self.start_audit_run()
+        for state, status in (('completed', 200), ('failed', 409)):
+            with self.subTest(state=state):
+                body = ({'run_id': run_id, 'status': state} if status == 200
+                        else {'error': 'run_conflict'})
+                self.audit_request('/sherlock/runs/finish',
+                                   {'run_id': run_id, 'status': state},
+                                   'finish_sherlock_run', status, body, run_id)
+
+    def test_audit_filter_has_no_run_id_or_urls(self):
+        url = 'https://example.com/private-filter-source'
+        audit = self.audit_request('/sherlock/sources/filter', {'urls': [url]},
+                                   'filter_sherlock_sources', 200, {'unreviewed': [url]})
+        self.assertNotIn('run_id=', audit)
+        self.assertNotIn(url, audit)
+
+    def test_audit_ingress_has_no_run_id_or_payload(self):
+        payload = {'summary': 'Vertrouwelijke fiche', 'token': 'fictief-geheim-token',
+                   'url': 'https://example.com/private-fiche',
+                   'rationale': 'Vertrouwelijke rationale', 'run_id': 987}
+        audit = self.audit_request('/ingress', payload, 'submit_weekendkrant_fiche',
+                                   201, {'id': 1})
+        self.assertNotIn('run_id=', audit)
+        for value in payload.values():
+            self.assertNotIn(str(value), audit)
+
+    def test_audit_database_failure_still_logs_received_and_finished(self):
+        with patch('ingress_api.SherlockState.start_next_run',
+                   side_effect=sqlite3.OperationalError('Geheime foutinhoud')):
+            audit = self.audit_request('/sherlock/runs', {}, 'start_sherlock_run',
+                                       503, {'error': 'database_unavailable'})
+        self.assertNotIn('Geheime foutinhoud', audit)
+
+    def test_audit_invalid_run_id_cannot_inject_payload_into_log(self):
+        for run_id in ('secret\nphase=finished', True, {'secret': 'value'}):
+            with self.subTest(run_id=run_id):
+                self.audit_request('/sherlock/runs/finish',
+                                   {'run_id': run_id, 'status': 'completed'},
+                                   'finish_sherlock_run', 400, {'error': 'invalid_request'})
+
+    def test_audit_unauthorized_request_does_not_log_bearer_value(self):
+        token = 'fictieve-authorization-token'
+        audit = self.audit_request('/ingress', {}, 'submit_weekendkrant_fiche',
+                                   401, {'error': 'unauthorized'}, token=token)
+        self.assertNotIn(token, audit)
+
+    def test_audit_malformed_json_is_received_and_finished(self):
+        with self.assertLogs('ingress_api', level='INFO') as logs:
+            result = self.request('POST', '/ingress', '{', self.token)
+        self.assertEqual(result, (400, {'error': 'invalid_json_object'}))
+        self.assertEqual([r.getMessage() for r in logs.records], [
+            'weekendkrant_tool_call phase=received tool=submit_weekendkrant_fiche',
+            'weekendkrant_tool_call phase=finished tool=submit_weekendkrant_fiche http_status=400'])
+
+    def test_audit_excludes_health_unknown_routes_and_other_methods(self):
+        with patch('ingress_api.logging.getLogger') as logger:
+            self.request('GET', '/health')
+            self.request('GET', '/ingress')
+            self.request('POST', '/unknown', '{}', self.token)
+        logger.assert_not_called()
+
 
 class ConfigTests(unittest.TestCase):
     def test_environment_and_overrides_without_opening_runtime_db(self):
@@ -161,3 +266,4 @@ class ConfigTests(unittest.TestCase):
         for env in ({}, {'WEEKENDKRANT_INGRESS_TOKEN': ''}):
             with patch.dict('os.environ', env, clear=True), self.assertRaises(ValueError):
                 Config.from_environment([])
+
