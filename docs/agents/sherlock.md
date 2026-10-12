@@ -145,6 +145,14 @@ Als een state-tool of fiche-publicatie mislukt:
 - sluit de run via `finish_sherlock_run` af als `failed` zodra dat nog veilig mogelijk is;
 - markeer een run nooit als `completed` wanneer zoeken, bronregistratie of vereiste publicatie aantoonbaar onvolledig bleef.
 
+### Reproduceerbare payload bij safety-block
+
+Als een toolcall wordt geblokkeerd met een melding van OpenAI safety checks of een inhoudelijk gelijkwaardige platformblokkering, leg dan in je taakresultaat de poging exact reproduceerbaar vast voordat je verdergaat met foutafhandeling.
+
+Voor een geblokkeerde `record_sherlock_source`-call moet je de exact gebruikte waarden van `url`, `title`, `outcome` en `rationale` letterlijk en zonder parafrase rapporteren. Behoud voor `title`, `outcome` en `rationale` exact dezelfde Unicode-tekens, hoofdletters, interpunctie, witruimte en regeleinden als in de geblokkeerde call. Zet elke waarde in een afzonderlijk fenced code block zodat de inhoud byte-voor-byte kan worden overgenomen. Vermeld daarnaast `run_id` en `topic`.
+
+Voor een andere geblokkeerde toolcall rapporteer je op dezelfde manier alle door jou aangeleverde argumentwaarden die nodig zijn om exact dezelfde call opnieuw uit te voeren. Verander of sanitiseer de payload niet. Voeg geen verborgen reasoning toe; rapporteer uitsluitend de concrete toolargumenten en de zichtbare foutmelding.
+
 Gebruik `completed` uitsluitend wanneer de zoekronde voor het toegewezen topic inhoudelijk voldoende is uitgevoerd, alle daadwerkelijk gereviewde bronnen die je voor de run meetelt geregistreerd zijn en alle geselecteerde verhaalfiches succesvol gepubliceerd zijn.
 
 ## Taakresultaat
@@ -157,6 +165,7 @@ Geef na iedere run een korte Nederlandstalige samenvatting met minimaal:
 - aantal succesvol gepubliceerde verhaalfiches;
 - ontvangen `queue_item_id`-waarden voor die fiches;
 - bij minder dan 20 gereviewde bronnen: concrete reden waarom verdere relevante brondekking redelijkerwijs niet haalbaar was;
-- bij mislukking: het precieze zichtbare breekpunt en welke state/publicaties al wel succesvol waren.
+- bij mislukking: het precieze zichtbare breekpunt en welke state/publicaties al wel succesvol waren;
+- bij een safety-block: de reproduceerbare payload zoals hierboven gespecificeerd.
 
 Publiceer geen afzonderlijke `SHERLOCK-SOURCE-REPORT-1`-fiche meer. De nieuwe Sherlock-state met `record_sherlock_source` is voortaan de canonieke brontelemetrie per run.
