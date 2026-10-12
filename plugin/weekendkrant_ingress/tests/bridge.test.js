@@ -39,15 +39,45 @@ test('unauthenticated MCP write denied',async()=>{
 const record={run_id:17,topic:2,url:'https://example.com/a',outcome:'selected',rationale:'Primary evidence'};
 const cases=[['start_sherlock_run',{},'/sherlock/runs',{run_id:17,topic:2},{status:'success',run_id:17,topic:2}],['filter_sherlock_sources',{urls:['https://example.com/a?b=1']},'/sherlock/sources/filter',{unreviewed:['https://example.com/a?b=1']},{status:'success',unreviewed:['https://example.com/a?b=1']}],['record_sherlock_source',record,'/sherlock/sources',{canonical_url:record.url},{status:'success',canonical_url:record.url}],['finish_sherlock_run',{run_id:17,status:'completed'},'/sherlock/runs/finish',{run_id:17,status:'completed'},{status:'success',run_id:17,run_status:'completed'}]];
 const invoke=(name,args,result)=>{let n=0;return callTool(name,args,env,async()=>n++?Response.json(result):Response.json({url:good}));};
-test('exact five tool schemas and annotations',async()=>{
+test('exact five tool names and schemas',async()=>{
  const r=await worker.fetch(new Request('https://site.test/mcp',{method:'POST',body:JSON.stringify({id:1,method:'tools/list'})}),{});
  assert.deepEqual((await r.json()).result.tools,TOOLS);
  assert.deepEqual(TOOLS.map(t=>t.name),['submit_weekendkrant_fiche',...cases.map(c=>c[0])]);
- for(const t of TOOLS){assert.equal(t.annotations.readOnlyHint,t.name==='filter_sherlock_sources');assert.equal(t.annotations.openWorldHint,true);if(t.name!=='submit_weekendkrant_fiche')assert.equal(t.inputSchema.additionalProperties,false);}
+ for(const t of TOOLS){if(t.name!=='submit_weekendkrant_fiche')assert.equal(t.inputSchema.additionalProperties,false);}
  assert.deepEqual(TOOLS[1].inputSchema.properties,{});
  assert.equal(TOOLS[2].inputSchema.properties.urls.maxItems,50);
  assert.deepEqual(TOOLS[3].inputSchema.required,['run_id','topic','url','outcome','rationale']);
  assert.deepEqual(TOOLS[4].inputSchema.properties.status.enum,['completed','failed']);
+});
+const annotationMatrix=[
+ ['submit_weekendkrant_fiche',false,false,false,false],
+ ['start_sherlock_run',false,false,false,false],
+ ['filter_sherlock_sources',true,false,true,false],
+ ['record_sherlock_source',false,false,true,false],
+ ['finish_sherlock_run',false,true,true,false]
+];
+for(const [name,readOnlyHint,destructiveHint,idempotentHint,openWorldHint] of annotationMatrix)test(`${name} advertises exact bounded annotations`,async()=>{
+ const r=await worker.fetch(new Request('https://site.test/mcp',{method:'POST',body:JSON.stringify({id:1,method:'tools/list'})}),{});
+ const tool=(await r.json()).result.tools.find(t=>t.name===name);
+ assert.deepEqual(tool.annotations,{readOnlyHint,destructiveHint,idempotentHint,openWorldHint});
+});
+test('descriptions identify the private workspace and bounded effects',()=>{
+ const descriptions=Object.fromEntries(TOOLS.map(t=>[t.name,t.description]));
+ for(const description of Object.values(descriptions))assert.match(description,/private Weekendkrant/);
+ assert.match(descriptions.submit_weekendkrant_fiche,/ingressqueue/);
+ assert.match(descriptions.submit_weekendkrant_fiche,/publiceert niets publiek/);
+ assert.match(descriptions.start_sherlock_run,/runstate/);
+ assert.match(descriptions.start_sherlock_run,/maakt.*aan/);
+ assert.match(descriptions.filter_sherlock_sources,/leest uitsluitend/);
+ assert.match(descriptions.filter_sherlock_sources,/wijzigt niets/);
+ assert.match(descriptions.filter_sherlock_sources,/URLs.*niet.*opgehaald.*bezocht/);
+ assert.match(descriptions.record_sherlock_source,/auditmetadata/);
+ assert.match(descriptions.record_sherlock_source,/inhoudelijk gereviewd/);
+ assert.match(descriptions.record_sherlock_source,/bronidentiteit.*opgeslagen.*gecanonicaliseerd/);
+ assert.match(descriptions.record_sherlock_source,/bezoekt.*URL niet/);
+ assert.match(descriptions.record_sherlock_source,/verstuurt of publiceert niets.*URL.*externe partij/);
+ assert.match(descriptions.finish_sherlock_run,/runstate.*definitief/);
+ assert.match(descriptions.finish_sherlock_run,/niet.*heropend.*aangevuld/);
 });
 test('strict discovery rejects normalized explicit ports, query, fragment and paths',()=>{
  for(const u of ['http://fictional.trycloudflare.com/ingress','https://fictional.trycloudflare.com/','https://fictional.trycloudflare.com/other','https://fictional.trycloudflare.com/ingress?x=1','https://fictional.trycloudflare.com/ingress#x','https://user@fictional.trycloudflare.com/ingress','https://fictional.trycloudflare.com:444/ingress','https://fictional.trycloudflare.com:443/ingress','https://a.b.trycloudflare.com/ingress','https://fictional.trycloudflare.com/ingress?','https://fictional.trycloudflare.com/ingress#'])assert.equal(endpoint(u),null,u);
