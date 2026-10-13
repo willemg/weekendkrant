@@ -34,6 +34,15 @@ nemen; telemetry gebruikt geen write-transactie en geen `immutable`-aanname.
   Failed/running reviews tellen mee in het cohorttotaal en de topicverdeling,
   maar niet in completed-gemiddelden. Zonder completed runs zijn die statistieken
   `null`, niet nul. Topics 1, 2 en 3 worden afzonderlijk weergegeven.
+- `published_fiches` telt alleen expliciete `sherlock_fiches`-koppelingen van de
+  geselecteerde runs, ook bij failed/running runs. `by_run` bevat run-ID, topic,
+  status, geregistreerde sources, fiche-aantal en geordende `queue_item_ids`.
+  Publicatie betekent hier persistente ingressontvangst, niet publiek publiceren
+  of succesvolle Ariadne-verwerking. Reviewaantallen worden niet vermenigvuldigd
+  door het aantal fiches. `queue.unattributed_items` telt alle queue-items zonder
+  expliciete producent, ongeacht het Sherlock-venster. Een nul fichetelling is
+  nul bekende koppelingen; legacy-output is onbekend. Op schema 4 zonder mapping-
+  tabel blijven fichemetingen `null` met waarschuwing; telemetry migreert niets.
 - Looptijd is `finished_at - started_at` in seconden, uitsluitend voor completed
   runs met betrouwbare timestamps. Gemiddelde, mediaan en aantal geldige samples
   worden getoond. Er wordt geen actieve uitvoeringsduur uit `running` afgeleid.
@@ -60,10 +69,10 @@ onbruikbaar schema geeft een expliciete CLI-fout op stderr en exitcode 1.
 
 ## Grenzen van de baseline
 
-De bestaande DB bevat geen canonieke fiche→run/job-koppeling, geen generieke
-jobbacklog en geen materialisatietimestamps of werkelijk modelgebruik. Daarom
-kan dit rapport geen fiche-aantal per producerende run, groei per tijdseenheid of
-allowancegebruik berekenen. Ongeregistreerde reviews zijn evenmin meetbaar.
+Schema 5 bevat een expliciete fiche→Sherlock-run-koppeling, maar geen generieke
+jobkoppeling/-backlog en geen materialisatietimestamps of werkelijk modelgebruik.
+Daarom kan dit rapport geen groei per tijdseenheid of allowancegebruik berekenen.
+Ongeregistreerde reviews en producenten van legacy/ongekoppelde fiches zijn evenmin meetbaar.
 De huidige tokenvoorraad is geen historische groeimeting. Het rapport meldt
 deze beperkingen in `limitations`; een productiebasislijn moet nog verzameld worden.
 Zie [fase 2 van het migratieplan](intelligent-worker-orchestration.md#fase-2--ontbrekende-telemetrie-bepalen).

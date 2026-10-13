@@ -8,6 +8,10 @@ import sqlite3
 from database import migrate
 
 
+class FicheRunConflict(ValueError):
+    """Publication cannot be attributed to this run/topic/state."""
+
+
 class IngressQueue:
     def __init__(self, db_path):
         self.db_path = Path(db_path)
@@ -61,16 +65,33 @@ class IngressQueue:
             if cursor.rowcount != 1:
                 raise ValueError(f'Queue-item niet pending: queue:{identity}')
 
-    def add(self, payload):
+    def add(self, payload, run_id=None):
         if not isinstance(payload, dict):
             raise ValueError('Payload moet een JSON-object zijn')
+        if run_id is not None:
+            if type(run_id) is not int or not 0 < run_id <= 9007199254740991:
+                raise ValueError('run_id moet een positieve safe integer zijn')
+            from datetime import date
+            from daily import queue_fiche
+            day = date.fromisoformat(payload.get('date', ''))
+            queue_fiche(0, payload, day)
         data = json.dumps(payload, ensure_ascii=False, allow_nan=False)
         received_at = datetime.now(timezone.utc).isoformat()
         with closing(sqlite3.connect(self.db_path)) as db, db:
+            db.execute('PRAGMA foreign_keys=ON')
+            db.execute('BEGIN IMMEDIATE')
+            if run_id is not None:
+                run = db.execute('SELECT topic,status FROM sherlock_runs WHERE id=?', (run_id,)).fetchone()
+                if run is None or run != (payload['topic'], 'running'):
+                    raise FicheRunConflict('Fiche vereist een running run met hetzelfde topic')
             cursor = db.execute(
                 'INSERT INTO ingress_queue (received_at, payload) VALUES (?, ?)',
                 (received_at, data))
-            return cursor.lastrowid
+            identity = cursor.lastrowid
+            if run_id is not None:
+                db.execute('INSERT INTO sherlock_fiches(queue_item_id,run_id) VALUES (?,?)',
+                           (identity, run_id))
+            return identity
 
     def pending_count(self):
         with closing(sqlite3.connect(self.db_path)) as db:

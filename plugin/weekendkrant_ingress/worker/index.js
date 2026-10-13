@@ -9,7 +9,7 @@ const integer={type:'integer',minimum:1,maximum:Number.MAX_SAFE_INTEGER};
 const topicSchema={type:'integer',enum:[1,2,3]};
 const textSchema={type:'string',minLength:1,pattern:'\\S'};
 const schema=(properties,required=Object.keys(properties))=>({type:'object',properties,required,additionalProperties:false});
-export const TOOL={name:'submit_weekendkrant_fiche',description:'Sla één bronfiche uitsluitend op in de private Weekendkrant-ingressqueue; publiceert niets publiek. Geeft een compacte status en bij succes het queue-item-ID.',inputSchema:{type:'object',additionalProperties:true},annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:false}};
+export const TOOL={name:'submit_weekendkrant_fiche',description:'Sla één bronfiche uitsluitend op in de private Weekendkrant-ingressqueue; publiceert niets publiek. Geef voor Sherlock het huidige run_id mee als transportmetadata om de producerende run persistent te koppelen. De backend vereist dan hetzelfde topic en een running run. Geeft een compacte status en bij succes het queue-item-ID.',inputSchema:{type:'object',properties:{run_id:integer},additionalProperties:true},annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:false}};
 export const TOOLS=[TOOL,
  {name:'start_sherlock_run',description:'Start een Sherlock-run: de tool maakt uitsluitend private Weekendkrant-runstate aan; de backend kiest atomair het volgende topic. Gebruik het geretourneerde run_id en topic gedurende die run.',inputSchema:schema({}),annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:false}},
  {name:'filter_sherlock_sources',description:"Filter concrete reeds gereviewde pagina-URLs: leest uitsluitend private Weekendkrant-state en wijzigt niets. URLs zijn lookupwaarden en worden niet opgehaald of bezocht. Reserveert of registreert niets; dit is geen story-deduplicatie. Verschillende URLs over hetzelfde verhaal mogen terugkomen.",inputSchema:schema({urls:{type:'array',maxItems:50,items:{type:'string'}}}),annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false}},
@@ -51,7 +51,9 @@ async function post(path,payload,env,fetcher,legacy=false){
 }
 export async function submit(payload,env,fetcher=fetch){
  if(!object(payload))return fail('invalid_payload');
- const response=await post('/ingress',payload,env,fetcher,true);
+ const attributed=Object.hasOwn(payload,'run_id');
+ if(attributed&&!positive(payload.run_id))return fail('invalid_payload');
+ const response=await post('/ingress',payload,env,fetcher,!attributed);
  if(response.status==='error')return response;
  if(!positive(response.result.id))return fail('ingress_response_invalid');
  return {status:'success',queue_item_id:response.result.id};

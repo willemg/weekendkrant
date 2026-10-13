@@ -147,6 +147,7 @@ class DatabaseTests(unittest.TestCase):
             with sqlite3.connect(path) as db:
                 self.assertEqual(db.execute('PRAGMA user_version').fetchone(), (database.SCHEMA_VERSION,))
 
+    @patch.object(database, 'SCHEMA_VERSION', 4)
     def test_v3_to_v4_preserves_full_existing_schema_and_data(self):
         self.legacy(2)
         self.db.execute('PRAGMA user_version=3')

@@ -24,6 +24,15 @@ Er is geen automatische retentie, dagvolledigheidscontrole of queueopruiming.
 Bestaande data blijft behouden. `days` en `attempts` besturen de queue niet.
 Een lege run maakt geen afgesloten dagrecord. Zie [runtimecontract](daily-runtime.md).
 
+## Sherlock-ficheprovenance
+
+De aanvullende tabel `sherlock_fiches` bewaart per gekoppeld queue-item de
+producerende Sherlock-run. Queue-insert en koppeling worden samen gecommit;
+verwerken en runafsluiten veranderen deze immutable relatie niet. Optionele
+`run_id` is ingress-transportmetadata en komt niet in de vier-velden-fichepayload.
+Historische/ongekoppelde fiches worden niet achteraf op tijd/topic toegeschreven.
+Zie [databasebeheer](database.md) en [ingressprovenance](ingress-runtime.md#sherlock-ficheprovenance).
+
 ## Minimale kwaliteitslabels
 
 ### verified_first_pass

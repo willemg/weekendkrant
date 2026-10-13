@@ -10,7 +10,7 @@ voor de werkwijze, architecturale motivatie en deploymentidentiteit.
 
 | Tool | Input | Compact succesresultaat |
 | --- | --- | --- |
-| `submit_weekendkrant_fiche` | Willekeurig top-level JSON-object | `status`, `queue_item_id` |
+| `submit_weekendkrant_fiche` | Top-level JSON-object; optioneel positieve safe-integer `run_id` als Sherlock-transportmetadata | `status`, `queue_item_id` |
 | `start_sherlock_run` | `{}` | `status`, `run_id`, `topic` |
 | `filter_sherlock_sources` | `urls`: maximaal 50 strings | `status`, `unreviewed` |
 | `record_sherlock_source` | `run_id`, `topic`, `url`, `outcome`, `rationale`; optioneel `title` (string/null) | `status`, `canonical_url` |
@@ -19,6 +19,15 @@ voor de werkwijze, architecturale motivatie en deploymentidentiteit.
 `status` in succesresultaten is `success`. De backend kiest bij start atomair het
 volgende topic (1, 2 of 3); de plugin kiest nooit zelf een topic. Run-IDs zijn
 positieve safe integers. De vier Sherlock-inputschemas weigeren extra velden.
+
+Sherlock geeft bij fichepublicatie zijn huidige `run_id` mee. De backend vereist
+een `running` run met hetzelfde topic en slaat queue-item plus runkoppeling atomisch
+op; Ariadne blijft exact vier fichevelden lezen. `run_id` is voor legacy callers
+optioneel; historische fiches blijven ongekoppeld. Bij gekoppelde fichecalls zijn
+400/409 zichtbaar als `invalid_request`/`conflict`; legacy foutcodes blijven geldig.
+Fichepublicatie blijft niet-idempotent, ook met `run_id`. Backend eerst upgraden
+naar schema 5 voordat nieuwe plugin/instructies worden geactiveerd; zie
+[ingressprovenance en invoering](../../docs/ingress-runtime.md#sherlock-ficheprovenance).
 
 Filtering leest uitsluitend de registratie van concrete gereviewde pagina-URLs:
 geen reservering, registratie of story-deduplicatie. De plugin canonicaliseert

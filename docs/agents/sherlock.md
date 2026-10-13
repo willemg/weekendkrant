@@ -125,10 +125,16 @@ Een URL die als `unreviewed` terugkomt, telt nog niet als gereviewde bron. Pas n
 Publiceer nieuwe verhalen uitsluitend via `submit_weekendkrant_fiche`.
 
 Gebruik exact:
+- `run_id`: exact het huidige ID uit `start_sherlock_run`, als transportmetadata voor de producerende run
 - `schema_version`: integer 1
 - `topic`: exact het toegewezen topic
 - `date`: lokale Europe/Brussels-datum als `YYYY-MM-DD`
 - `content`: volledige Nederlandstalige fiche-inhoud in eenvoudige Markdown
+
+De backend koppelt `run_id` atomisch aan het nieuwe queue-item en bewaart alleen
+de vier fichevelden in de consumentenpayload. Publiceer uitsluitend zolang de
+run `running` is en met exact het toegewezen topic. Een ontbrekende, afgesloten
+of anders getopiceerde run geeft een conflict; verzin geen nieuwe run voor die fiche.
 
 Zet geen machineheader in `content`.
 

@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 import sqlite3
 
-from ingress_queue import IngressQueue
+from ingress_queue import IngressQueue, FicheRunConflict
 from sherlock_state import SherlockState
 
 
@@ -124,7 +124,7 @@ def create_server(config):
             except (ValueError, TypeError, UnicodeError, RecursionError):
                 self.reply(400, {'error': 'invalid_json_object'})
                 return
-            if self.audit_tool in ('record_sherlock_source', 'finish_sherlock_run'):
+            if self.audit_tool in ('record_sherlock_source', 'finish_sherlock_run', 'submit_weekendkrant_fiche'):
                 # Alleen een integer is metadata; ongeldige waarden kunnen inhoud bevatten.
                 run_id = payload.get('run_id')
                 if type(run_id) is int:
@@ -132,7 +132,17 @@ def create_server(config):
             self.audit_event('received')
             if self.path == '/ingress':
                 try:
-                    item_id = queue.add(payload)
+                    if 'run_id' in payload:
+                        run_id = payload['run_id']
+                        if type(run_id) is not int:
+                            raise ValueError('Invalid run_id')
+                        fiche = {key: value for key, value in payload.items() if key != 'run_id'}
+                        item_id = queue.add(fiche, run_id=run_id)
+                    else:
+                        item_id = queue.add(payload)
+                except FicheRunConflict:
+                    self.reply(409, {'error': 'run_conflict'})
+                    return
                 except (ValueError, TypeError, UnicodeError, RecursionError):
                     self.reply(400, {'error': 'invalid_json_object'})
                     return
@@ -171,7 +181,15 @@ def create_server(config):
                 raise ValueError('Incomplete body')
             def reject_constant(value):
                 raise ValueError('Invalid JSON constant')
-            payload = json.loads(raw.decode('utf-8'), parse_constant=reject_constant)
+            def unique(pairs):
+                result = {}
+                for key, value in pairs:
+                    if key in result:
+                        raise ValueError('Duplicate JSON key')
+                    result[key] = value
+                return result
+            payload = json.loads(raw.decode('utf-8'), parse_constant=reject_constant,
+                                 object_pairs_hook=unique)
             if not isinstance(payload, dict):
                 raise ValueError('Expected JSON object')
             return payload

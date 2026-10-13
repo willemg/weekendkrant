@@ -24,7 +24,7 @@ def timestamp(value):
         return None
 
 
-def run_summary(runs):
+def run_summary(runs, has_fiches=True):
     completed = [r for r in runs if r['status'] == 'completed']
     sources = [r['sources'] for r in completed]
     durations = [r['duration_seconds'] for r in completed
@@ -34,6 +34,7 @@ def run_summary(runs):
         'runs': len(runs),
         'statuses': {s: statuses[s] for s in ('completed', 'failed', 'running')},
         'registered_sources': sum(r['sources'] for r in runs),
+        'published_fiches': sum(len(r['queue_item_ids']) for r in runs) if has_fiches else None,
         'completed_sources_mean': mean(sources) if sources else None,
         'completed_sources_min': min(sources) if sources else None,
         'completed_sources_max': max(sources) if sources else None,
@@ -43,8 +44,14 @@ def run_summary(runs):
     }
 
 
-def sherlock_report(db, since, now, warnings):
+def sherlock_report(db, since, now, warnings, has_fiches):
     runs = []
+    fiches = {}
+    if has_fiches:
+        for row in db.execute('SELECT run_id,queue_item_id FROM sherlock_fiches ORDER BY queue_item_id'):
+            fiches.setdefault(row['run_id'], []).append(row['queue_item_id'])
+    else:
+        warnings.append('Ficheprovenance niet beschikbaar: tabel sherlock_fiches ontbreekt.')
     for row in db.execute('''SELECT r.id,r.topic,r.status,r.started_at,r.finished_at,
                             count(s.canonical_url) AS sources
                             FROM sherlock_runs r LEFT JOIN sherlock_sources s
@@ -56,6 +63,7 @@ def sherlock_report(db, since, now, warnings):
         if not since <= start <= now:
             continue
         run = dict(row)
+        run['queue_item_ids'] = fiches.get(row['id'], []) if has_fiches else None
         run['duration_seconds'] = None
         if row['status'] == 'completed':
             finish = timestamp(row['finished_at'])
@@ -64,8 +72,12 @@ def sherlock_report(db, since, now, warnings):
             else:
                 warnings.append('Sherlock-run %s: looptijd niet betrouwbaar bepaalbaar.' % row['id'])
         runs.append(run)
-    result = run_summary(runs)
-    result['by_topic'] = {str(t): run_summary([r for r in runs if r['topic'] == t])
+    result = run_summary(runs, has_fiches)
+    result['by_run'] = [{'run_id': r['id'], 'topic': r['topic'], 'status': r['status'],
+                         'registered_sources': r['sources'],
+                         'published_fiches': len(r['queue_item_ids']) if has_fiches else None,
+                         'queue_item_ids': r['queue_item_ids']} for r in runs]
+    result['by_topic'] = {str(t): run_summary([r for r in runs if r['topic'] == t], has_fiches)
                           for t in (1, 2, 3)}
     return result
 
@@ -132,7 +144,7 @@ def report(db_path=DB_PATH, hours=24, now=None):
         'sherlock': None, 'queue': None, 'parts': None, 'warnings': warnings,
         'limitations': [
             'Alleen geregistreerde reviews; ongeregistreerde inhoudelijke reviews zijn onbekend.',
-            'Geen canonieke fiche/run/job-koppeling: fiche-aantal per run niet bepaalbaar.',
+            'Fichetellingen omvatten alleen expliciet gekoppelde queue-items; legacy/ongekoppelde producers blijven onbekend.',
             'Geen materialisatietimestamps/usage-historiek: groeisnelheid en werkelijk modelgebruik onbekend.',
             'Geen generieke jobs: intelligente backlog niet bepaalbaar; pending is alleen ingressbacklog.',
             'Offers zijn lokale seals, geen bewijs van modelontvangst; running kan achtergelaten zijn.',
@@ -147,7 +159,7 @@ def report(db_path=DB_PATH, hours=24, now=None):
         tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         sections = (
             ('sherlock', {'sherlock_runs', 'sherlock_sources'},
-             lambda: sherlock_report(db, since, now, warnings)),
+             lambda: sherlock_report(db, since, now, warnings, 'sherlock_fiches' in tables)),
             ('queue', {'ingress_queue'}, lambda: queue_report(db, now, warnings)),
             ('parts', {'parts', 'part_revisions', 'part_offers'}, lambda: parts_report(db, warnings)),
         )
@@ -157,4 +169,7 @@ def report(db_path=DB_PATH, hours=24, now=None):
                 warnings.append('%s niet beschikbaar: ontbrekende tabellen %s.' % (name, ', '.join(sorted(missing))))
             else:
                 result[name] = collect()
+        if result['queue'] is not None:
+            result['queue']['unattributed_items'] = db.execute('''SELECT count(*) FROM ingress_queue q
+                WHERE NOT EXISTS (SELECT 1 FROM sherlock_fiches f WHERE f.queue_item_id=q.id)''').fetchone()[0] if 'sherlock_fiches' in tables else None
     return result

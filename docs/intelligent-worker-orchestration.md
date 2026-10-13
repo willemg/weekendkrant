@@ -230,7 +230,7 @@ validatie en operationele invoering.
 
 - [x] Bestaande geregistreerde Sherlock-reviews per run, status/topicverdeling en completed-looptijd read-only ontsluiten.
 - [x] Huidige queuevoorraad/leeftijd en parts, actieve tokenmetingen en lokale offers read-only tonen.
-- [ ] Gepubliceerde fiches en `queue_item_id` aan producerende run/job koppelen.
+- [x] Gepubliceerde Sherlock-fiches en `queue_item_id` aan de huidige producerende run koppelen; generieke jobkoppeling volgt pas met het jobmodel.
 - [ ] Materialisatiegroei, modelgebruik en intelligente backlog meten; toekomstige jobmetingen toevoegen.
 - [ ] Telemetrycontract en basislijn vastleggen vóór capaciteitsbeslissingen.
 
@@ -242,16 +242,18 @@ of migreert geen database en verandert geen runtime-state. Een rapport ontsluite
 is nog geen empirisch verzamelde productiebasislijn. Fase 2 blijft gedeeltelijk
 open; de overige roadmapfasen veranderen niet.
 
-Nog niet afleidbaar: niet-geregistreerde reviews, fiche-aantallen per run/job,
+Nog niet afleidbaar: niet-geregistreerde reviews, producenten van legacy/ongekoppelde fiches,
 materialisatiegroei per tijdseenheid, daadwerkelijk modelgebruik en intelligente
 jobbacklog. De ingressqueue is alleen een meetbare transportbacklog. Offers
 bewijzen geen modelontvangst en een `running` run kan achtergelaten zijn.
 
-Concreet gat: het canonieke fichecontract heeft exact `schema_version`, `topic`,
-`date` en `content`, zonder `run_id`/`job_id`. De queue bewaart geen canonieke
-producentkoppeling. Taakoutput met queue-IDs vervangt die databasekoppeling niet.
-Kies later een expliciete metadata-/protocoluitbreiding; voeg nu geen extra
-velden toe aan het strikte versie-1-consumentencontract.
+De huidige runkoppeling gebruikt optionele `run_id`-transportmetadata bij
+fichepublicatie. Schema 5 bewaart `sherlock_fiches` atomisch met de queue-insert;
+de opgeslagen consumentenpayload blijft exact `schema_version`, `topic`, `date`
+en `content`. Telemetry toont expliciet gekoppelde fiches en queue-IDs per run
+en topic. Historische/ongekoppelde fiches krijgen geen geraden producent.
+Er is nog geen `job_id`. Backend, plugin en actieve Sherlock-instructies moeten
+na merge in die volgorde worden bijgewerkt; deze PR voert dat niet operationeel uit.
 
 ### Fase 3 — generiek job- en attemptmodel
 

@@ -75,7 +75,7 @@ Malformed JSON, onjuist schema en ongeldige URLs geven `400`; databasefouten gev
 `503`. Sherlock-state is bewust source-level: alleen de concrete pagina-URL wordt
 onthouden. Een andere pagina over hetzelfde verhaal blijft een afzonderlijke bron;
 er is geen story-deduplicatie. Zie [databasebeheer](database.md) voor het schema
-en de bestaande schema-versie 4.
+en de actuele schemaversie.
 
 De MCP-plugin met vijf tools is geïmplementeerd in `plugin/weekendkrant_ingress/`:
 `submit_weekendkrant_fiche`, `start_sherlock_run`, `filter_sherlock_sources`,
@@ -84,6 +84,29 @@ geen bewijs van actieve publicatie in Sites. Zie
 [pluginbronbeheer en deployment](plugin-deployment.md) voor de canonieke bron en
 de afzonderlijke synchronisatie/publicatie. Scheduler en agentprompt worden
 hiermee niet gewijzigd.
+
+### Sherlock-ficheprovenance
+
+`POST /ingress` accepteert optioneel een positieve safe-integer `run_id` naast
+`schema_version`, `topic`, `date` en `content`. Dit is transportmetadata, geen
+extra veld in de opgeslagen versie-1-consumentenpayload. De backend valideert
+bij gekoppelde publicatie het strikte fichecontract en verwijdert `run_id` uit
+de queuepayload. Queue-item en immutable `sherlock_fiches`-koppeling worden
+atomisch opgeslagen; HTTP 201 met `id` volgt pas na commit.
+Onbekende/afgesloten run of topic-mismatch geeft 409 `run_conflict` zonder insert.
+Een ongeldige `run_id` (ook null/bool), ongeldig fichecontract of dubbele JSON-key
+geeft 400. Legacy ingress zonder `run_id` blijft beschikbaar en ongeattribueerd.
+De koppeling is geen idempotency-sleutel: iedere geslaagde herhaling maakt opnieuw
+een fiche. De plugin geeft nog steeds `queue_item_id` terug. Gekoppelde calls
+onderscheiden `conflict`/`invalid_request`; legacy calls houden hun foutcodes.
+Request-audit logt voor gekoppelde ingress ook integer `run_id`, geen fiche-inhoud.
+
+Invoering na merge: consistente DB-back-up en centrale migratie naar versie 5,
+app/API bijwerken/herstarten, dan plugin synchroniseren/publiceren volgens het
+[deploymentcontract](plugin-deployment.md), daarna Sherlock met de gemergede
+canonieke instructies synchroniseren. Een nieuwe caller mag `run_id` pas sturen
+als de backend dat ondersteunt; een oude backend zou metadata als fiche-inhoud
+opslaan. Deze PR doet geen deployment of operationele instructiesync.
 
 Stuur UTF-8 JSON met Content-Length, bij voorkeur `Content-Type: application/json`.
 Requests krijgen een sockettimeout van 10 seconden. Deze kleine standaardbibliotheek-
