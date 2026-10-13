@@ -186,6 +186,8 @@ en bronnen. Dit is doelontwerp, geen bestaande modelruntime.
 - gebeurtenissen in context plaatsen;
 - patronen herkennen;
 - tegenstrijdigheden zichtbaar maken;
+- op dossier-/verhaalniveau de breedte en onafhankelijkheid van bronnen en perspectieven bewaken;
+- bij ontbrekende relevante spreiding of onafhankelijke bevestiging een begrensde Kuifje-missie voorstellen om het concrete gat gericht te onderzoeken;
 - onderscheid maken tussen feit, inferentie en interpretatie;
 - een inhoudelijk coherent verhaal of bijgewerkt dossier maken;
 - compacte rolling state schrijven met bronverwijzingen, tegenbewijs en open vragen;
@@ -193,6 +195,10 @@ en bronnen. Dit is doelontwerp, geen bestaande modelruntime.
 - op verzoek de eigen state comprimeren met behoud van onzekerheden en provenance.
 
 Leonardo krijgt zoveel redactionele vrijheid als nuttig is, maar mag feitelijke claims niet losmaken van het bronmateriaal.
+
+Sherlock blijft breed scouten; Leonardo beoordeelt de inhoudelijke lacunes in
+het samengestelde dossier of verhaal. Ariadne beoordeelt die lacunes nooit zelf;
+zij valideert alleen de expliciete missie, koppelingen en technische budgetgrenzen.
 
 De standaardkandidaat voor Leonardo is een middenmodel zoals Terra, om kwaliteit en kost in balans te houden.
 
