@@ -97,6 +97,45 @@ Voorbeeld van één event:
 {"materialized_at":"2026-10-13T17:00:00+00:00","topic":1,"queue_items":2,"content_bytes":3,"queue_item_ids":[10,11]}
 ```
 
+## Modelgebruik: beschikbaarheid van echte metingen
+
+`model_usage` maakt zichtbaar dat daadwerkelijke usage in de huidige runtime
+niet beschikbaar is. `status: unavailable` en `null` voor `model_id`, input-,
+output-, reasoning- en cached-inputtokens betekenen **onbekend**, ook bij een
+lege database of een periode zonder geregistreerde runs. Dit zijn geen metingen
+van nul verbruik. `allowance` heeft dezelfde
+status met onbekende `used`, `remaining` en `unit`; er wordt geen tokenbudget,
+percentage of resterende tijd berekend. Voor lokale Ariadne staat
+`status: not_applicable`: die deterministische verwerking doet geen modelcalls.
+
+`source: current_runtime_contract` beschrijft de beschikbaarheid van metering in
+de onderzochte huidige koppelingen, geen providerreceipt of live productquotum.
+De CLI blijft lokaal/read-only en vraagt geen scheduled-task- of provider-API op.
+`--hours` maakt deze onbekende waarden niet ineens meetbaar.
+
+### Audit van de huidige runtime (13 oktober 2026)
+
+| Onderzocht contract | Wat beschikbaar is | Wat het niet meet |
+| --- | --- | --- |
+| `sherlock_runs` / `sherlock_sources` / `sherlock_fiches` | Runstatus en -tijden, geregistreerde reviews, gekoppelde fiches/queue-IDs | Model-ID, provider-input/output/reasoning/cacheusage, kosten of allowance |
+| Ingress/MCP-request en succesresponses | Fiche-inhoud en expliciete auditmetadata; run/topic, queue-ID, canonical URL, filterresultaat of finishstatus | Providerusage; de brug start zelf geen modelcall |
+| Compacte backend-requestaudit | Toolnaam, received/finished, waar beschikbaar run-ID en HTTP-status | Toolcallaantal als modelverbruik, tokens of kosten |
+| Beschikbare scheduled-taskmetadata, read-only geïnspecteerd | Taak/prompt, planning, enabled-status en laatste uitvoer-/wijzigingsmoment | Geen usage-, token-, allowance-, model- of kostvelden in de teruggegeven metadata |
+| `part_revisions` / legacy `threads` | Lokale bundeltelling met `cl100k_base`, tokenizer en reserve | Werkelijk aangeboden/verbruikte inputtokens; ontvangst door een model |
+| `source_materializations` / bronarchief | Bevestigde materialisatietijden, queue-aantallen en bronbytes | Token- of allowancegebruik |
+| `part_offers` | Lokaal persistent offer/seal | Uitgevoerde intelligentie of providerusage |
+
+Dit is een conclusie over de huidige Weekendkrant-runtime en de beschikbare
+interface, geen algemene uitspraak dat een platform nergens usage kan aanbieden.
+Er zijn nu geen lokale Leonardo-/Kuifje-/Striktland-/Minos-modelcalls met een
+usage-response om te ontsluiten. Daarom voegt deze stap geen usageopslag of
+migratie toe. Runtimes, reviews, fiches, toolcalls, tekst die zichzelf `usage`
+noemt en parttokens worden nooit als vervangende usagebron gebruikt.
+
+Echte gebruiksmetingen blijven open totdat een betrouwbare bron het verbruik,
+de eenheid en de scope expliciet levert. De statusnotitie is geen gerealiseerde
+token- of allowancemeting; die roadmapcheckbox blijft open.
+
 ## Grenzen van de baseline
 
 Schema 6 bevat expliciete materialisatietijden voor nieuwe verwerking en een

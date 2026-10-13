@@ -51,6 +51,41 @@ class TelemetryTests(unittest.TestCase):
         self.assertEqual(result['parts']['open'], [])
         self.assertEqual(result['parts']['offers'], [])
 
+    def assert_unknown_model_usage(self, usage):
+        self.assertEqual(usage['status'], 'unavailable')
+        for key in ('model_id', 'input_tokens', 'output_tokens', 'reasoning_tokens', 'cached_input_tokens'):
+            self.assertIsNone(usage[key], key)
+        self.assertTrue(usage['reason'])
+        self.assertEqual(usage['allowance']['status'], 'unavailable')
+        for key in ('used', 'remaining', 'unit'):
+            self.assertIsNone(usage['allowance'][key], key)
+        self.assertTrue(usage['allowance']['reason'])
+        self.assertEqual(usage['ariadne']['status'], 'not_applicable')
+
+    def test_model_usage_unknown_even_with_empty_or_missing_schema(self):
+        self.assert_unknown_model_usage(self.inspect()['model_usage'])
+        path = Path(self.tmp.name) / 'empty.sqlite3'
+        path.touch()
+        self.assert_unknown_model_usage(report(path, now=NOW)['model_usage'])
+        self.assertEqual(path.read_bytes(), b'')
+
+    def test_model_usage_not_inferred_from_runs_bundle_tokens_or_payload_text(self):
+        baseline = self.inspect()['model_usage']
+        self.run_fixture(1, 1, 'completed', '2026-10-13T17:00:00Z', '2026-10-13T17:45:00Z', 31)
+        self.db.execute("INSERT INTO parts VALUES (1,'2026_W42',1,1,1,NULL)")
+        self.db.execute("INSERT INTO part_revisions VALUES (1,1,'/fixture','hash',30000,'cl100k_base',5000)")
+        self.db.execute('UPDATE parts SET active_revision=1 WHERE id=1')
+        # Untrusted fiche text/transport data is never a provider usage receipt.
+        self.db.execute('INSERT INTO ingress_queue(received_at,payload) VALUES (?,?)',
+                        ('2026-10-13T17:00:00Z', json.dumps({'usage': {'input_tokens': 1234, 'allowance': 42}})))
+        result = self.inspect()
+        self.assertEqual(result['parts']['open'][0]['tokens'], 30000)
+        self.assertEqual(result['sherlock']['registered_sources'], 31)
+        self.assertEqual(result['model_usage'], baseline)
+        self.assertEqual(self.inspect(hours=1)['model_usage'], baseline)
+        self.assertEqual(self.inspect(hours=48)['model_usage'], baseline)
+        self.assert_unknown_model_usage(result['model_usage'])
+
     def test_empty_uninitialized_database_is_not_migrated(self):
         path = Path(self.tmp.name) / 'empty.sqlite3'
         path.touch()
@@ -170,7 +205,9 @@ class TelemetryTests(unittest.TestCase):
                 patch.object(ariadne, 'runtime_lock', side_effect=AssertionError('no lock')), \
                 redirect_stdout(stdout):
             ariadne.main()
-        self.assertEqual(json.loads(stdout.getvalue())['sherlock']['runs'], 0)
+        output = json.loads(stdout.getvalue())
+        self.assertEqual(output['sherlock']['runs'], 0)
+        self.assert_unknown_model_usage(output['model_usage'])
         stderr = io.StringIO()
         with patch('sys.argv', ['ariadne.py', 'telemetry', '--db', str(self.path), '--hours', '0']), \
                 redirect_stderr(stderr), self.assertRaises(SystemExit) as stopped:

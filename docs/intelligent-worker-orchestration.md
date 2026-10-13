@@ -232,6 +232,7 @@ validatie en operationele invoering.
 - [x] Huidige queuevoorraad/leeftijd en parts, actieve tokenmetingen en lokale offers read-only tonen.
 - [x] Gepubliceerde Sherlock-fiches en `queue_item_id` aan de huidige producerende run koppelen; generieke jobkoppeling volgt pas met het jobmodel.
 - [x] Nieuwe materialisatiegroei door de tijd meten via bevestigde queue-aantallen en exacte bronbytes; historische onbekende tijden niet reconstrueren.
+- [x] Beschikbaarheid van huidig modelgebruik onderzoeken en ontbrekende providerusage/allowance expliciet zichtbaar maken in read-only telemetry.
 - [ ] Modelgebruik en intelligente backlog meten; toekomstige jobmetingen toevoegen.
 - [ ] Telemetrycontract en basislijn vastleggen vóór capaciteitsbeslissingen.
 
@@ -261,6 +262,15 @@ met succesvolle verwerking. Telemetry toont wanneer welke queue-items met hoevee
 bronbytes werden gematerialiseerd; eerdere archiefbronnen zonder tijd blijven
 expliciet onbekend. Zie [het meetcontract](telemetry.md#materialisatiegroei).
 Deze stap verandert geen uitvoeringscadence en introduceert geen modelgebruik of jobs.
+
+De huidige usage-audit vindt geen betrouwbare model-ID, input/output/reasoning/
+cacheusage of product-allowanceteller in Sherlock-state, MCP-contracten of de
+beschikbare scheduled-taskmetadata. `model_usage` meldt daarom `unavailable`
+met `null`-waarden en redenen; lokale deterministische Ariadne meldt
+`not_applicable`. Bundeltokens, runtimes, reviews en toolcalls worden niet als
+usage geïnterpreteerd. Alleen het onderzoek en de expliciete beschikbaarheids-
+rapportage zijn gerealiseerd; daadwerkelijke gebruiksmetingen blijven open.
+Zie [de usage-audit](telemetry.md#modelgebruik-beschikbaarheid-van-echte-metingen).
 
 ### Fase 3 — generiek job- en attemptmodel
 
