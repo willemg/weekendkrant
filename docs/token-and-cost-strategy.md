@@ -23,6 +23,10 @@ moet komen van minder herlezen en minder output; kleine calls of een trager ritm
 maken dezelfde tokens niet vanzelf goedkoper. Herhaalde instructies, state en
 compressiecalls tellen ook mee. Het aanbiedritme vereist kosten- en kwaliteitsmeting.
 
+## Sherlock-capaciteitsmetingen
+
+De empirische capaciteit van Sherlock als actieve worker wordt afzonderlijk gekarakteriseerd in [Sherlock-capaciteitsexperimenten](sherlock-capacity-experiments.md). Dat document houdt bewezen platformgrenzen, meetmethoden en experimentele hypotheses gescheiden van de bredere kostenarchitectuur in dit document.
+
 ## Kost per component
 
 ### Sherlock
