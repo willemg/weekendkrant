@@ -9,7 +9,7 @@ Schema en migraties staan wel in Git; er worden geen productiegegevens meegeleve
 
 ## Eén migratieketen
 
-`database.py` beheert alle DDL en `PRAGMA user_version`. De actuele versie is **5**.
+`database.py` beheert alle DDL en `PRAGMA user_version`. De actuele versie is **6**.
 De genummerde SQL-bestanden in `migrations/` zijn de bron van waarheid:
 
 | Versie | Migratie | Verantwoordelijkheid |
@@ -19,6 +19,7 @@ De genummerde SQL-bestanden in `migrations/` zijn de bron van waarheid:
 | 3 | `003_unified_runtime_schema.sql` | Voorheen ongeversioneerde daily- en ingress-tabellen |
 | 4 | `004_sherlock_state.sql` | Sherlock-runs en daadwerkelijk gereviewde bronpagina's |
 | 5 | `005_sherlock_fiches.sql` | Immutable Sherlock-run→queue-item-provenance |
+| 6 | `006_source_materializations.sql` | Immutable UTC-materialisatietijd per gearchiveerd queue-item |
 
 De historische nummering blijft behouden. Versie 0 kan een lege database zijn,
 maar ook reeds de voorheen ongeversioneerde runtime-tabellen bevatten.
@@ -82,6 +83,7 @@ compatibiliteitsexports uit de centrale module; ze beheren geen eigen schema.
 | `sherlock_runs` | Oplopende run-ID, topic, start-/eindtijd en uitvoeringsstatus |
 | `sherlock_sources` | Unieke canonieke bron-URL, oorspronkelijke URL, run/topic, reviewtijd, optionele titel, outcome en rationale |
 | `sherlock_fiches` | Eén immutable `queue_item_id`→`run_id`-koppeling per expliciet gekoppelde fiche |
+| `source_materializations` | Eén immutable `queue_id`→`materialized_at`-record voor iedere nieuwe succesvolle Ariadne-materialisatie |
 
 De partidentiteit is uniek; `one_open_part` staat maximaal één open part per
 week/topic toe. Revisies hebben unieke paden, positieve revisienummers en
@@ -152,7 +154,20 @@ Geen netwerkrequests, redirect-/AMP-detectie, domeinspecifieke regels of semanti
 story-deduplicatie. Ook kandidaat-/claimstate, leases, retries, scheduling, APIs,
 agentintegratie en Leonardo-state vallen buiten deze opslaglaag.
 
-## Volgende schemawijzigingen
+## Materialisatietijdprovenance (schema 6)
+
+Migratie 6 voegt alleen `source_materializations`, een tijdindex en validatie-/
+immutabilitytriggers toe. Er is geen backfill: bestaande bronbytes, memberships,
+revisies, queue-statussen en overige provenance blijven intact. De tabel verwijst
+naar `source_archive`; insert vereist een gearchiveerd, processed queue-item.
+Update/delete en vervanging van een bestaande tijdregistratie worden geweigerd.
+Nieuwe `daily`-materialisaties registreren alle geselecteerde queue-IDs met één
+geobserveerd UTC-tijdstip in de korte finale transactie. Mislukte commit betekent
+geen geregistreerde tijd, geen nieuwe actieve revisie en geen processed-status.
+Historische bronontvangst, fichepayloaddatum, file-mtime of offertijd zijn geen
+vervanging voor een onbekende materialisatietijd. Zie [telemetry](telemetry.md).
+
+## Sherlock-ficheprovenance (schema 5)
 
 Migratie 5 voegt alleen `sherlock_fiches`, een run-index en validatie-/immutability-
 triggers toe. Bestaande queue-, bron-, run-, part- en revisiondata blijven intact;
@@ -165,6 +180,8 @@ en koppeling samen. Runfinish gebruikt dezelfde SQLite-schrijflock. Een fout
 laat geen half ontvangen fiche achter. Zonder `run_id` blijft ingress ongekoppeld.
 Het mappingrecord blijft na processing en runafsluiting bestaan. Geen generieke
 jobs of aanvullende source→fiche-koppeling worden geïntroduceerd.
+
+## Volgende schemawijzigingen
 
 Geen ad-hoc DDL in featuremodules. Iedere schemawijziging krijgt een nieuwe,
 expliciet genummerde migratie en een verhoging van `database.SCHEMA_VERSION`.

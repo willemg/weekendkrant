@@ -131,6 +131,20 @@ de foutregistratie mislukken; logging blijft zichtbaar. Bewaar database en
 succesvolle revisiebestanden samen. Verwijderde succesvolle files worden niet
 automatisch gereconstrueerd.
 
+## Materialisatietijdprovenance vanaf schema 6
+
+Een niet-lege succesvolle snapshot registreert per nieuw queue-item een immutable
+`source_materializations`-record met UTC-tijdstip. Het tijdstip wordt geobserveerd
+na partregistratie en statusupdates, vlak vóór de finale commit. Het is een
+registratiemoment, geen meting van het exacte fsync-/commitmoment of de looptijd.
+De klok is de actuele UTC-hostklok, onafhankelijk van fichepayloaddatum en de
+`now`-parameter voor Belgische selectiedatum. Alle items van één snapshot krijgen
+hetzelfde tijdstip. De records worden samen met bronarchief, revisies en processed-
+status gecommit; iedere fout draait alles terug. Een lege run maakt geen record.
+Retry na rollback registreert het nieuwe werkelijke registratiemoment; een reeds
+processed item wordt niet opnieuw geteld. Oude items krijgen geen geraden tijd.
+Zie [materialisatiegroei in telemetry](telemetry.md#materialisatiegroei).
+
 ## Expliciete lokale offer/seal-operatie
 
 `PartStore(db).offer(part_id, revision)` verwacht een concrete part-ID en exact

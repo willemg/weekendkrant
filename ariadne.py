@@ -53,7 +53,7 @@ def main():
     telemetry_parser = commands.add_parser('telemetry', help='Read-only overzicht van bestaande SQLite-telemetrie.')
     telemetry_parser.add_argument('--db', type=Path, default=Path('/home/weekendkrant/weekendkrant.sqlite3'))
     telemetry_parser.add_argument('--hours', type=float, default=24,
-                                  help='Sherlock-runs gestart in de laatste N uur (standaard 24).')
+                                  help='Sherlock-runstarts en materialisaties in de laatste N uur (standaard 24).')
     args = parser.parse_args()
     if args.command == 'telemetry':
         from telemetry import report

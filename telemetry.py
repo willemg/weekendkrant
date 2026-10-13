@@ -124,6 +124,34 @@ def parts_report(db, warnings):
                 'SELECT id,part_id,revision,created_at FROM part_offers ORDER BY id')]}
 
 
+def materialization_report(db, since, now, warnings):
+    events = {}
+    invalid = 0
+    for row in db.execute('''SELECT m.queue_id,m.materialized_at,a.topic,length(a.content) AS bytes
+                             FROM source_materializations m JOIN source_archive a ON a.queue_id=m.queue_id
+                             ORDER BY m.queue_id'''):
+        when = timestamp(row['materialized_at'])
+        if when is None:
+            invalid += 1
+            warnings.append('Queue-item %s: materialisatietijd niet betrouwbaar bepaalbaar.' % row['queue_id'])
+            continue
+        if not since <= when <= now:
+            continue
+        key = (when, row['topic'])
+        event = events.setdefault(key, {'materialized_at': when.isoformat(), 'topic': row['topic'],
+                                        'queue_items': 0, 'content_bytes': 0, 'queue_item_ids': []})
+        event['queue_items'] += 1
+        event['content_bytes'] += row['bytes']
+        event['queue_item_ids'].append(row['queue_id'])
+    rows = [events[key] for key in sorted(events)]
+    return {'since': since.isoformat(), 'until': now.isoformat(),
+            'queue_items': sum(e['queue_items'] for e in rows),
+            'content_bytes': sum(e['content_bytes'] for e in rows), 'events': rows,
+            'invalid_timestamp_items': invalid,
+            'untimed_archived_items': db.execute('''SELECT count(*) FROM source_archive a WHERE NOT EXISTS
+                (SELECT 1 FROM source_materializations m WHERE m.queue_id=a.queue_id)''').fetchone()[0]}
+
+
 def report(db_path=DB_PATH, hours=24, now=None):
     """Inspect one snapshot without initialization, migrations or file writes."""
     if not math.isfinite(hours) or hours <= 0:
@@ -141,11 +169,11 @@ def report(db_path=DB_PATH, hours=24, now=None):
         'as_of': now.isoformat(),
         'sherlock_period': {'since': since.isoformat(), 'until': now.isoformat(),
                            'basis': 'runs_started_in_period; registered sources of those runs in snapshot'},
-        'sherlock': None, 'queue': None, 'parts': None, 'warnings': warnings,
+        'sherlock': None, 'queue': None, 'parts': None, 'materialization': None, 'warnings': warnings,
         'limitations': [
             'Alleen geregistreerde reviews; ongeregistreerde inhoudelijke reviews zijn onbekend.',
             'Fichetellingen omvatten alleen expliciet gekoppelde queue-items; legacy/ongekoppelde producers blijven onbekend.',
-            'Geen materialisatietimestamps/usage-historiek: groeisnelheid en werkelijk modelgebruik onbekend.',
+            'Historische materialisatietijden zonder expliciete registratie en werkelijk modelgebruik blijven onbekend.',
             'Geen generieke jobs: intelligente backlog niet bepaalbaar; pending is alleen ingressbacklog.',
             'Offers zijn lokale seals, geen bewijs van modelontvangst; running kan achtergelaten zijn.',
         ],
@@ -162,6 +190,8 @@ def report(db_path=DB_PATH, hours=24, now=None):
              lambda: sherlock_report(db, since, now, warnings, 'sherlock_fiches' in tables)),
             ('queue', {'ingress_queue'}, lambda: queue_report(db, now, warnings)),
             ('parts', {'parts', 'part_revisions', 'part_offers'}, lambda: parts_report(db, warnings)),
+            ('materialization', {'source_materializations', 'source_archive'},
+             lambda: materialization_report(db, since, now, warnings)),
         )
         for name, required, collect in sections:
             missing = required - tables
