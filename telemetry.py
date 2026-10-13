@@ -174,6 +174,17 @@ def model_usage_report():
     }
 
 
+def intelligent_backlog_report():
+    """Current availability, not a queue/part-based estimate of intelligent work."""
+    return {
+        'status': 'not_implemented',
+        'source': 'current_runtime_contract',
+        'ready_items': None,
+        'oldest_ready_at': None,
+        'reason': 'De huidige runtime registreert geen klaarstaand intelligent werk; ingress-pending, parts, offers en Sherlock-runs zijn geen intelligente werkqueue.',
+    }
+
+
 def report(db_path=DB_PATH, hours=24, now=None):
     """Inspect one snapshot without initialization, migrations or file writes."""
     if not math.isfinite(hours) or hours <= 0:
@@ -193,6 +204,7 @@ def report(db_path=DB_PATH, hours=24, now=None):
                            'basis': 'runs_started_in_period; registered sources of those runs in snapshot'},
         'sherlock': None, 'queue': None, 'parts': None, 'materialization': None, 'warnings': warnings,
         'model_usage': model_usage_report(),
+        'intelligent_backlog': intelligent_backlog_report(),
         'limitations': [
             'Alleen geregistreerde reviews; ongeregistreerde inhoudelijke reviews zijn onbekend.',
             'Fichetellingen omvatten alleen expliciet gekoppelde queue-items; legacy/ongekoppelde producers blijven onbekend.',
