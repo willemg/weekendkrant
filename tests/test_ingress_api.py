@@ -62,6 +62,33 @@ class HTTPTests(unittest.TestCase):
         self.assertEqual(row, ('{"summary": "test"}', 'pending'))
         self.assertEqual(IngressQueue(self.path).pending_count(), 1)
 
+    def test_attributed_fiche_preserves_consumer_payload_and_queue_identity(self):
+        run_id = self.start_audit_run()
+        payload = {'run_id': run_id, 'schema_version': 1, 'topic': 1,
+                   'date': '2026-10-13', 'content': '# Bronfiche'}
+        audit = self.audit_request('/ingress', payload, 'submit_weekendkrant_fiche',
+                                   201, {'id': 1}, run_id)
+        self.assertNotIn(payload['content'], audit)
+        with sqlite3.connect(self.path) as db:
+            self.assertEqual(db.execute('SELECT * FROM sherlock_fiches').fetchall(), [(1, run_id)])
+            expected = {k: v for k, v in payload.items() if k != 'run_id'}
+            self.assertEqual(json.loads(db.execute('SELECT payload FROM ingress_queue').fetchone()[0]), expected)
+
+    def test_attributed_fiche_rejects_invalid_or_closed_run_and_topic_mismatch(self):
+        run_id = self.start_audit_run()
+        payload = {'run_id': run_id, 'schema_version': 1, 'topic': 1,
+                   'date': '2026-10-13', 'content': '# Bronfiche'}
+        for change, status in [({'run_id': None}, 400), ({'run_id': True}, 400),
+                               ({'run_id': 999}, 409), ({'topic': 2}, 409)]:
+            self.assertEqual(self.request('POST', '/ingress', json.dumps(dict(payload, **change)), self.token)[0], status)
+        self.request('POST', '/sherlock/runs/finish', json.dumps({'run_id': run_id, 'status': 'completed'}), self.token)
+        self.assertEqual(self.request('POST', '/ingress', json.dumps(payload), self.token)[0], 409)
+        self.assertEqual(IngressQueue(self.path).pending_count(), 0)
+
+    def test_ingress_rejects_ambiguous_duplicate_run_id(self):
+        body = '{"run_id":1,"run_id":2,"schema_version":1,"topic":1,"date":"2026-10-13","content":"x"}'
+        self.assertEqual(self.request('POST', '/ingress', body, self.token)[0], 400)
+
     def test_unauthorized(self):
         for token in (None, secrets.token_urlsafe(24), 'é'):
             with self.subTest(token=token):
@@ -205,7 +232,7 @@ class HTTPTests(unittest.TestCase):
     def test_audit_ingress_has_no_run_id_or_payload(self):
         payload = {'summary': 'Vertrouwelijke fiche', 'token': 'fictief-geheim-token',
                    'url': 'https://example.com/private-fiche',
-                   'rationale': 'Vertrouwelijke rationale', 'run_id': 987}
+                   'rationale': 'Vertrouwelijke rationale'}
         audit = self.audit_request('/ingress', payload, 'submit_weekendkrant_fiche',
                                    201, {'id': 1})
         self.assertNotIn('run_id=', audit)

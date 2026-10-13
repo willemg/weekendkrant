@@ -7,7 +7,23 @@ const good='https://fictional.trycloudflare.com/ingress';
 test('fiche remains a write tool with arbitrary object schema',async()=>{
  const r=await worker.fetch(new Request('https://site.test/mcp',{method:'POST',body:JSON.stringify({id:1,method:'tools/list'})}),{});
  assert.deepEqual((await r.json()).result.tools,TOOLS);assert.equal(TOOL.annotations.readOnlyHint,false);
- assert.deepEqual(TOOL.inputSchema,{type:'object',additionalProperties:true});
+ assert.equal(TOOL.inputSchema.additionalProperties,true);
+ assert.equal(TOOL.inputSchema.properties.run_id.type,'integer');
+});
+test('attributed fiche forwards run_id and returns canonical queue ID',async()=>{
+ const payload={run_id:17,schema_version:1,topic:2,date:'2026-10-13',content:'# Fiche'};
+ let count=0;
+ const r=await submit(payload,env,async(url,options)=>{
+  if(!count++)return ok({url:good});
+  assert.deepEqual(JSON.parse(options.body),payload);
+  return ok({id:42});
+ });
+ assert.deepEqual(r,{status:'success',queue_item_id:42});
+ for(const run_id of [null,true,0,-1,1.5,'17',Number.MAX_SAFE_INTEGER+1]){
+  assert.equal((await submit({...payload,run_id},env,()=>assert.fail('network'))).code,'invalid_payload');
+ }
+ let n=0;
+ assert.equal((await submit(payload,env,async()=>n++?new Response('',{status:409}):ok({url:good}))).code,'conflict');
 });
 test('endpoint restrictions',()=>{
  for(const u of ['http://a.trycloudflare.com/ingress','https://evil.test/','https://trycloudflare.com/','https://a.trycloudflare.com.evil.test/','https://user@a.trycloudflare.com/','https://a.trycloudflare.com:444/','https://a.trycloudflare.com/#x'])assert.equal(endpoint(u),null);

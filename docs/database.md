@@ -9,7 +9,7 @@ Schema en migraties staan wel in Git; er worden geen productiegegevens meegeleve
 
 ## Eén migratieketen
 
-`database.py` beheert alle DDL en `PRAGMA user_version`. De actuele versie is **4**.
+`database.py` beheert alle DDL en `PRAGMA user_version`. De actuele versie is **5**.
 De genummerde SQL-bestanden in `migrations/` zijn de bron van waarheid:
 
 | Versie | Migratie | Verantwoordelijkheid |
@@ -18,6 +18,7 @@ De genummerde SQL-bestanden in `migrations/` zijn de bron van waarheid:
 | 2 | `002_part_offers.sql` | Historische offers en sealing-/immutabilitytriggers |
 | 3 | `003_unified_runtime_schema.sql` | Voorheen ongeversioneerde daily- en ingress-tabellen |
 | 4 | `004_sherlock_state.sql` | Sherlock-runs en daadwerkelijk gereviewde bronpagina's |
+| 5 | `005_sherlock_fiches.sql` | Immutable Sherlock-run→queue-item-provenance |
 
 De historische nummering blijft behouden. Versie 0 kan een lege database zijn,
 maar ook reeds de voorheen ongeversioneerde runtime-tabellen bevatten.
@@ -80,6 +81,7 @@ compatibiliteitsexports uit de centrale module; ze beheren geen eigen schema.
 | `ingress_queue` | Ontvangen JSON-payloads, ontvangstmoment en verwerkingsstatus |
 | `sherlock_runs` | Oplopende run-ID, topic, start-/eindtijd en uitvoeringsstatus |
 | `sherlock_sources` | Unieke canonieke bron-URL, oorspronkelijke URL, run/topic, reviewtijd, optionele titel, outcome en rationale |
+| `sherlock_fiches` | Eén immutable `queue_item_id`→`run_id`-koppeling per expliciet gekoppelde fiche |
 
 De partidentiteit is uniek; `one_open_part` staat maximaal één open part per
 week/topic toe. Revisies hebben unieke paden, positieve revisienummers en
@@ -151,6 +153,18 @@ story-deduplicatie. Ook kandidaat-/claimstate, leases, retries, scheduling, APIs
 agentintegratie en Leonardo-state vallen buiten deze opslaglaag.
 
 ## Volgende schemawijzigingen
+
+Migratie 5 voegt alleen `sherlock_fiches`, een run-index en validatie-/immutability-
+triggers toe. Bestaande queue-, bron-, run-, part- en revisiondata blijven intact;
+er is geen backfill op basis van tijd of topic. Foreign keys verwijzen naar queue
+en run. De inserttrigger vereist een bestaand queue-item en een `running` run;
+update/delete en herattribueren via `INSERT OR REPLACE` worden geweigerd.
+`IngressQueue.add(payload, run_id=...)` valideert het vier-velden-fichecontract
+en de topicmatch, controleert de run onder `BEGIN IMMEDIATE` en commit queue-item
+en koppeling samen. Runfinish gebruikt dezelfde SQLite-schrijflock. Een fout
+laat geen half ontvangen fiche achter. Zonder `run_id` blijft ingress ongekoppeld.
+Het mappingrecord blijft na processing en runafsluiting bestaan. Geen generieke
+jobs of aanvullende source→fiche-koppeling worden geïntroduceerd.
 
 Geen ad-hoc DDL in featuremodules. Iedere schemawijziging krijgt een nieuwe,
 expliciet genummerde migratie en een verhoging van `database.SCHEMA_VERSION`.
