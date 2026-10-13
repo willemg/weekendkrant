@@ -1,5 +1,12 @@
 # Token- en kostenstrategie
 
+De context-/tokenbudgetprincipes en bestaande bundelmetingen blijven relevant.
+Leonardo als aparte voornaamste betaalde API-laag, de genoemde modelrollen en
+API-dollarbudgettering zijn het oudere doelontwerp, geen huidige runtime.
+Voor toekomstige execution identity, scheduled capaciteit en gedeelde allowance
+is het [ontwerpbesluit van 13 oktober 2026](intelligent-worker-orchestration.md)
+leidend. De nieuwe generieke jobruntime is nog niet geïmplementeerd.
+
 ## Uitgangspunt
 
 De grootste betaalde kost ontstaat wanneer intelligente modellen grote hoeveelheden context moeten lezen.

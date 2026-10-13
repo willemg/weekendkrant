@@ -8,8 +8,11 @@ Sherlock levert fiches via de Weekendkrant Ingress MCP-plugin aan de HTTPS-API.
 SQLite bewaart de transportqueue; GitHub is geen transportqueue. Het dagelijkse
 consumentencontract heeft exact `schema_version: 1`, `topic: 1|2|3`, een Belgische
 ISO-kalenderdatum en niet-lege Markdown in `content`. De oude Git-header en
-`closed`-melding worden niet meer gebruikt. Sherlock voert zijn dagelijkse run
-vóór Ariadne uit; deze PR wijzigt zijn actieve taak niet.
+`closed`-melding worden niet meer gebruikt. Sherlock behandelt per scheduled
+uurrun precies één door de backend toegewezen topic via `start_sherlock_run`.
+Zie de [canonieke Sherlock-instructies](agents/sherlock.md). Ariadne verwerkt de
+ontvangen fiches momenteel dagelijks om 10:00 in `Europe/Brussels`; deze PR
+wijzigt de actieve taak en lokale scheduling niet.
 
 ### Voorlopige verantwoordelijkheden
 
@@ -30,7 +33,7 @@ taak niet aan.
 
 ### Onderzoeksgebieden
 
-De inhoudelijke scope hieronder is het **zoekterrein**, niet een verplicht uitvoerschema. Sherlock hoeft niet in één run alle hieronder beschreven redactionele taken perfect uit te voeren. De bestaande vijf actieve nieuwstaken vormen voorlopig vooral onze bron voor welke onderwerpen en signalen interessant zijn.
+De inhoudelijke scope hieronder is het **zoekterrein**, niet een verplicht uitvoerschema. Iedere huidige Sherlock-uurrun onderzoekt uitsluitend het toegewezen topic. De vijf nieuwstaken uit de oorspronkelijke opzet zijn historische inspiratie voor de onderwerpen en signalen hieronder, geen beschrijving van de actuele runtime.
 
 Tijdens de observatiefase onderzoeken we welke onderdelen een actieve taak werkelijk betrouwbaar kan combineren. Als bijvoorbeeld brede zoekdekking, compacte samenvatting en cross-domain signalering samen te veel blijken, vereenvoudigen we Sherlock in plaats van Ariadne afhankelijk te maken van fragiele output.
 
