@@ -72,7 +72,9 @@ Historische ingressbranches en worktrees worden niet automatisch verwijderd.
 
 ## Cron en retentie
 
-`daily` is de enige huidige Ariadne-taak, dagelijks om 10:00 Belgische tijd.
+`daily` is de enige huidige Ariadne-taak en ondersteunt herhaalde runs op dezelfde
+dag. Het voorlopige lokale croncontract is iedere 15 minuten; productie-invoering
+gebeurt na merge handmatig en is geen gevolg van alleen een repository-update.
 Na merge moet de zondagse `prepare-week --next-week`-cronregel handmatig weg;
 zie het exacte [croncontract](daily-runtime.md#croncontract-na-merge).
 Er is geen wekelijkse volledigheidscontrole, automatische achtwekenretentie of

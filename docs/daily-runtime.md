@@ -1,4 +1,4 @@
-# Dagelijkse backlogverwerking op bibib
+# Deterministische backlogverwerking op bibib
 
 `Sherlock -> MCP ingress -> ingress_queue.pending -> Ariadne daily -> lokale draden -> ingress_queue.processed`
 
@@ -195,21 +195,47 @@ handmatige productierun; verander geen status om een dag opnieuw te openen.
 
 ## Croncontract na merge
 
+`daily` blijft de commandonaam; de selectiedatum sluit verdere runs op dezelfde
+dag niet uit. De voorlopige lokale cadence is iedere **15 minuten**, op :00,
+:15, :30 en :45. Dit onafhankelijke cadence-deel van fase 6 wordt vervroegd
+ingevoerd; het vereist geen generieke jobs of intelligente orchestratie.
+De PR wijzigt de productiecrontab niet. Na merge en applicatie-update moet de
+beheerder de crontab van gebruiker `weekendkrant` op bibib handmatig aanpassen.
+
 Verwijder **handmatig** de obsolete zondagregel uit de crontab op bibib:
 
 ```cron
 0 22 * * 0 /home/weekendkrant/app/start_ariadne.sh prepare-week --next-week >/dev/null
 ```
 
-Behoud voorlopig de dagelijkse regel, met de hosttijdzone `Europe/Brussels`:
+Vervang de oude regel `0 10 * * * ... start_ariadne.sh daily ...` door exact
+deze voorlopige regel, met de hosttijdzone `Europe/Brussels`:
 
 ```cron
-0 10 * * * /home/weekendkrant/app/start_ariadne.sh daily >/dev/null
+*/15 * * * * /home/weekendkrant/app/start_ariadne.sh daily >/dev/null
 ```
 
 `daily` is de enige huidige operationele Ariadne-taak. `prepare-week` bestaat niet
 meer in de CLI. De code wijzigt geen crontab, verwijdert geen historische branches
 of worktrees en installeert geen nieuwe zondagjob.
+
+Controleer met `crontab -l` dat precies één `daily`-regel bestaat en de oude
+dagelijkse regel weg is. Controleer na een volgend kwartier de logfile
+`/home/weekendkrant/logs/ariadne.log` en `./start_ariadne.sh telemetry` voor
+nieuwe bevestigde materialisaties, of een expliciete lege run. Herhaald starten
+maakt geen dubbele archiefbron of materialisatietijdregistratie; lege runs
+schrijven geen revisies. Een proces dat het bestaande `flock` niet krijgt stopt
+direct niet-nul met een diagnose, zonder queue/provenance aan te raken. Het wacht
+niet op de vorige run. Later ontvangen of na een fout pending gebleven fiches
+worden in een volgende vrije run verwerkt. De bestaande snapshot-, korte
+transactie-, orphan/retry- en crashsafe regels blijven ongewijzigd.
+
+15 minuten is een voorlopige keuze, geen gemeten optimum of gegarandeerde
+verwerkingslatency. Bij langere runs kunnen kwartierstarts worden geweigerd;
+pas later op basis van logging en echte materialisatietijden de cadence aan.
+Rollback van alleen het ritme: vervang de kwartierregel handmatig door
+`0 10 * * * /home/weekendkrant/app/start_ariadne.sh daily >/dev/null`.
+Verwijder of reset daarvoor geen queue-items, parts of provenance.
 
 ## Bewaarbeleid
 

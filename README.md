@@ -35,8 +35,9 @@ Zie de ontwerpdocumentatie:
 Het [ontwerpbesluit van 13 oktober 2026](docs/intelligent-worker-orchestration.md)
 kiest generieke scheduled executors met één begrensde rol/job per activatie en
 minstens uurlijk, mogelijk sneller lokaal materialiseren als doelrichting.
-Die generieke jobruntime en nieuwe cadence zijn nog niet geïmplementeerd;
-onderstaande runtime en cron blijven de huidige beschreven situatie.
+De generieke jobruntime is nog niet geïmplementeerd. De bestaande `daily` is
+geschikt voor herhaalde kwartierstarts; het voorlopige croncontract hieronder
+wordt na merge handmatig ingevoerd en bewijst geen reeds gewijzigde productiecrontab.
 
 `Sherlock -> MCP ingress -> ingress_queue.pending -> Ariadne daily -> lokale draden -> ingress_queue.processed`
 
@@ -100,13 +101,15 @@ Verwijder na merge handmatig de obsolete zondagregel op bibib:
 0 22 * * 0 /home/weekendkrant/app/start_ariadne.sh prepare-week --next-week >/dev/null
 ```
 
-Behoud de dagelijkse regel:
+Vervang de oude dagelijkse `daily`-regel door de voorlopige kwartierregel;
+laat niet beide regels bestaan:
 
 ```cron
-0 10 * * * /home/weekendkrant/app/start_ariadne.sh daily >/dev/null
+*/15 * * * * /home/weekendkrant/app/start_ariadne.sh daily >/dev/null
 ```
 
 De code wijzigt geen crontab en verwijdert geen bestaande worktrees of branches.
+Zie [invoering en rollback](docs/daily-runtime.md#croncontract-na-merge).
 
 ## Database
 
