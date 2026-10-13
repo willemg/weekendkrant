@@ -233,6 +233,7 @@ validatie en operationele invoering.
 - [x] Gepubliceerde Sherlock-fiches en `queue_item_id` aan de huidige producerende run koppelen; generieke jobkoppeling volgt pas met het jobmodel.
 - [x] Nieuwe materialisatiegroei door de tijd meten via bevestigde queue-aantallen en exacte bronbytes; historische onbekende tijden niet reconstrueren.
 - [x] Beschikbaarheid van huidig modelgebruik onderzoeken en ontbrekende providerusage/allowance expliciet zichtbaar maken in read-only telemetry.
+- [x] Huidige intelligente backlog onderzoeken en het ontbreken van een registratie van klaarstaand intelligent werk expliciet zichtbaar maken in telemetry.
 - [ ] Modelgebruik en intelligente backlog meten; toekomstige jobmetingen toevoegen.
 - [ ] Telemetrycontract en basislijn vastleggen vóór capaciteitsbeslissingen.
 
@@ -271,6 +272,13 @@ met `null`-waarden en redenen; lokale deterministische Ariadne meldt
 usage geïnterpreteerd. Alleen het onderzoek en de expliciete beschikbaarheids-
 rapportage zijn gerealiseerd; daadwerkelijke gebruiksmetingen blijven open.
 Zie [de usage-audit](telemetry.md#modelgebruik-beschikbaarheid-van-echte-metingen).
+
+De backlog-audit vindt geen huidige registratie of lifecycle van klaarstaand
+intelligent werk. `intelligent_backlog` meldt daarom `not_implemented` met
+onbekende telling en oudste klaarzettijd. Ingress-pending, parts, offers en
+gestarte Sherlock-runs worden niet tot intelligente opdrachten omgerekend.
+Alleen onderzoek en expliciete beschikbaarheidsrapportage zijn gerealiseerd;
+de werkelijke backlogmeting blijft open. Zie [de backlog-audit](telemetry.md#intelligente-backlog-nog-geen-werkregistratie).
 
 ### Fase 3 — generiek job- en attemptmodel
 

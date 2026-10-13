@@ -62,6 +62,46 @@ class TelemetryTests(unittest.TestCase):
         self.assertTrue(usage['allowance']['reason'])
         self.assertEqual(usage['ariadne']['status'], 'not_applicable')
 
+    def assert_no_intelligent_backlog_contract(self, backlog):
+        self.assertEqual(backlog['status'], 'not_implemented')
+        self.assertEqual(backlog['source'], 'current_runtime_contract')
+        self.assertIsNone(backlog['ready_items'])
+        self.assertIsNone(backlog['oldest_ready_at'])
+        self.assertTrue(backlog['reason'])
+
+    def test_intelligent_backlog_not_zero_for_empty_or_missing_schema(self):
+        self.assert_no_intelligent_backlog_contract(self.inspect()['intelligent_backlog'])
+        path = Path(self.tmp.name) / 'empty-backlog.sqlite3'
+        path.touch()
+        self.assert_no_intelligent_backlog_contract(report(path, now=NOW)['intelligent_backlog'])
+        self.assertEqual(path.read_bytes(), b'')
+
+    def test_intelligent_backlog_not_inferred_from_ingress_parts_offers_or_runs(self):
+        baseline = self.inspect()['intelligent_backlog']
+        for identity, status in ((1, 'pending'), (2, 'pending'), (3, 'processed')):
+            self.db.execute('INSERT INTO ingress_queue VALUES (?,?,?,?)',
+                            (identity, '2026-10-13T17:00:00Z', '{}', status))
+        for identity in (1, 2, 3):
+            self.db.execute("INSERT INTO parts VALUES (?,'2026_W42',?,1,1,NULL)", (identity, identity))
+            self.db.execute('INSERT INTO part_revisions VALUES (?,1,?,?,30000,?,5000)',
+                            (identity, '/fixture/%s' % identity, 'hash', 'cl100k_base'))
+            self.db.execute('UPDATE parts SET active_revision=1 WHERE id=?', (identity,))
+        self.db.execute("INSERT INTO part_offers VALUES (1,2,1,'2026-10-13T17:00:00Z')")
+        self.db.execute('UPDATE parts SET is_open=0 WHERE id=3')
+        self.run_fixture(1, 1, 'running', '2026-10-13T17:00:00Z', None, 0)
+        self.run_fixture(2, 2, 'failed', '2026-10-13T17:00:00Z', '2026-10-13T17:01:00Z', 2)
+        self.run_fixture(3, 3, 'completed', '2026-10-13T17:00:00Z', '2026-10-13T17:01:00Z', 3)
+        result = self.inspect()
+        self.assertEqual(result['queue']['pending'], 2)
+        self.assertEqual(result['parts']['parts'], 3)
+        self.assertEqual(result['parts']['open_parts'], 1)
+        self.assertEqual(len(result['parts']['offers']), 1)
+        self.assertEqual(result['sherlock']['runs'], 3)
+        self.assertEqual(result['intelligent_backlog'], baseline)
+        self.assertEqual(self.inspect(hours=1)['intelligent_backlog'], baseline)
+        self.assertEqual(self.inspect(hours=48)['intelligent_backlog'], baseline)
+        self.assert_no_intelligent_backlog_contract(result['intelligent_backlog'])
+
     def test_model_usage_unknown_even_with_empty_or_missing_schema(self):
         self.assert_unknown_model_usage(self.inspect()['model_usage'])
         path = Path(self.tmp.name) / 'empty.sqlite3'
@@ -208,6 +248,7 @@ class TelemetryTests(unittest.TestCase):
         output = json.loads(stdout.getvalue())
         self.assertEqual(output['sherlock']['runs'], 0)
         self.assert_unknown_model_usage(output['model_usage'])
+        self.assert_no_intelligent_backlog_contract(output['intelligent_backlog'])
         stderr = io.StringIO()
         with patch('sys.argv', ['ariadne.py', 'telemetry', '--db', str(self.path), '--hours', '0']), \
                 redirect_stderr(stderr), self.assertRaises(SystemExit) as stopped:

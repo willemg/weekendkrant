@@ -136,6 +136,37 @@ Echte gebruiksmetingen blijven open totdat een betrouwbare bron het verbruik,
 de eenheid en de scope expliciet levert. De statusnotitie is geen gerealiseerde
 token- of allowancemeting; die roadmapcheckbox blijft open.
 
+## Intelligente backlog: nog geen werkregistratie
+
+`intelligent_backlog` toont `status: not_implemented`, `ready_items: null` en
+`oldest_ready_at: null` met een reden. De huidige runtime heeft geen persistente
+registratie van werk dat daadwerkelijk klaarstaat voor intelligente uitvoering.
+Dit is geen gemeten nul en ook geen schatting. `source: current_runtime_contract`
+beschrijft het onderzochte huidige contract, onafhankelijk van `--hours`; de CLI
+raadpleegt geen scheduler of nieuwe externe bron en blijft read-only.
+
+### Audit van de huidige runtime (13 oktober 2026)
+
+| Bestaande registratie | Betekenis | Waarom geen intelligente backlog |
+| --- | --- | --- |
+| `ingress_queue.pending` | Ontvangen fiches voor deterministische Ariadne-verwerking | Niet beoordeeld of ingepland als intelligente opdracht; omvat ook toekomstige fiches |
+| Open/gesloten parts en actieve revisies | Opgeslagen bronbundels met tokenmetingen | Geen intelligent uitvoeringscontract, readinessbeslissing of consumptiestatus |
+| `part_offers` | Immutable lokale offer/seal van een revisie | Geen bevestigde modelontvangst, uitvoering of afhandeling; telt niet als wachtende opdracht |
+| `sherlock_runs` | Gestarte runs, met running/completed/failed-status | `start_sherlock_run` maakt een run en roteert een topic, geen claim van eerder klaargezet werk; running kan achtergelaten zijn |
+| `attempts` | Fouten van lokale Ariadne-verwerking | Geen klaarstaande intelligente retries of opdrachten |
+| `source_materializations` / `sherlock_fiches` | Bevestigde verwerking / producerprovenance | Registraties van wat gebeurde, geen werkplanning |
+
+Er bestaat evenmin een huidig consumer-/acknowledgementcontract waarmee een offer
+van klaarstaand naar afgehandeld intelligent werk overgaat. Daarom kunnen we
+geen betrouwbaar aantal, leeftijd, rolverdeling of wachtrij uit deze records
+afleiden. Ook met veel pending fiches/parts/offers of helemaal lege tabellen blijven
+de backlogmetingen onbekend. Scheduled activaties zijn geen persistente werkitems.
+
+Deze stap maakt uitsluitend die ontbrekende beschikbaarheid expliciet. Hij bouwt
+geen jobmodel, consumer, dispatcher, seeds/dossiers of nieuwe planning. Werkelijke
+intelligente backlogmetingen blijven open totdat de runtime zo'n werkregistratie
+en lifecycle werkelijk heeft.
+
 ## Grenzen van de baseline
 
 Schema 6 bevat expliciete materialisatietijden voor nieuwe verwerking en een
