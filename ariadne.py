@@ -50,7 +50,20 @@ def main():
     commands = parser.add_subparsers(dest='command', required=True)
     daily_parser = commands.add_parser('daily', help='Verwerk de SQLite-queue tot en met vandaag in Europe/Brussels.')
     daily_parser.add_argument('--repo', type=Path, default=Path.cwd())
+    telemetry_parser = commands.add_parser('telemetry', help='Read-only overzicht van bestaande SQLite-telemetrie.')
+    telemetry_parser.add_argument('--db', type=Path, default=Path('/home/weekendkrant/weekendkrant.sqlite3'))
+    telemetry_parser.add_argument('--hours', type=float, default=24,
+                                  help='Sherlock-runs gestart in de laatste N uur (standaard 24).')
     args = parser.parse_args()
+    if args.command == 'telemetry':
+        from telemetry import report
+        import sqlite3
+        try:
+            result = report(args.db, args.hours)
+        except (ValueError, OSError, sqlite3.Error) as error:
+            parser.exit(1, 'Telemetry mislukt: %s\n' % error)
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return
     try:
         configure_logging()
     except OSError:
