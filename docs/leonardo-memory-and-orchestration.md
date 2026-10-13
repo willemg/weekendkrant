@@ -39,7 +39,7 @@ om fiches te ordenen, state samen te vatten of onderzoeksvragen te kiezen.
 | --- | --- |
 | Sherlock | Vindt signalen en levert bronvaste fiches met expliciet topic. |
 | Ariadne | Valideert metadata, bewaart bronnen en state, telt tokens, bundelt deterministisch, bewaakt budgetten en voert toegestane acties uit. |
-| Leonardo | Herkent patronen, kiest inhoudelijke dossierverbanden, schrijft rolling state en formuleert gerichte onderzoeksmissies. |
+| Leonardo | Herkent patronen, kiest inhoudelijke dossierverbanden, bewaakt per dossier/verhaal bron- en perspectiefbreedte en onafhankelijke bevestiging, schrijft rolling state en formuleert gerichte onderzoeksmissies. |
 | Kuifje | Onderzoekt een afgebakende missie en retourneert bronnen, bevindingen, onzekerheden en eventuele lege oogst onder de meegegeven identifiers. |
 | Striktland | Controleert claims tegen oorspronkelijke bronfragmenten. |
 | Minos | Herschrijft waar nodig één keer de problematische passage. |
@@ -169,6 +169,11 @@ moeten nog worden vastgelegd.
 ## Kuifje keert terug naar hetzelfde dossier
 
 Leonardo formuleert een missie omdat in een dossier een concrete vraag openstaat.
+Daaronder vallen ook lacunes in relevante bron- of perspectiefspreiding en
+ontbrekende onafhankelijke bevestiging. Leonardo mag daarvoor een begrensde
+Kuifje-missie voorstellen met de concrete lacune als onderzoeksvraag en alleen
+de noodzakelijke context. Sherlock blijft de brede scout; Ariadne stelt deze
+inhoudelijke lacunes nooit zelf vast.
 Ariadne voert die alleen uit binnen vooraf toegestane acties en beschikbaar
 budget. Een aanvraag is nog geen uitgevoerde missie.
 

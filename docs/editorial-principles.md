@@ -13,6 +13,21 @@ Leonardo mag verbanden voorstellen en patronen benoemen, maar moet onderscheid b
 - speculatie;
 - tegenstrijdige informatie.
 
+## Bronbreedte en onafhankelijke bevestiging
+
+In het doelontwerp bewaakt Leonardo op dossier-/verhaalniveau de breedte en
+onafhankelijkheid van bronnen en perspectieven. Hij kijkt waar relevant naar
+spreiding over bronsoorten, instellingen, regio's, talen en betrokken perspectieven.
+Meerdere publicaties die hetzelfde persbericht of dezelfde oorspronkelijke bron
+herhalen, vormen geen onafhankelijke bevestiging. Spreiding volgt de inhoudelijke
+vraag en bronkwaliteit; aantallen of geforceerde balans zijn geen kwaliteitsbewijs.
+
+Ontbreekt relevante spreiding of onafhankelijke bevestiging, dan mag Leonardo
+een begrensde Kuifje-missie voorstellen om dat concrete gat gericht te onderzoeken.
+Sherlock blijft breed scouten. Ariadne bewaart en routeert de expliciete opdracht
+en bewaakt de technische grenzen; zij beoordeelt inhoudelijke lacunes nooit zelf.
+Zie het [missieontwerp](leonardo-memory-and-orchestration.md#kuifje-keert-terug-naar-hetzelfde-dossier).
+
 ## Sherlock comprimeert, maar synthetiseert niet breed
 
 Sherlock moet webmateriaal reduceren tot compacte, bruikbare bronfiches. Hij mag relevantie inschatten, maar moet niet vooruitlopen op Leonardo's latere synthese.
