@@ -15,6 +15,13 @@ Weekendkrant probeert daarom niet de kwaliteit van de synthesizer maximaal te ve
 
 ## Status en begrippen
 
+De [huidige usage-audit](telemetry.md#modelgebruik-beschikbaarheid-van-echte-metingen)
+ontsluit geen werkelijk modelverbruik: Sherlock/MCP en de beschikbare taakmetadata
+leveren geen providerusage of product-allowanceteller. Telemetry toont dat expliciet
+als onbekend (`unavailable`/`null`); lokale deterministische Ariadne is
+`not_applicable`. De onderstaande bundelmetingen, inputgrenzen en oudere
+API-kostenontwerpen zijn geen metingen van verbruik of resterende allowance.
+
 De bundelmeting is geïmplementeerd; Leonardo-calls, statebeheer, Kuifje-missies en
 kostenadministratie zijn doelontwerp. Zie [het ontwerpbesluit van 8 oktober 2026](leonardo-memory-and-orchestration.md).
 De huidige bundels groeien over daggrenzen heen per ISO-week/topic via nieuwe

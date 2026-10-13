@@ -152,6 +152,28 @@ def materialization_report(db, since, now, warnings):
                 (SELECT 1 FROM source_materializations m WHERE m.queue_id=a.queue_id)''').fetchone()[0]}
 
 
+def model_usage_report():
+    """Availability of current metering contracts, never an inferred usage total."""
+    return {
+        'status': 'unavailable',
+        'source': 'current_runtime_contract',
+        'reason': 'De huidige Sherlock-/MCP-contracten bewaren geen door de modelprovider gemeten usage of model-ID.',
+        'model_id': None,
+        'input_tokens': None,
+        'output_tokens': None,
+        'reasoning_tokens': None,
+        'cached_input_tokens': None,
+        'allowance': {
+            'status': 'unavailable', 'used': None, 'remaining': None, 'unit': None,
+            'reason': 'De beschikbare scheduled-taskmetadata levert geen product-allowanceteller of meeteenheid.',
+        },
+        'ariadne': {
+            'status': 'not_applicable',
+            'reason': 'De huidige lokale deterministische Ariadne-verwerking voert geen modelcalls uit.',
+        },
+    }
+
+
 def report(db_path=DB_PATH, hours=24, now=None):
     """Inspect one snapshot without initialization, migrations or file writes."""
     if not math.isfinite(hours) or hours <= 0:
@@ -170,6 +192,7 @@ def report(db_path=DB_PATH, hours=24, now=None):
         'sherlock_period': {'since': since.isoformat(), 'until': now.isoformat(),
                            'basis': 'runs_started_in_period; registered sources of those runs in snapshot'},
         'sherlock': None, 'queue': None, 'parts': None, 'materialization': None, 'warnings': warnings,
+        'model_usage': model_usage_report(),
         'limitations': [
             'Alleen geregistreerde reviews; ongeregistreerde inhoudelijke reviews zijn onbekend.',
             'Fichetellingen omvatten alleen expliciet gekoppelde queue-items; legacy/ongekoppelde producers blijven onbekend.',
