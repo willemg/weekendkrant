@@ -11,7 +11,7 @@ zonder een langlevend modelproces nodig te hebben.
 | Status | Wat bestaat of is besloten |
 | --- | --- |
 | Huidige geïmplementeerde runtime | Sherlock-specifieke runstart met atomaire topicrotatie, bronfiltering en source-audit; fiche-ingress naar SQLite; deterministische `daily`-materialisatie naar week/topic-parts met immutable revisies, bronarchief en lokale offer/seal-records. |
-| Huidig beschreven operationeel ritme | Sherlock behandelt volgens zijn canonieke instructies één toegewezen topic per uurrun. Ariadne draait volgens het lokale croncontract dagelijks om 10:00 in `Europe/Brussels`. Repository-instructies bewijzen op zichzelf geen actieve schedulerconfiguratie of deployment. |
+| Huidig beschreven operationeel ritme | Sherlock behandelt volgens zijn canonieke instructies één toegewezen topic per uurrun. De bestaande Ariadne `daily` ondersteunt herhaalde kwartierstarts; het voorlopige lokale croncontract is elke 15 minuten in `Europe/Brussels`, na handmatige invoering. Repository-instructies bewijzen op zichzelf geen actieve schedulerconfiguratie of deployment. |
 | Gekozen doelrichting | Generieke scheduled executors krijgen per activatie maximaal één begrensde job met een door de backend gekozen rol. Persistente state draagt de redactionele continuïteit. Lokale Ariadne-materialisatie moet minstens uurlijk, mogelijk sneller, kunnen draaien. |
 | Nog niet geïmplementeerd | Generieke jobqueue, attempts/claims, dispatcher, generieke MCP-control-plane, Leonardo-state en -jobs, dossiers, missies, drafts, verificatie- en correctiejobs, capaciteitsbeleid en automatische eindredactie. |
 
@@ -122,15 +122,16 @@ harde budgetten controleren, dubbele claims voorkomen en resultaten mechanisch
 naar expliciete dossiers, missies en jobs terugrouteren. Deze uitbreiding van
 haar regietaak is doelontwerp, geen huidige jobruntime.
 
-De huidige `daily`-verwerking eenmaal per dag om 10:00 is te traag voor deze
+De eerdere `daily`-verwerking eenmaal per dag om 10:00 is te traag voor deze
 redactie. Als drie Sherlock-rondes nieuwe fiches leveren en daarna Leonardo
 aan de slag moet, moet die oogst tijdig in lokale part/revision-state staan.
 
 De gekozen doelrichting is **minstens eenmaal per uur materialiseren, mogelijk
-duidelijk vaker**. De exacte cadence blijft open en wordt empirisch gekozen op
-basis van ingest, materialisatieduur en gewenste inputversheid. Een lokale
-systemd timer of vergelijkbare scheduler ligt voor de hand; deterministisch werk
-verbruikt geen intelligent scheduled slot. Deze PR installeert geen timer.
+duidelijk vaker**. Het onafhankelijke cadence-deel van fase 6 kiest voorlopig
+**elke 15 minuten via lokale cron**. Ingest, materialisatieduur en gewenste
+inputversheid moeten later uitwijzen of dat ritme passend blijft. Deterministisch
+werk verbruikt geen intelligent scheduled slot. Deze PR wijzigt de productiecrontab
+niet; zie [invoering en rollback](daily-runtime.md#croncontract-na-merge).
 
 Behoud het bestaande snapshot-, provenance-, runtime-slot- en partprotocol met
 korte transacties. Maak onderscheid tussen vaker materialiseren en een part
@@ -192,6 +193,8 @@ onzekerheden en toegang tot origineel materiaal.
 Audit uitgevoerd op `main`-commit
 `0c0320e92acd34c2d9948506c069fd8c663abd18`. De onderstaande verschillen zijn
 migratiewerk; bestaande runtimebeschrijvingen worden niet vooruitlopend herschreven.
+Deze tabel bewaart de historische audit, inclusief het toenmalige dagelijkse
+croncontract. Het latere voorlopige kwartiercontract staat bij fase 6 en runtime.
 
 | Gecontroleerd document | Bevinding en latere aanpassing |
 | --- | --- |
@@ -312,10 +315,16 @@ rolkeuze of tweede job binnen dezelfde scheduled activatie veroorzaken.
 
 ### Fase 6 — Ariadne frequenter materialiseren
 
-- [ ] Bestaande queue→parts-verwerking geschikt maken voor minstens uurlijk, mogelijk sneller lokaal gebruik.
-- [ ] Snapshot-, lock-, provenance- en crashsafe implementatie zoveel mogelijk behouden.
-- [ ] Exacte cadence meten/kiezen en lokale scheduling afzonderlijk invoeren.
+- [x] Bestaande queue→parts-verwerking voor herhaalde kwartierstarts valideren, inclusief lege runs en echte procesoverlap zonder dubbel materiaal.
+- [x] Bestaande snapshot-, flock-, provenance-, retry- en crashsafe implementatie behouden.
+- [x] 15 minuten als voorlopige operationele croncadence documenteren, met handmatige invoering en rollback.
+- [ ] Productiecrontab handmatig invoeren en de voorlopige cadence empirisch evalueren.
 - [ ] Afzonderlijk bepalen wanneer open parts worden aangeboden/sealed voor intelligent gebruik.
+
+Alleen dit onafhankelijke cadence-deel wordt vervroegd uitgevoerd, zonder de
+job-/dispatcherfasen af te wachten. De bestaande runtime volstaat; er komen geen
+nieuwe jobs, modelcalls of offers/sealing bij. Tests en documentatie bewijzen
+geschiktheid, niet een al uitgevoerde productie-installatie. Fase 6 blijft deels open.
 
 Deze fase moet vóór de eerste Sherlock/Leonardo-cyclus operationeel zijn; een
 dagelijkse materialisatie mag geen urenoude oogst achter een klaarstaande job houden.
@@ -391,7 +400,7 @@ Geen aparte permanente agents nodig; deadlinebeleid blijft een expliciete regel.
 
 ## Open vragen
 
-- Wat is de exacte frequentie van lokale Ariadne/materialisatie?
+- Blijft de voorlopige 15-minutencadence passend volgens de werkelijke materialisatietijden en ingest?
 - Welke jobclaim/lease/fencing-semantiek voorkomt overlap en verouderde resultaten,
   en hoe verloopt crashherstel zonder onzekere effecten blind te herhalen?
 - Wanneer moet een part aangeboden/sealed worden?

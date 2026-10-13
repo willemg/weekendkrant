@@ -11,8 +11,9 @@ ISO-kalenderdatum en niet-lege Markdown in `content`. De oude Git-header en
 `closed`-melding worden niet meer gebruikt. Sherlock behandelt per scheduled
 uurrun precies één door de backend toegewezen topic via `start_sherlock_run`.
 Zie de [canonieke Sherlock-instructies](agents/sherlock.md). Ariadne verwerkt de
-ontvangen fiches momenteel dagelijks om 10:00 in `Europe/Brussels`; deze PR
-wijzigt de actieve taak en lokale scheduling niet.
+ontvangen fiches via de bestaande deterministische `daily`. Het voorlopige lokale
+croncontract is elke 15 minuten in `Europe/Brussels`, na handmatige invoering;
+de repository wijzigt geen actieve Sherlock-taak of productiecrontab.
 
 ### Voorlopige verantwoordelijkheden
 
@@ -124,7 +125,7 @@ met immutable revisies en exact bronarchief, en de
 
 - pending fiches tot en met vandaag in Europe/Brussels in één snapshot verwerken;
 - oude pending fiches automatisch meenemen zonder afzonderlijke herstelmodus;
-- dagelijks om 10:00 zonder polling starten; nul fiches is succes;
+- via lokale cron elke 15 minuten starten volgens het voorlopig handmatig in te voeren croncontract; nul fiches is succes;
 - queue-items na geslaagde output en provenance atomisch processed markeren;
 - nieuwe Sherlock-output herkennen;
 - fichetopic valideren tegen de vaste catalogus `1`, `2`, `3`;
