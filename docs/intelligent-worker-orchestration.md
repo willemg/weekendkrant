@@ -216,8 +216,8 @@ aan, maar koppelt fiche-output nog niet canoniek aan de producerende run/job.
 
 De volgorde hieronder is de beoogde afhankelijkheidsvolgorde. Een fase wordt pas
 afgevinkt wanneer haar resultaat aantoonbaar bestaat; een ontwerpcheckbox bewijst
-geen deployment. Fase 1 is gerealiseerd door deze documentatiestap. Alle andere
-checkboxes blijven open. Iedere runtimefase krijgt afzonderlijke implementatie,
+geen deployment. Fase 1 is gerealiseerd door de documentatiestap; fase 2 wordt
+hieronder per gerealiseerde meting bijgehouden. Iedere runtimefase krijgt afzonderlijke implementatie,
 validatie en operationele invoering.
 
 ### Fase 1 — architectuur canoniek maken
@@ -228,10 +228,24 @@ validatie en operationele invoering.
 
 ### Fase 2 — ontbrekende telemetrie bepalen
 
-- [ ] Bestaande Sherlock-reviews per run/job en looptijd meetbaar ontsluiten.
+- [x] Bestaande geregistreerde Sherlock-reviews per run, status/topicverdeling en completed-looptijd read-only ontsluiten.
+- [x] Huidige queuevoorraad/leeftijd en parts, actieve tokenmetingen en lokale offers read-only tonen.
 - [ ] Gepubliceerde fiches en `queue_item_id` aan producerende run/job koppelen.
-- [ ] Tokens, materialisatiegroei, queueleeftijd en intelligente backlog meten.
+- [ ] Materialisatiegroei, modelgebruik en intelligente backlog meten; toekomstige jobmetingen toevoegen.
 - [ ] Telemetrycontract en basislijn vastleggen vóór capaciteitsbeslissingen.
+
+Na bijwerken van de applicatie op bibib is de eerste kleine stap aan te roepen
+via `./start_ariadne.sh telemetry`; deze PR voert geen deployment uit.
+Zie [het telemetrycontract](telemetry.md) voor `--hours`, `--db`, snapshotsemantiek
+en beperkingen. Het rapport gebruikt alleen bestaande tabellen, initialiseert
+of migreert geen database en verandert geen runtime-state. Een rapport ontsluiten
+is nog geen empirisch verzamelde productiebasislijn. Fase 2 blijft gedeeltelijk
+open; de overige roadmapfasen veranderen niet.
+
+Nog niet afleidbaar: niet-geregistreerde reviews, fiche-aantallen per run/job,
+materialisatiegroei per tijdseenheid, daadwerkelijk modelgebruik en intelligente
+jobbacklog. De ingressqueue is alleen een meetbare transportbacklog. Offers
+bewijzen geen modelontvangst en een `running` run kan achtergelaten zijn.
 
 Concreet gat: het canonieke fichecontract heeft exact `schema_version`, `topic`,
 `date` en `content`, zonder `run_id`/`job_id`. De queue bewaart geen canonieke
