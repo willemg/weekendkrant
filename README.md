@@ -22,6 +22,7 @@ De kernprincipes zijn:
 
 Zie de ontwerpdocumentatie:
 
+- [Intelligente workers, rollen en gefaseerd migratieplan](docs/intelligent-worker-orchestration.md)
 - [Architectuur](docs/architecture.md)
 - [Rollen: Sherlock, Ariadne, Leonardo, Kuifje, Striktland en Minos](docs/roles.md)
 - [Leonardo: geheugen, draden en deterministische regie](docs/leonardo-memory-and-orchestration.md)
@@ -30,6 +31,12 @@ Zie de ontwerpdocumentatie:
 - [Redactionele principes](docs/editorial-principles.md)
 
 ## Huidige runtime
+
+Het [ontwerpbesluit van 13 oktober 2026](docs/intelligent-worker-orchestration.md)
+kiest generieke scheduled executors met één begrensde rol/job per activatie en
+minstens uurlijk, mogelijk sneller lokaal materialiseren als doelrichting.
+Die generieke jobruntime en nieuwe cadence zijn nog niet geïmplementeerd;
+onderstaande runtime en cron blijven de huidige beschreven situatie.
 
 `Sherlock -> MCP ingress -> ingress_queue.pending -> Ariadne daily -> lokale draden -> ingress_queue.processed`
 

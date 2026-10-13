@@ -1,5 +1,12 @@
 # Leonardo: geheugen, draden en deterministische regie
 
+Het [ontwerpbesluit van 13 oktober 2026](intelligent-worker-orchestration.md)
+generaliseert continuïteit via persistente state naar alle intelligente rollen.
+Voor toekomstige execution identity en orchestratie is dat nieuwe document
+leidend: Leonardo wordt een rol binnen generieke scheduled jobs. De API-kosten-
+en modelkeuzevoorstellen hieronder zijn het eerdere doelontwerp; huidige
+part-, revisie- en offercontracten blijven geldig.
+
 ## Status en besluit van 8 oktober 2026
 
 Dit document bevat zowel huidig runtimegedrag als toekomstig doelontwerp.
