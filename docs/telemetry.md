@@ -67,13 +67,44 @@ zonder schema aan te maken. Ontbrekende tabellen, bijvoorbeeld op een oudere DB,
 geven eveneens een onbeschikbare sectie. Een ontbrekend/onleesbaar bestand of
 onbruikbaar schema geeft een expliciete CLI-fout op stderr en exitcode 1.
 
+## Materialisatiegroei
+
+Vanaf schema 6 toont `materialization` in hetzelfde read-only rapport de bevestigde
+queue-materialisaties binnen `--hours` (standaard 24), met inclusieve UTC-grenzen
+`since`/`until`. De registratie vindt vlak vóór de succesvolle finale commit
+plaats; zonder geslaagde commit bestaat er geen event. Het tijdstip is de actuele
+hostklok, geen historische payloaddatum, ontvangsttijd, revisiebestands-mtime of
+offertijd. Een lege run is geen materialisatie-event.
+
+`queue_items` en `content_bytes` zijn de totalen binnen het venster. `events` is
+een tijdlijn gegroepeerd per geregistreerd UTC-tijdstip en topic, met dezelfde
+tellingen en geordende `queue_item_ids`. Bytes zijn exacte UTF-8-broncontent uit
+het bestaande bronarchief, zonder partheader of serialisatie-overhead. Iedere
+queue-ID telt precies één keer, ook wanneer eerdere bronnen opnieuw in een
+groeiende partrevisie verschijnen. Dit is geen som van revisietokens of meting
+van modelgebruik. Bestaande tokenmetingen blijven bij de actuele parts staan.
+
+`untimed_archived_items` telt alle archiefbronnen zonder geregistreerde tijd,
+onafhankelijk van het venster. Die historie is onbekend en wordt niet aan een
+dag of uur toegeschreven. `invalid_timestamp_items` telt onbruikbare timestamps
+en gaat gepaard met waarschuwingen; deze rows worden buiten de tijdlijn gehouden.
+Op oudere schemas ontbreekt de sectie (`null` plus waarschuwing); telemetry
+initialiseert of migreert niets. Geen timers of cadence veranderen door deze stap.
+
+Voorbeeld van één event:
+
+```json
+{"materialized_at":"2026-10-13T17:00:00+00:00","topic":1,"queue_items":2,"content_bytes":3,"queue_item_ids":[10,11]}
+```
+
 ## Grenzen van de baseline
 
-Schema 5 bevat een expliciete fiche→Sherlock-run-koppeling, maar geen generieke
-jobkoppeling/-backlog en geen materialisatietimestamps of werkelijk modelgebruik.
-Daarom kan dit rapport geen groei per tijdseenheid of allowancegebruik berekenen.
+Schema 6 bevat expliciete materialisatietijden voor nieuwe verwerking en een
+fiche→Sherlock-run-koppeling, maar geen generieke jobkoppeling/-backlog of werkelijk
+modelgebruik. Historische materialisatiegroei zonder tijdprovenance en
+allowancegebruik blijven onbekend.
 Ongeregistreerde reviews en producenten van legacy/ongekoppelde fiches zijn evenmin meetbaar.
-De huidige tokenvoorraad is geen historische groeimeting. Het rapport meldt
+De huidige tokenvoorraad is geen historische token-groeimeting. Het rapport meldt
 deze beperkingen in `limitations`; een productiebasislijn moet nog verzameld worden.
 Zie [fase 2 van het migratieplan](intelligent-worker-orchestration.md#fase-2--ontbrekende-telemetrie-bepalen).
 

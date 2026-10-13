@@ -231,7 +231,8 @@ validatie en operationele invoering.
 - [x] Bestaande geregistreerde Sherlock-reviews per run, status/topicverdeling en completed-looptijd read-only ontsluiten.
 - [x] Huidige queuevoorraad/leeftijd en parts, actieve tokenmetingen en lokale offers read-only tonen.
 - [x] Gepubliceerde Sherlock-fiches en `queue_item_id` aan de huidige producerende run koppelen; generieke jobkoppeling volgt pas met het jobmodel.
-- [ ] Materialisatiegroei, modelgebruik en intelligente backlog meten; toekomstige jobmetingen toevoegen.
+- [x] Nieuwe materialisatiegroei door de tijd meten via bevestigde queue-aantallen en exacte bronbytes; historische onbekende tijden niet reconstrueren.
+- [ ] Modelgebruik en intelligente backlog meten; toekomstige jobmetingen toevoegen.
 - [ ] Telemetrycontract en basislijn vastleggen vóór capaciteitsbeslissingen.
 
 Na bijwerken van de applicatie op bibib is de eerste kleine stap aan te roepen
@@ -243,7 +244,7 @@ is nog geen empirisch verzamelde productiebasislijn. Fase 2 blijft gedeeltelijk
 open; de overige roadmapfasen veranderen niet.
 
 Nog niet afleidbaar: niet-geregistreerde reviews, producenten van legacy/ongekoppelde fiches,
-materialisatiegroei per tijdseenheid, daadwerkelijk modelgebruik en intelligente
+historische materialisatiegroei zonder tijdprovenance, daadwerkelijk modelgebruik en intelligente
 jobbacklog. De ingressqueue is alleen een meetbare transportbacklog. Offers
 bewijzen geen modelontvangst en een `running` run kan achtergelaten zijn.
 
@@ -254,6 +255,12 @@ en `content`. Telemetry toont expliciet gekoppelde fiches en queue-IDs per run
 en topic. Historische/ongekoppelde fiches krijgen geen geraden producent.
 Er is nog geen `job_id`. Backend, plugin en actieve Sherlock-instructies moeten
 na merge in die volgorde worden bijgewerkt; deze PR voert dat niet operationeel uit.
+
+Schema 6 voegt de kleine lokale `source_materializations`-provenance toe, atomisch
+met succesvolle verwerking. Telemetry toont wanneer welke queue-items met hoeveel
+bronbytes werden gematerialiseerd; eerdere archiefbronnen zonder tijd blijven
+expliciet onbekend. Zie [het meetcontract](telemetry.md#materialisatiegroei).
+Deze stap verandert geen uitvoeringscadence en introduceert geen modelgebruik of jobs.
 
 ### Fase 3 — generiek job- en attemptmodel
 

@@ -1,6 +1,6 @@
 """Deterministische verwerking van de persistente backlogsnapshot in de SQLite-queue."""
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 import hashlib
 import logging
 import os
@@ -104,6 +104,11 @@ def outside_repo(root, path):
     return path
 
 
+def materialization_timestamp():
+    """Observe registration time, independently of the payload/date cutoff."""
+    return datetime.now(timezone.utc).isoformat()
+
+
 def run_daily(root, db_path=DB_PATH, output=OUTPUT_PATH, now=None, lock_path=LOCK_PATH):
     day = local_day(now)
     week = week_name(day)
@@ -161,6 +166,9 @@ def run_daily(root, db_path=DB_PATH, output=OUTPUT_PATH, now=None, lock_path=LOC
                     raise ValueError(f'Queue-item niet pending: queue:{identity}')
             store.register(plans, paths, closures, snapshots, new_sources)
             queue.mark_processed(db, [identity for identity, _ in items])
+            stamp = materialization_timestamp()
+            db.executemany('INSERT INTO source_materializations(queue_id,materialized_at) VALUES (?,?)',
+                           [(identity, stamp) for identity, _ in items])
             db.commit()
             logger.info('Dagverwerking geslaagd: datum=%s fiches=%s draden=%s', day, len(items), len(plans))
             return {'date': str(day), 'week': week, 'status': 'success', 'threads': len(plans)}

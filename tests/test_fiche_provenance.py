@@ -118,6 +118,7 @@ class ProvenanceTests(unittest.TestCase):
         with self.assertRaises(sqlite3.IntegrityError), self.db:
             self.db.execute('INSERT INTO sherlock_fiches VALUES (?,?)', (identity + 99, self.run_id))
 
+    @patch.object(database, 'SCHEMA_VERSION', 5)
     def test_v4_upgrade_preserves_legacy_and_no_backfill(self):
         path = Path(self.tmp.name) / 'old.sqlite3'
         with sqlite3.connect(path) as db:

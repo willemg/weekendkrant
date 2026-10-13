@@ -56,8 +56,8 @@ class TelemetryTests(unittest.TestCase):
         path.touch()
         result = report(path, now=NOW)
         self.assertEqual(path.read_bytes(), b'')
-        self.assertEqual(len(result['warnings']), 3)
-        for section in ('sherlock', 'queue', 'parts'):
+        self.assertEqual(len(result['warnings']), 4)
+        for section in ('sherlock', 'queue', 'parts', 'materialization'):
             self.assertIsNone(result[section])
 
     def test_missing_database_is_not_created(self):
