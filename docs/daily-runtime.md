@@ -244,3 +244,99 @@ zijn verwijderd. Startup/migratie verwijdert geen bestaande SQLite-rijen.
 Alle bestaande data blijft behouden; er is voorlopig geen automatische opruiming.
 Een toekomstig beleid wordt apart ontworpen rond bronarchief, partrevisies,
 Leonardo-state, actieve dossiers, missies en callaudit.
+
+## Systeemtest en operationele gate
+
+**Projectregel:** na een wijziging die een bestaande end-to-end-flow kan raken,
+zijn groene gewone tests onvoldoende. De wijziging is pas operationeel bewezen
+na een groene relevante geautomatiseerde systeemtest en, als deploymentgrenzen
+zijn geraakt, een geslaagde relevante deployment smoke. Dit geldt na grote
+wijzigingen aan runtime, ingress, plugin, database of orchestratie, in het
+bijzonder vóór nachtelijke/onbeheerde Sherlock-runs. Leg commit, opdracht,
+tijdstip, uitkomst en eventuele nog onbewezen grenzen vast in PR/deploymentrapport.
+Deze discipline is de [fase-2.5-gate vóór fase 3](intelligent-worker-orchestration.md#fase-25---systeemtest-en-operationele-smoke-test).
+
+| Niveau | Bewijs en grens |
+| --- | --- |
+| Unit | Eén functie/regel, eventueel met mocks, bijvoorbeeld fichevalidatie of planning. |
+| Integratie | Samenwerking tussen modules en echte opslag/HTTP, vaak in hetzelfde testproces, bijvoorbeeld `run_daily` met een tijdelijke DB. |
+| Systeem | Bestaande runtime via echte proces-, HTTP-, SQLite- en bestandgrenzen, zonder interne functies achter elkaar aan te roepen. |
+| Deployment smoke | Operationele controle van de werkelijk geïnstalleerde/gepubliceerde componenten en hun configuratie. Aanvullend op lokale systeemtests. |
+
+### Opdracht en eenmalige voorbereiding
+
+Vanuit de repositoryroot, met geïnstalleerde `requirements.txt` en een aanwezige
+`cl100k_base`-cache:
+
+```bash
+.venv/bin/python -m unittest discover -s tests -p 'test_system_e2e.py' -v
+```
+
+Op bibib gebruikt de wrapper een expliciete cache. Geef voor bovenstaande
+opdracht daar dezelfde bestaande cache mee:
+
+```bash
+TIKTOKEN_CACHE_DIR=/home/weekendkrant/.cache/tiktoken .venv/bin/python -m unittest discover -s tests -p 'test_system_e2e.py' -v
+```
+
+De test is ook onderdeel van de gewone `unittest discover -s tests` en
+`./start_tests.sh`. De zelfstandige opdracht duurt normaliter enkele seconden.
+Bij een ontbrekende/corrupte cache faalt hij zichtbaar vóór runtime-start,
+zonder download of skip. Vul de cache zo nodig **vooraf**, tijdens installatie
+(met netwerk), met dezelfde interpreter en gewenste `TIKTOKEN_CACHE_DIR`:
+
+```bash
+.venv/bin/python -c 'import tiktoken; tiktoken.get_encoding("cl100k_base")'
+```
+
+Dit installatiecommando is geen onderdeel van de offline test. De test leest en
+hashcontroleert de bestaande cache en kopieert die naar zijn tijdelijke omgeving;
+hij verandert de oorspronkelijke cache niet. Het verwachte bestand/hash volgt
+het gepinde `tiktoken==0.12.0`-contract. Een tokenizerupgrade moet dit expliciet
+opnieuw valideren.
+
+### Werkelijk bewezen pad
+
+`tests/test_system_e2e.py` start `ingress_api.py --port 0 --db <temp>` als
+subprocess. Een readiness-log met de werkelijk gebonden poort plus HTTP
+`GET /health` vervangt een gegokte startup-sleep. Daarna maakt HTTP een Sherlock-run
+en publiceert een synthetische UTF-8-fiche met `run_id` via de echte `/ingress`.
+De controle leest de persistente queue en runkoppeling via een onafhankelijke
+SQLite-connectie. De producer wordt gestopt voordat de consument start.
+
+Een tweede subprocess start `ariadne.py daily` met expliciete tijdelijke DB,
+output, lock en log. Dit gebruikt de echte centrale migraties, snapshot,
+`flock`, tokenizer, crashsafe filepublicatie en finale transactie. Het controleert
+één queue-item, de exacte consumentenpayload, Sherlock-provenance, bronarchief,
+ISO-week/topic/part 1/revision 1, revisiehash en bronmembership, materialisatietijd-
+koppeling en `processed`. Bronbytes en source-ID komen precies eenmaal voor.
+Twee volgende lege CLI-runs laten alle DB-tabellen en artifactbytes/mtime gelijk.
+De bestaande integratietests blijven rollback/orphan-retry en procesoverlap testen.
+
+Alle beschrijfbare staat staat onder één `TemporaryDirectory`, met een uitsluitend
+synthetisch token en een afzonderlijke child-environment. Processen worden ook bij
+failure beëindigd en tijdelijke staat wordt opgeruimd. De test gebruikt loopback,
+geen proxy; externe socketverbindingen zijn in beide child-processen geblokkeerd.
+Foutmeldingen benoemen startup/ingest, queue, materialisatie, artifacts of provenance;
+CLI-failures tonen stderr en de tijdelijke runtimelogs vóór cleanup.
+
+De kleine productieaanpassing maakt bestaande `run_daily`-configuratie bereikbaar
+via `daily --db --output --lock --log`; alle bestaande defaults blijven gelden.
+Bij gelijktijdige consumenten moeten zij hetzelfde lockpad gebruiken. Ingress logt
+na succesvolle bind het niet-geheime host/poort-readinesssignaal.
+
+### Bewuste beperking
+
+Dit is een verse tijdelijke database, geen bewijs voor elke historische
+productiemigratie. De bestaande migratie- en hersteltests blijven nodig. Ook
+bewijst één fiche geen overflow-, belasting- of volledige redactionele kwaliteit.
+Een herhaalde **POST** is geen idempotente retry: iedere succesvolle POST maakt
+volgens het bestaande contract een nieuw item. De replaycontrole herhaalt de
+consument na bevestigde verwerking, zonder opnieuw te publiceren of statussen
+terug te zetten.
+
+Niet getest zijn de vaste bibib-shellwrappers/venv-paden, systemd, cron, publieke
+tunnel/discovery, Sites-sync/publicatie, MCP/pluginregistratie, auth-secrets of
+Sherlocks actieve instructies/scheduler. Daarvoor geldt de afzonderlijke
+[deployment-smokeprocedure](plugin-deployment.md#operationele-deployment-smoke).
+Een lokale `127.0.0.1`-call bewijst nooit de gepubliceerde pluginroute.

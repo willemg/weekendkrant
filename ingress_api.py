@@ -230,6 +230,7 @@ def main(argv=None):
     except ValueError as error:
         raise SystemExit(str(error))
     with create_server(config) as server:
+        logging.getLogger(__name__).info('ingress_ready host=%s port=%s', *server.server_address)
         try:
             server.serve_forever()
         except KeyboardInterrupt:

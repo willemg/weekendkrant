@@ -147,3 +147,136 @@ Sites beheert ook operationele versie-/deploymentrecords, pluginregistratie en
 toegangsinstellingen. Operationele SQLite-data op bibib blijft buiten Git.
 Niet-geheime bronrepresentaties, zoals het hostingmanifest met project-ID en
 MCP-capability, horen wel bij de canonieke pluginbron.
+
+## Operationele deployment smoke
+
+Deze procedure vult de [lokale systeemtest en canonieke operationele
+regel](daily-runtime.md#systeemtest-en-operationele-gate) aan. Voer haar uit wanneer
+plugin/Sites, ingress-auth/configuratie, tunnel/discovery, systemd of productie-
+ingress geraakt zijn. Na alleen een lokale runtimewijziging blijft controle van
+de geïnstalleerde Ariadne-wrapper en daadwerkelijke materialisatie nodig.
+Voer vóór deployment de lokale systeemtest uit op de gekozen broncommit.
+Dit contract beschrijft controles, deze PR voert geen productie-smoke uit.
+
+### 1. Veilige controles zonder redactionele writes
+
+Leg de gekozen app-commit en, indien relevant, plugin-commit/Sites-publicatie vast
+volgens het deploymentidentiteitscontract hierboven. Controleer op bibib:
+
+```bash
+systemctl is-active weekendkrant-ingress.service weekendkrant-ingress-tunnel.service
+curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8000/health
+cd /home/weekendkrant/app
+./start_ariadne.sh telemetry
+```
+
+Verwacht actieve services, HTTP 200 met `status: ok` en een leesbaar telemetry-
+rapport. Dit bewijst lokale service-/DB-bereikbaarheid en de geïnstalleerde
+wrapper/interpreter, geen publieke route of succesvolle materialisatie.
+
+Controleer vervolgens vanaf buiten bibib de actuele vaste discoverypointer en
+het daarvan afgeleide publieke health-endpoint, zonder token:
+
+```bash
+python3 - <<'PY'
+import json
+import urllib.request
+from urllib.parse import urlsplit
+pointer = 'https://raw.githubusercontent.com/willemg/weekendkrant/main/config/ingress-endpoint.json'
+with urllib.request.urlopen(pointer, timeout=10) as response:
+    url = json.load(response)['url']
+p = urlsplit(url)
+assert (p.scheme == 'https' and p.hostname and p.hostname.endswith('.trycloudflare.com')
+        and p.path == '/ingress' and not p.username and not p.password
+        and p.port is None and not p.query and not p.fragment), 'Ongeldige discoverypointer'
+with urllib.request.urlopen('https://' + p.hostname + '/health', timeout=10) as response:
+    health = json.load(response)
+assert health['status'] == 'ok', health
+print(health)
+PY
+```
+
+Dit bewijst discovery → publieke tunnel → ingress-health, nog geen bearer-auth of
+Sites-route. Een actieve service alleen is onvoldoende: discovery kan verouderd
+zijn terwijl de tunnel draait.
+
+Roep daarna **via de werkelijk gepubliceerde ChatGPT/MCP-plugin** aan:
+
+```json
+filter_sherlock_sources({"urls": []})
+```
+
+Verwacht een geslaagd toolresultaat met `unreviewed: []`. Controleer rond hetzelfde
+tijdstip in `journalctl -u weekendkrant-ingress.service --since '5 minutes ago'
+--no-pager` de ontvangen en afgeronde `filter_sherlock_sources` met HTTP 200.
+Dit bestaande filter schrijft geen runs, bronreviews of fiches, reserveert geen
+URL en haalt geen bron op. Deze call bewijst ChatGPT → actieve Sites/plugin →
+discovery/tunnel → geauthenticeerde backendcall. Doe dit niet via een lokale
+HTTP-vervanger. Health alleen bewijst het auth-/pluginpad niet; deze read-only
+call bewijst op zijn beurt nog niet de `/ingress`-schrijfroute of `run_id`-verwerking.
+
+### 2. Laatste schrijfgrens: één legitieme fiche onder toezicht
+
+Er bestaat geen dry-run-/deleteprotocol voor productie-ingress. Introduceer geen
+synthetische testfiche, losse testrun of fictieve review in de redactionele queue.
+Gebruik een eerstvolgende **echte, inhoudelijk gereviewde Sherlock-bron** tijdens
+een begeleide run met de gedeployde canonieke instructies en plugin. Laat de
+normale runstart/source-audit/publicatie/finish plaatsvinden; bewaar `run_id`,
+topic en het bevestigde `queue_item_id` van één legitieme fiche.
+Een onbekende POST-uitkomst mag niet blind opnieuw worden gepubliceerd: ingress
+heeft geen deduplicatiesleutel. Onderzoek eerst logs/DB en meld onzekerheid.
+
+Controleer de betreffende queue-/runkoppeling read-only op bibib. Laat de normale
+kwartierconsument verwerken of start de bestaande `./start_ariadne.sh daily`
+handmatig onder het bestaande `flock` (geen configuratie- of statuswijzigingen).
+Als het slot bezet is, wacht op de lopende/volgende run. Controleer daarna, met
+het echte ID als argument in plaats van `123`:
+
+```bash
+.venv/bin/python - 123 <<'PY'
+from contextlib import closing
+import hashlib
+from pathlib import Path
+import sqlite3
+import sys
+identity = int(sys.argv[1])
+with closing(sqlite3.connect('file:/home/weekendkrant/weekendkrant.sqlite3?mode=ro', uri=True)) as db:
+    rows = db.execute('''SELECT q.status,f.run_id,a.content,a.sha256,p.week,p.topic,p.part,
+        r.revision,r.path,r.sha256,m.materialized_at
+        FROM ingress_queue q
+        JOIN sherlock_fiches f ON f.queue_item_id=q.id
+        JOIN source_archive a ON a.queue_id=q.id
+        JOIN revision_sources s ON s.queue_id=q.id
+        JOIN parts p ON p.id=s.part_id AND p.active_revision=s.revision
+        JOIN part_revisions r ON r.part_id=p.id AND r.revision=s.revision
+        JOIN source_materializations m ON m.queue_id=q.id WHERE q.id=?''', (identity,)).fetchall()
+assert len(rows) == 1, 'Nog niet verwerkt of provenance ontbreekt; controleer logs/telemetry'
+status, run, content, source_sha, week, topic, part, revision, path, sha, at = rows[0]
+assert status == 'processed', status
+data = Path(path).read_bytes()
+assert hashlib.sha256(content).hexdigest() == source_sha
+assert hashlib.sha256(data).hexdigest() == sha
+assert data.count(content) == 1
+assert data.count(('--- SOURCE queue:%d date=' % identity).encode()) == 1
+print(dict(queue_item_id=identity, run_id=run, week=week, topic=topic,
+           part=part, revision=revision, materialized_at=at, status=status))
+PY
+```
+
+Een succesvolle check bewijst de echte gepubliceerde schrijfroute én materialisatie
+met coherente bron-/revisieprovenance. De fiche is normale gewenste redactionele
+state; er is niets op te ruimen. Verwijder of reset nooit handmatig queue-, audit-
+of provenancegegevens om een smoke groen te maken. Als geen geschikte echte bron
+beschikbaar is, noteer de schrijfgrens expliciet als **niet uitgevoerd** en laat
+de operationele gate open. De veilige controles uit stap 1 kunnen wel al groen zijn.
+
+### 3. Bewijs vastleggen vóór onbeheerde runs
+
+Rapporteer app/plugin-commit en Sites-publicatie, tijdstip, lokale systeemtest,
+service/health-resultaten, read-only pluginresultaat met corresponderende backend-
+audit, en het echte run-/queue-ID plus processed part/revision-controle. Noem iedere
+niet uitgevoerde grens expliciet. Een geslaagde lokale call of alleen groene
+unit-/integratietests mag geen volledig geslaagde deployment-smokeclaim opleveren.
+Bij fouten: deployment stoppen/onderzoeken via de bestaande bronbeheerroute;
+geen nachtelijke/onbeheerde werking als operationeel bewezen vrijgeven zolang
+de relevante grens onbewezen is. Fase 2.5 blijft dan open vóór fase 3.

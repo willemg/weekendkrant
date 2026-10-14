@@ -50,6 +50,10 @@ def main():
     commands = parser.add_subparsers(dest='command', required=True)
     daily_parser = commands.add_parser('daily', help='Verwerk de SQLite-queue tot en met vandaag in Europe/Brussels.')
     daily_parser.add_argument('--repo', type=Path, default=Path.cwd())
+    daily_parser.add_argument('--db', type=Path, help='SQLite-pad; standaard de productie-DB.')
+    daily_parser.add_argument('--output', type=Path, help='Dradenmap; standaard de productiemap.')
+    daily_parser.add_argument('--lock', type=Path, help='Runtime-slot; standaard het productieslot.')
+    daily_parser.add_argument('--log', type=Path, help='Logbestand; standaard het productielog.')
     telemetry_parser = commands.add_parser('telemetry', help='Read-only overzicht van bestaande SQLite-telemetrie.')
     telemetry_parser.add_argument('--db', type=Path, default=Path('/home/weekendkrant/weekendkrant.sqlite3'))
     telemetry_parser.add_argument('--hours', type=float, default=24,
@@ -65,15 +69,21 @@ def main():
         print(json.dumps(result, indent=2, sort_keys=True))
         return
     try:
-        configure_logging()
+        if args.log is None:
+            configure_logging()
+        else:
+            configure_logging(args.log)
     except OSError:
         # Als het bestand niet beschikbaar is, blijft de fout via logging zichtbaar.
         logging.basicConfig(level=logging.INFO, format=LOG_FORMAT, force=True)
-        logger.exception('Logging initialiseren mislukt: logbestand=%s', LOG_PATH)
+        logger.exception('Logging initialiseren mislukt: logbestand=%s', args.log or LOG_PATH)
         parser.exit(1)
     from daily import run_daily
     try:
-        result = run_daily(args.repo)
+        overrides = {name: value for name, value in (
+            ('db_path', args.db), ('output', args.output), ('lock_path', args.lock))
+            if value is not None}
+        result = run_daily(args.repo, **overrides)
     except Exception:
         logger.exception('Dagelijkse taak mislukt: repo=%s', args.repo)
         parser.exit(1)

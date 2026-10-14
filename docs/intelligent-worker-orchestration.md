@@ -283,6 +283,28 @@ gestarte Sherlock-runs worden niet tot intelligente opdrachten omgerekend.
 Alleen onderzoek en expliciete beschikbaarheidsrapportage zijn gerealiseerd;
 de werkelijke backlogmeting blijft open. Zie [de backlog-audit](telemetry.md#intelligente-backlog-nog-geen-werkregistratie).
 
+### Fase 2.5 - systeemtest en operationele smoke test
+
+Deze afzonderlijke fase is een expliciete gate vóór fase 3, naar aanleiding van
+13 oktober 2026: groene unit-/integratietests bleken geen bewijs voor de werkelijke
+Sherlock → ingress → SQLite → Ariadne-keten na een grote wijziging.
+
+- [x] Reproduceerbare geïsoleerde systeemtest via echte HTTP-ingress en afzonderlijke ingress-/Ariadne-CLI-processen toevoegen.
+- [x] Eén representatieve gekoppelde fiche exact eenmaal naar tijdelijke SQLite, bronarchief en week/topic/part met immutable revision materialiseren; processed en provenance controleren.
+- [x] Herhaalde verwerking na bevestiging en lege runs zonder dubbele bronnen of gewijzigde revisies bewijzen.
+- [x] Eén snelle handmatige testopdracht en de afgedekte/niet-afgedekte grenzen documenteren.
+- [x] Veilige operationele smokeprocedure voor het werkelijk gedeployde pad vastleggen.
+- [x] Verplichte relevante systeemtest en, bij deploymentwijzigingen, smoke na grote wijzigingen aan runtime, ingress, plugin, database of orchestratie canoniek vastleggen.
+- [ ] Deployment smoke op de werkelijk gepubliceerde route uitvoeren en bewijs vastleggen, inclusief een legitieme gekoppelde fiche tot processed part/revision.
+- [ ] Gate operationeel groen verklaren op de gekozen gedeployde commit, vóór fase 3 start.
+
+Zie [runtime/testcontract en operationele discipline](daily-runtime.md#systeemtest-en-operationele-gate)
+voor de ene canonieke regel, testniveaus, opdracht, isolatie en beperkingen;
+zie [deployment smoke](plugin-deployment.md#operationele-deployment-smoke) voor
+het aanvullende productiepad. Lokale tests bewijzen geen deployment. Fase 3 mag
+pas starten nadat de relevante systeemtest én deployment smoke aantoonbaar groen
+zijn. Bestaande fase-2-restpunten en andere roadmapstatussen blijven ongewijzigd.
+
 ### Fase 3 — generiek job- en attemptmodel
 
 - [ ] Stabiele jobs, rollen, status, timestamps en input/outputreferenties ontwerpen.
