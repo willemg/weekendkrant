@@ -339,3 +339,27 @@ en een echte Sherlock-run via de herstartte productie-ingress, met succesvolle
 runstart, source-audit, fichepublicaties en runfinish. Samen dekken de lokale
 systeemtest en deze deployment smoke de fase-2.5-gate. Een exact productie-SHA of
 handmatig geverifieerd processed/revision-ID is hierbij niet geregistreerd.
+
+
+## Fase-4-plugin en backendcompatibiliteit
+
+De fase-4-bron voegt vier generieke control-tools toe aan de bestaande vijf:
+claim, validate, finish en abandon. Bestaande Sherlock-toolnamen, schemas en
+antwoorden blijven gelijk. De generieke calls vereisen backend/schema 8;
+update bij latere deployment eerst die backend en voer de lokale tests uit,
+importeer daarna exact de gemergede pluginbron en publiceer via de bestaande
+procedure. Sherlock wordt hierdoor niet naar generieke jobs gemigreerd.
+
+De plugin gebruikt uitsluitend `WEEKENDKRANT_INGRESS_TOKEN`. Het aparte operatorsecret
+`WEEKENDKRANT_RECOVERY_TOKEN` hoort alleen bij de backend, nooit in Sites/pluginenv.
+Er is geen MCP-recoverytool. Claim-/resultaatreceipts en leasegevoelige validatie
+volgen [het canonieke retrycontract](jobs.md#fase-4-protocol-identiteit-en-operation-receipts).
+
+De afzonderlijk te starten plugin-developmenttest
+`plugin/weekendkrant_ingress/tests/bridge_backend.py` valideert de echte
+JavaScript-brug → HTTP → SQLite met geïnjecteerde verloren antwoorden na commit.
+Hij staat buiten de Python-discovery en vereist geen Node-installatie op bibib.
+Discovery en bestemming worden voor deze test naar loopback gemapt; dit is geen
+bewijs van de gepubliceerde externe route. Bij latere deployment blijft de echte
+deployment smoke een afzonderlijke operationele gate. Deze fase-4-PR publiceert
+geen plugin en claimt geen nieuw productie- of smoke-bewijs.

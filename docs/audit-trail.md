@@ -184,3 +184,15 @@ callaudit volgt in een aparte stap.
 
 Er is nu geen automatische retentie. Actieve state, open missies en benodigd
 bronbewijs vragen een afzonderlijk, begrensd bewaarbeleid; dat wordt later ontworpen.
+
+
+## Generieke control-plane-audit (fase 4)
+
+De job-/attempt-/recoveryaudit wordt aangevuld met immutable `job_operations`:
+operation-ID, type, requestdigest, job-/attempt-ID, compact antwoord zonder token
+en backendtijd. Receipt en jobmutatie zijn één commit; verloren antwoorden blijven
+inspecteerbaar en exact herhaalbaar. Tokens staan alleen in `job_attempts`, nooit
+in receipts of requestlogs. Validate geeft actuele leasegevoelige state; een oude
+claimreceipt bewijst alleen de vroegere claimcommit. Geen modelreasoning,
+verzonnen usage of side-effectgaranties worden als audit opgeslagen.
+Zie [identiteit en retries](jobs.md#fase-4-protocol-identiteit-en-operation-receipts).

@@ -1,4 +1,4 @@
-"""Generic durable job storage, deliberately disconnected from runtime/control plane.
+"""Generic durable job storage, shared by the explicit-job control plane.
 
 Expiry quarantines work, never authorizes automatic reexecution. Reconciliation
 asserts the old executor stopped and effects were checked, with durable evidence.

@@ -6,7 +6,7 @@ Deployment bestaat uit synchronisatie van één gemergede commit, gevolgd door
 publicatie. Zie [het canonieke deploymentdocument](../../docs/plugin-deployment.md)
 voor de werkwijze, architecturale motivatie en deploymentidentiteit.
 
-## Vijf MCP-tools
+## Bestaande vijf MCP-tools
 
 | Tool | Input | Compact succesresultaat |
 | --- | --- | --- |
@@ -38,7 +38,57 @@ reasoning/chain-of-thought. Finish sluit de run definitief af.
 
 De filtertool is read-only; de overige vier tools wijzigen backendstate. Alle
 calls vereisen de bestaande `oai-authenticated-user-id`-header. De MCP-handler
-biedt exact deze vijf tools en weigert onbekende toolnamen met een JSON-RPC-error.
+behoudt deze vijf tools en voegt vier generieke tools toe. Onbekende toolnamen
+geven een JSON-RPC-error.
+
+## Generieke control-plane (fase 4)
+
+| Tool | Input | Compact succesresultaat (naast `status: success`) |
+| --- | --- | --- |
+| `claim_weekendkrant_job` | `operation_id`, `job_id`, `activation_id` | Claim-ID/token/lease, rol en immutable input/contractrefs; of `claim: null` |
+| `validate_weekendkrant_claim` | `job_id`, `attempt_id`, `token` | Job/attempt-ID, `claim_status`, `valid`, `lease_until` |
+| `finish_weekendkrant_job` | `operation_id`, claim-ID/token, `status` (`succeeded`/`failed`/`uncertain`), `output_refs`; optioneel `error` | Job/attempt-ID en `job_status` |
+| `abandon_weekendkrant_job` | `operation_id`, claim-ID/token, `error` | Job/attempt-ID en `job_status: blocked` |
+
+Strikte velden en begrensde teksten/referenties; de plugin controleert ook
+response-identiteiten. Alle vier wijzigen private jobstate (validate kan expiry
+vastleggen) en publiceren niets. De metadata-audit geldt voor alle vier hints:
+
+| Tool | readOnlyHint | destructiveHint | idempotentHint | openWorldHint |
+| --- | --- | --- | --- | --- |
+| `claim_weekendkrant_job` | false | true | true | false |
+| `validate_weekendkrant_claim` | false | true | true | false |
+| `finish_weekendkrant_job` | false | true | true | false |
+| `abandon_weekendkrant_job` | false | true | true | false |
+
+- `readOnlyHint=false`: claim schrijft een attempt/receipt; finish en abandon
+  sluiten bestaande attempts af. Ook validate kan persistent expiry vastleggen.
+- `destructiveHint=true`: finish maakt succeeded/failed terminaal; abandon
+  sluit de attempt als uncertain en blokkeert de job. **Alle vier**, inclusief
+  claim en validate, voeren eerst de expiryquarantaine uit: verlopen running
+  attempts worden expired en hun jobs blocked, ook buiten de aangeleverde job
+  en bij een geweigerde operatie of receipt-replay. Dit is geen louter additieve write.
+- `idempotentHint=true`: exacte claim/finish/abandon-retries met dezelfde
+  operation-ID en argumenten gebruiken persistente receipts. Validate herhaalt
+  dezelfde actuele controle zonder extra attempt of resultaat; expiry is een
+  herhaalbare lifecycle-overgang. Een voortschrijdende backendklok kan het
+  antwoord en de expiryquarantaine veranderen; de hint belooft geen vast antwoord.
+- `openWorldHint=false`: effecten blijven binnen de private Weekendkrant-state.
+  De vaste discovery en backend zijn transport binnen deze begrensde dienst;
+  input-/outputreferenties worden niet bezocht en er is geen externe publicatie.
+
+`tests/bridge.test.js` controleert per tool via `tools/list` exact het volledige
+annotations-object, net als voor de vijf bestaande tools.
+Gebruik bij transportretry dezelfde operation-ID en exacte argumenten. Dezelfde
+activation-ID geldt voor de hele activation, ook na jobfinish. Een oude claimreceipt
+is geen nieuwe uitvoeringsbevoegdheid: valideer vóór werk en respecteer de lease.
+De control-plane claimt alleen een expliciet job-ID, zonder dispatcher of jobcreate.
+Zie [protocol en retries](../../docs/jobs.md#fase-4-protocol-identiteit-en-operation-receipts).
+
+Recovery is uitsluitend een apart backend-operatorendpoint met een afzonderlijk
+secret. De plugin heeft geen reconcile-tool en krijgt geen recoverysecret.
+Backend/schema 8 moeten vóór import/publicatie van deze pluginversie gereed zijn.
+Bestaande Sherlock-instructies gebruiken voorlopig uitsluitend hun huidige tools.
 
 ## Discovery en HTTP
 
@@ -53,6 +103,7 @@ bouwt sibling endpoints met `URL` op dezelfde gevalideerde host:
 - `/sherlock/sources/filter`
 - `/sherlock/sources`
 - `/sherlock/runs/finish`
+- `/jobs/claim`, `/jobs/validate`, `/jobs/finish`, `/jobs/abandon`
 
 Callers kunnen geen host of backendpad kiezen. Alle POSTs gebruiken uitsluitend
 `WEEKENDKRANT_INGRESS_TOKEN`. Sites beheert de echte waarde buiten deze bron.
@@ -82,15 +133,56 @@ Sites beheert overige deployment-, plugin- en toegangsmetadata buiten deze bron.
 
 ## Lokaal testen en bouwen
 
-Gebruik Node.js 22 of nieuwer. Geen dependencies, echte secret of netwerk nodig:
+De functionele minimumversie voor tests en build is **Node.js 18.3.0**.
+`package.json` legt dit vast met `engines.node`. De gebruikte features bepalen
+deze grens:
+
+| Feature | Beschikbaarheid / bewijs |
+| --- | --- |
+| `fetch`, `Request`, `Response` zonder extra flags | Vanaf Node 18.0.0 standaard aanwezig ([Node 18-aankondiging](https://nodejs.org/en/blog/announcements/v18-release-announce)) |
+| `node:test` en `node --test` | Testmodule vanaf 18.0.0; CLI-flag vanaf 18.1.0 ([CLI-documentatie](https://nodejs.org/api/cli.html#--test)) |
+| `Response.json()` | Ontbreekt in echte Node 18.2.0; aanwezig in 18.3.0. De pluginchecks zijn op 18.3.0 gecontroleerd. Node 18.3.0 bundelt Undici 5.4.0 ([release](https://nodejs.org/en/blog/release/v18.3.0)). Dit is de bepalende ondergrens. |
+| `AbortSignal.timeout()`, `Object.hasOwn`, ES modules/top-level await, `node:fs/promises` | Beschikbaar vóór 18.3.0; de concrete test/buildpaden zijn op 18.3.0 gecontroleerd. |
+
+Dit is een featureminimum, geen eis dat de test-runner- of fetch-API destijds al
+als stabiel gemarkeerd was, en geen versiecontract voor de gehoste worker.
+`npm test` en `npm run build` draaien vooraf `scripts/check-runtime.mjs`.
+De expliciete plugin-developmenttest met Python-backendfixture gebruikt dezelfde
+preflight vóór tijdelijke database/server worden gestart: een ontbrekende/te oude Node of uitgeschakelde fetch-feature geeft
+een concrete fout, geen stille skip. Er zijn geen Node-packageafhankelijkheden,
+echte secrets of extern netwerk nodig om de tests/build uit te voeren:
 
 ```sh
 npm --prefix plugin/weekendkrant_ingress test
 npm --prefix plugin/weekendkrant_ingress run build
 ```
 
-Tests dekken de bestaande fichetool, strikte discovery, vijf toolschemas en
+Tests dekken de bestaande fichetool, strikte discovery, negen toolschemas en
 annotations, exacte authenticated POSTs, input- en responsevalidatie, foutmapping,
 secretbescherming en MCP-dispatch. De build kopieert worker en hostingmanifest
 naar `dist/server/index.js` en `dist/.openai/hosting.json`. Deze lokale buildoutput
 wordt niet gecommit en het buildcommando publiceert niets.
+
+
+### Optionele bridge/backend-developmenttest
+
+Start deze test expliciet in een plugin-developmentomgeving met Node.js >=18.3.0
+én Python 3.9+ (de fixture gebruikt alleen de standaardbibliotheek):
+
+```sh
+npm --prefix plugin/weekendkrant_ingress run test:backend
+```
+
+Of gebruik vanuit de repositoryroot een expliciete Python-interpreter:
+
+```sh
+.venv/bin/python plugin/weekendkrant_ingress/tests/bridge_backend.py
+```
+
+Deze test bewaart de echte JavaScript-brug → HTTP → SQLite-dekking van operation-ID
+replay en verloren claim-/finishantwoorden na commit. Hij staat buiten de gewone
+Python-testdiscovery en buiten `npm test`; de opdracht is uitsluitend voor plugin-
+development, niet voor bibib. `./start_tests.sh` en de Python-systeemgate op bibib
+blijven volledig Node-vrij. De backend/Python-tests bewijzen hun eigen persistente
+replay-/idempotentiecontract; de werkelijk gepubliceerde Sites-route wordt apart
+bewezen door de bestaande deployment-smoke.

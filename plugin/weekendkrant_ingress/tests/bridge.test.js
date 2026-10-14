@@ -55,10 +55,10 @@ test('unauthenticated MCP write denied',async()=>{
 const record={run_id:17,topic:2,url:'https://example.com/a',outcome:'selected',rationale:'Primary evidence'};
 const cases=[['start_sherlock_run',{},'/sherlock/runs',{run_id:17,topic:2},{status:'success',run_id:17,topic:2}],['filter_sherlock_sources',{urls:['https://example.com/a?b=1']},'/sherlock/sources/filter',{unreviewed:['https://example.com/a?b=1']},{status:'success',unreviewed:['https://example.com/a?b=1']}],['record_sherlock_source',record,'/sherlock/sources',{canonical_url:record.url},{status:'success',canonical_url:record.url}],['finish_sherlock_run',{run_id:17,status:'completed'},'/sherlock/runs/finish',{run_id:17,status:'completed'},{status:'success',run_id:17,run_status:'completed'}]];
 const invoke=(name,args,result)=>{let n=0;return callTool(name,args,env,async()=>n++?Response.json(result):Response.json({url:good}));};
-test('exact five tool names and schemas',async()=>{
+test('original five tools retain names and schemas',async()=>{
  const r=await worker.fetch(new Request('https://site.test/mcp',{method:'POST',body:JSON.stringify({id:1,method:'tools/list'})}),{});
  assert.deepEqual((await r.json()).result.tools,TOOLS);
- assert.deepEqual(TOOLS.map(t=>t.name),['submit_weekendkrant_fiche',...cases.map(c=>c[0])]);
+ assert.deepEqual(TOOLS.slice(0,5).map(t=>t.name),['submit_weekendkrant_fiche',...cases.map(c=>c[0])]);
  for(const t of TOOLS){if(t.name!=='submit_weekendkrant_fiche')assert.equal(t.inputSchema.additionalProperties,false);}
  assert.deepEqual(TOOLS[1].inputSchema.properties,{});
  assert.equal(TOOLS[2].inputSchema.properties.urls.maxItems,50);
@@ -70,7 +70,11 @@ const annotationMatrix=[
  ['start_sherlock_run',false,false,false,false],
  ['filter_sherlock_sources',true,false,true,false],
  ['record_sherlock_source',false,false,true,false],
- ['finish_sherlock_run',false,true,true,false]
+ ['finish_sherlock_run',false,true,true,false],
+ ['claim_weekendkrant_job',false,true,true,false],
+ ['finish_weekendkrant_job',false,true,true,false],
+ ['abandon_weekendkrant_job',false,true,true,false],
+ ['validate_weekendkrant_claim',false,true,true,false]
 ];
 for(const [name,readOnlyHint,destructiveHint,idempotentHint,openWorldHint] of annotationMatrix)test(`${name} advertises exact bounded annotations`,async()=>{
  const r=await worker.fetch(new Request('https://site.test/mcp',{method:'POST',body:JSON.stringify({id:1,method:'tools/list'})}),{});
@@ -152,4 +156,63 @@ test('Sherlock discovery failures and missing secret stay compact',async()=>{
 
 test('parameterless start accepts omitted MCP arguments',async()=>{
  assert.deepEqual(await invoke('start_sherlock_run',undefined,{run_id:17,topic:2}),{status:'success',run_id:17,topic:2});
+});
+
+test('generic claim/finish/abandon/validate preserve operation and claim identities',async()=>{
+ const authority={job_id:3,attempt_id:7,token:'claim-secret'};
+ const cases=[
+  ['claim_weekendkrant_job','/jobs/claim',{job_id:3,activation_id:'activation:1',operation_id:'claim:1'},
+   {...authority,lease_until:'2026-10-14T20:00:00.000000+00:00',role:'test',input_refs:['input:v1'],output_contract_ref:'contract:v1'}],
+  ['finish_weekendkrant_job','/jobs/finish',{...authority,operation_id:'finish:1',status:'succeeded',output_refs:['result:v1']},
+   {job_id:3,attempt_id:7,job_status:'succeeded'}],
+  ['abandon_weekendkrant_job','/jobs/abandon',{...authority,operation_id:'abandon:1',error:'unknown effects'},
+   {job_id:3,attempt_id:7,job_status:'blocked'}],
+  ['validate_weekendkrant_claim','/jobs/validate',authority,
+   {job_id:3,attempt_id:7,claim_status:'expired',valid:false,lease_until:'2026-10-14T20:00:00.000000+00:00'}]
+ ];
+ for(const [name,path,args,result] of cases){
+  let n=0;
+  assert.deepEqual(await callTool(name,args,env,async(url,options)=>{
+   if(n++===0)return ok({url:good});
+   assert.equal(new URL(url).pathname,path);assert.deepEqual(JSON.parse(options.body),args);
+   return ok(result);
+  }),{status:'success',...result});
+  assert.equal((await callTool(name,{...args,extra:1},env,()=>assert.fail('network'))).code,'invalid_request');
+  n=0;
+  assert.equal((await callTool(name,args,env,async()=>n++?ok({...result,job_id:999}):ok({url:good}))).code,'response_invalid');
+ }
+ assert.equal(TOOLS.some(t=>t.name.includes('reconcile')),false);
+ for(const t of TOOLS.filter(t=>t.name.includes('job')||t.name.includes('claim'))){
+  assert.equal(t.annotations.idempotentHint,true);
+  assert.equal(t.inputSchema.additionalProperties,false);
+ }
+});
+test('generic tools reject malformed identity and bound content before network',async()=>{
+ const args={job_id:3,activation_id:'a',operation_id:'op'};
+ for(const bad of [true,0,1.2,Number.MAX_SAFE_INTEGER+1])
+  assert.equal((await callTool('claim_weekendkrant_job',{...args,job_id:bad},env,()=>assert.fail('network'))).code,'invalid_request');
+ for(const bad of ['', ' ', 'x'.repeat(129)])
+  assert.equal((await callTool('claim_weekendkrant_job',{...args,operation_id:bad},env,()=>assert.fail('network'))).code,'invalid_request');
+ const finish={job_id:3,attempt_id:7,token:'secret',operation_id:'op',status:'succeeded',output_refs:[]};
+ for(const output_refs of [null,[''],Array(33).fill('ref'),['x'.repeat(513)]])
+  assert.equal((await callTool('finish_weekendkrant_job',{...finish,output_refs},env,()=>assert.fail('network'))).code,'invalid_request');
+});
+test('generic lost answer remains an error, no automatic request retry or fresh identity',async()=>{
+ let n=0;
+ const r=await callTool('claim_weekendkrant_job',{job_id:3,activation_id:'a',operation_id:'op'},env,async()=>{
+  if(n++===0)return ok({url:good});throw Error('response lost');
+ });
+ assert.equal(n,2);assert.equal(r.code,'backend_unreachable');
+});
+
+test('generic null claims, forged responses and finish failure states are explicit',async()=>{
+ const args={job_id:3,activation_id:'a',operation_id:'op'};
+ assert.deepEqual(await invoke('claim_weekendkrant_job',args,{claim:null}),{status:'success',claim:null});
+ for(const result of [{claim:null,token:'unexpected'},{job_id:3,attempt_id:7,token:'',lease_until:'invalid',role:'r',input_refs:[],output_contract_ref:'c'}])
+  assert.equal((await invoke('claim_weekendkrant_job',args,result)).code,'response_invalid');
+ for(const status of ['failed','uncertain']){
+  const finish={job_id:3,attempt_id:7,token:'secret',operation_id:'op',status,output_refs:[],error:null};
+  const result={job_id:3,attempt_id:7,job_status:status==='uncertain'?'blocked':status};
+  assert.deepEqual(await invoke('finish_weekendkrant_job',finish,result),{status:'success',...result});
+ }
 });
