@@ -355,8 +355,10 @@ De plugin gebruikt uitsluitend `WEEKENDKRANT_INGRESS_TOKEN`. Het aparte operator
 Er is geen MCP-recoverytool. Claim-/resultaatreceipts en leasegevoelige validatie
 volgen [het canonieke retrycontract](jobs.md#fase-4-protocol-identiteit-en-operation-receipts).
 
-Naast de bestaande systeemgate valideert `test_system_job_control.py` de echte
+De afzonderlijk te starten plugin-developmenttest
+`plugin/weekendkrant_ingress/tests/bridge_backend.py` valideert de echte
 JavaScript-brug → HTTP → SQLite met geïnjecteerde verloren antwoorden na commit.
+Hij staat buiten de Python-discovery en vereist geen Node-installatie op bibib.
 Discovery en bestemming worden voor deze test naar loopback gemapt; dit is geen
 bewijs van de gepubliceerde externe route. Bij latere deployment blijft de echte
 deployment smoke een afzonderlijke operationele gate. Deze fase-4-PR publiceert

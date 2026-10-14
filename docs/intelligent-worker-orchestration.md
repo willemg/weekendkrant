@@ -362,8 +362,13 @@ Zie [het fase-4-protocol](jobs.md#fase-4-protocol-identiteit-en-operation-receip
 voor velden, fencing, transportretries, persistente receipts en afzonderlijke
 operatorauthenticatie. Claim kiest alleen een aangeleverd job-ID. Sherlock blijft
 op de specifieke runtime; geen dispatcher, scheduler- of capacitywijziging.
-Implementatie en lokale systeemtests zijn gerealiseerd; Sites-publicatie en
+Implementatie en lokale backendtests zijn gerealiseerd; Sites-publicatie en
 productie-upgrade zijn geen bewijs of wijziging van deze fase-4-PR.
+
+De testlagen blijven gescheiden: de Python-suite en systeemgate op bibib zijn
+Node-vrij; JavaScript-pluginchecks en de expliciete bridge/backend-developmenttest
+draaien afzonderlijk. Het gepubliceerde Sites → tunnel → backend-pad vereist de
+bestaande deployment-smoke. Zie [testlagen](jobs.md#testlagen-en-bewijsgrenzen).
 
 ### Fase 5 — Sherlock naar generieke executor migreren
 

@@ -222,24 +222,35 @@ tests bewijzen geen gepubliceerde Sites-deployment of productie-upgrade.
 ```bash
 .venv/bin/python -m unittest discover -s tests
 .venv/bin/python -m unittest discover -s tests -p 'test_system*.py' -v
-node --test plugin/weekendkrant_ingress/tests/*.test.js
+# Afzonderlijk in de plugin-developmentomgeving:
+npm --prefix plugin/weekendkrant_ingress test
+npm --prefix plugin/weekendkrant_ingress run test:backend
 ```
 
-De nieuwe systeemtest draait de echte JavaScript-brug, HTTP-backend en tijdelijke
-SQLite samen; alleen discovery en bestemming worden naar loopback gemapt. Verloren
-claim- en finishantwoorden na commit worden werkelijk geïnjecteerd. De bestaande
-Sherlock-ingress/Ariadne/part/revision-systeemgate blijft daarnaast verplicht.
+## Testlagen en bewijsgrenzen
 
-Validatie van fase 4 op 14 oktober 2026: **231 Python-tests groen**, inclusief
-13 control-protocoltests, 3 HTTP-tests en beide systeemketens (3 systeemtests
-inclusief cachepreflight); **32 plugintests groen** en pluginbuild geslaagd.
-Opnieuw uitgevoerd na de gerichte documentatie-/preflightcorrecties, met Python
-3.12 en zowel Node.js 24.19.0 als de featureminimumversie 18.3.0: de volledige
-Python- en pluginsuite en de pluginbuild zijn op beide versies groen. Node 18.2.0
-wordt door de preflight geweigerd omdat `Response.json()` ontbreekt; een ontbrekende
-fetch-feature geeft eveneens een concrete fout. Voor de gecombineerde Python-suite
-is Node.js >=18.3.0 op `PATH` nodig om de JavaScript/HTTP/SQLite-systeemtest uit te voeren;
-de gedeelde Node-versie-/featurepreflight en het bestaande offline
-tokenizercache-preflight blijven gelden. Zie [featureminimum en
-onderbouwing](../plugin/weekendkrant_ingress/README.md#lokaal-testen-en-bouwen). Dit is lokaal
-bewijs, geen afzonderlijke uitvoering op bibib of publieke deployment smoke.
+- Weekendkrant/bibib: Python unit-, integratie- en systeemtests van backend,
+  SQLite en Ariadne. `./start_tests.sh` en `unittest discover -s tests` starten
+  geen Node en vereisen geen Node-installatie. De HTTP-controltests en persistente
+  operationtests blijven operation-ID replay, verloren antwoorden, idempotentie,
+  lease/fencing, concurrency en crashherstel bewijzen.
+- MCP/Sites-plugin: afzonderlijke JavaScript-tests en pluginbuild. De optionele
+  `plugin/weekendkrant_ingress/tests/bridge_backend.py` is een expliciete plugin-
+  developmenttest van de echte JavaScript-brug → HTTP → tijdelijke SQLite, met
+  verloren claim- en finishantwoorden na commit. Alleen discovery/bestemming worden
+  naar loopback gemapt. Hij staat buiten de Python-discovery en draait alleen via
+  de expliciete pluginopdracht, nooit via `./start_tests.sh`.
+- Het werkelijk gepubliceerde Sites → tunnel → backend-pad wordt bewezen door de
+  bestaande afzonderlijke deployment-smoke, niet door een lokale bridge-test.
+
+Plugin-development vereist Node.js >=18.3.0; de versie-/featurepreflight geldt
+uitsluitend voor die laag. De optionele backendfixture gebruikt daarnaast Python,
+zonder extra Python-packages. Zie [opdrachten en featureminimum](../plugin/weekendkrant_ingress/README.md#lokaal-testen-en-bouwen).
+De bestaande offline tokenizercache-preflight blijft gelden voor de Python/Ariadne-
+systeemgate op bibib.
+
+Validatie na scheiding van de testlagen op 14 oktober 2026: **230 Python-tests**,
+waaronder 13 control-protocoltests, 3 HTTP-tests en **2 systeemtests** inclusief
+cachepreflight, groen met Node volledig buiten `PATH`. **32 JavaScript-plugintests**,
+de afzonderlijke optionele bridge/backend-test en de pluginbuild groen. Dit is
+lokaal bewijs, geen uitvoering op bibib of nieuwe deployment-smoke.

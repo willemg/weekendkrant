@@ -85,11 +85,10 @@ niet door deze cleanup.
 ## Installatie en uitvoering
 
 Python 3.9 of nieuwer en de tokenizer uit `requirements.txt` zijn vereist.
-Voor `./start_tests.sh` en de volledige Python-suite is ook Node.js **18.3.0 of
-nieuwer** op `PATH` nodig: de generieke systeemtest start de JavaScript-brug.
-Dezelfde functionele ondergrens geldt voor plugintests/build. De Node-preflight
-controleert versie en runtimefeatures; zie [onderbouwing en testvereisten](plugin/weekendkrant_ingress/README.md#lokaal-testen-en-bouwen).
-De Python-backend en Ariadne zelf gebruiken geen Node.js.
+`./start_tests.sh` en alle Python unit-, integratie- en systeemtests op bibib
+zijn volledig Node-vrij. Node.js is uitsluitend vereist voor de afzonderlijke
+MCP/Sites-plugin-developmenttests en build; zie
+[plugin-testvereisten](plugin/weekendkrant_ingress/README.md#lokaal-testen-en-bouwen).
 De installatie staat onder `/home/weekendkrant/app`:
 
 ```bash

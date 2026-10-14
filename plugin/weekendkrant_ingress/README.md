@@ -115,14 +115,14 @@ deze grens:
 | --- | --- |
 | `fetch`, `Request`, `Response` zonder extra flags | Vanaf Node 18.0.0 standaard aanwezig ([Node 18-aankondiging](https://nodejs.org/en/blog/announcements/v18-release-announce)) |
 | `node:test` en `node --test` | Testmodule vanaf 18.0.0; CLI-flag vanaf 18.1.0 ([CLI-documentatie](https://nodejs.org/api/cli.html#--test)) |
-| `Response.json()` | Ontbreekt in echte Node 18.2.0; aanwezig in 18.3.0. De volledige suites zijn op 18.3.0 gecontroleerd. Node 18.3.0 bundelt Undici 5.4.0 ([release](https://nodejs.org/en/blog/release/v18.3.0)). Dit is de bepalende ondergrens. |
+| `Response.json()` | Ontbreekt in echte Node 18.2.0; aanwezig in 18.3.0. De pluginchecks zijn op 18.3.0 gecontroleerd. Node 18.3.0 bundelt Undici 5.4.0 ([release](https://nodejs.org/en/blog/release/v18.3.0)). Dit is de bepalende ondergrens. |
 | `AbortSignal.timeout()`, `Object.hasOwn`, ES modules/top-level await, `node:fs/promises` | Beschikbaar vóór 18.3.0; de concrete test/buildpaden zijn op 18.3.0 gecontroleerd. |
 
 Dit is een featureminimum, geen eis dat de test-runner- of fetch-API destijds al
 als stabiel gemarkeerd was, en geen versiecontract voor de gehoste worker.
 `npm test` en `npm run build` draaien vooraf `scripts/check-runtime.mjs`.
-De Python-systeemtest gebruikt dezelfde preflight vóór tijdelijke database/server
-worden gestart: een ontbrekende/te oude Node of uitgeschakelde fetch-feature geeft
+De expliciete plugin-developmenttest met Python-backendfixture gebruikt dezelfde
+preflight vóór tijdelijke database/server worden gestart: een ontbrekende/te oude Node of uitgeschakelde fetch-feature geeft
 een concrete fout, geen stille skip. Er zijn geen Node-packageafhankelijkheden,
 echte secrets of extern netwerk nodig om de tests/build uit te voeren:
 
@@ -136,3 +136,27 @@ annotations, exacte authenticated POSTs, input- en responsevalidatie, foutmappin
 secretbescherming en MCP-dispatch. De build kopieert worker en hostingmanifest
 naar `dist/server/index.js` en `dist/.openai/hosting.json`. Deze lokale buildoutput
 wordt niet gecommit en het buildcommando publiceert niets.
+
+
+### Optionele bridge/backend-developmenttest
+
+Start deze test expliciet in een plugin-developmentomgeving met Node.js >=18.3.0
+én Python 3.9+ (de fixture gebruikt alleen de standaardbibliotheek):
+
+```sh
+npm --prefix plugin/weekendkrant_ingress run test:backend
+```
+
+Of gebruik vanuit de repositoryroot een expliciete Python-interpreter:
+
+```sh
+.venv/bin/python plugin/weekendkrant_ingress/tests/bridge_backend.py
+```
+
+Deze test bewaart de echte JavaScript-brug → HTTP → SQLite-dekking van operation-ID
+replay en verloren claim-/finishantwoorden na commit. Hij staat buiten de gewone
+Python-testdiscovery en buiten `npm test`; de opdracht is uitsluitend voor plugin-
+development, niet voor bibib. `./start_tests.sh` en de Python-systeemgate op bibib
+blijven volledig Node-vrij. De backend/Python-tests bewijzen hun eigen persistente
+replay-/idempotentiecontract; de werkelijk gepubliceerde Sites-route wordt apart
+bewezen door de bestaande deployment-smoke.
