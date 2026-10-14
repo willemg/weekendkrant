@@ -80,7 +80,7 @@ class MaterializationTests(unittest.TestCase):
             before = db.execute('SELECT * FROM source_archive').fetchall()
             self.assertIsNone(report(old, now=self.now)['materialization'])
             database.migrate(db)
-            self.assertEqual(db.execute('PRAGMA user_version').fetchone(), (6,))
+            self.assertEqual(db.execute('PRAGMA user_version').fetchone(), (database.SCHEMA_VERSION,))
             self.assertEqual(db.execute('SELECT * FROM source_archive').fetchall(), before)
             self.assertEqual(db.execute('SELECT * FROM source_materializations').fetchall(), [])
             snapshot = list(db.iterdump())

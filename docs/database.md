@@ -9,7 +9,7 @@ Schema en migraties staan wel in Git; er worden geen productiegegevens meegeleve
 
 ## Eén migratieketen
 
-`database.py` beheert alle DDL en `PRAGMA user_version`. De actuele versie is **6**.
+`database.py` beheert alle DDL en `PRAGMA user_version`. De actuele versie is **7**.
 De genummerde SQL-bestanden in `migrations/` zijn de bron van waarheid:
 
 | Versie | Migratie | Verantwoordelijkheid |
@@ -20,6 +20,7 @@ De genummerde SQL-bestanden in `migrations/` zijn de bron van waarheid:
 | 4 | `004_sherlock_state.sql` | Sherlock-runs en daadwerkelijk gereviewde bronpagina's |
 | 5 | `005_sherlock_fiches.sql` | Immutable Sherlock-run→queue-item-provenance |
 | 6 | `006_source_materializations.sql` | Immutable UTC-materialisatietijd per gearchiveerd queue-item |
+| 7 | `007_jobs.sql` | Generieke jobs, afzonderlijke attempts/claims en reconciliatieaudit |
 
 De historische nummering blijft behouden. Versie 0 kan een lege database zijn,
 maar ook reeds de voorheen ongeversioneerde runtime-tabellen bevatten.
@@ -180,6 +181,20 @@ en koppeling samen. Runfinish gebruikt dezelfde SQLite-schrijflock. Een fout
 laat geen half ontvangen fiche achter. Zonder `run_id` blijft ingress ongekoppeld.
 Het mappingrecord blijft na processing en runafsluiting bestaan. Geen generieke
 jobs of aanvullende source→fiche-koppeling worden geïntroduceerd.
+
+## Generieke jobopslag (schema 7)
+
+`jobs` bewaart stabiele rol-, input- en contractidentiteit plus lifecycle en outputs.
+`job_attempts` bewaart afzonderlijke uitvoeringsclaims, unieke activatie/token,
+vaste leases en terminale uitkomsten. `job_recoveries` bewaart immutable
+reconciliatiebeslissingen met bewijsreferenties. De legacy-tabel `attempts`
+blijft ongewijzigd Ariadnes runtimefoutaudit.
+
+`jobs.JobStore` migreert via dezelfde centrale keten en gebruikt korte atomaire
+transacties. Expiry blokkeert uitvoering, late resultaten worden gefenced en
+een nieuwe attempt vereist expliciete veilige reconciliatie. Er is geen
+backfill, dispatcher, control plane of wijziging aan bestaande runtimecontracten.
+Zie [volledig lifecycle-, herstel- en testcontract](jobs.md).
 
 ## Volgende schemawijzigingen
 
