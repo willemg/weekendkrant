@@ -93,6 +93,18 @@ class LoggingTests(unittest.TestCase):
         self.assertEqual(stdout.getvalue(), json.dumps(result, indent=2, sort_keys=True) + '\n')
         self.assertEqual(stderr.getvalue(), '')
 
+    def test_entrypoint_passes_explicit_runtime_paths(self):
+        paths = [Path(self.tmp.name) / name for name in ('app', 'db', 'output', 'lock', 'log')]
+        argv = ['ariadne.py', 'daily']
+        for option, path in zip(('repo', 'db', 'output', 'lock', 'log'), paths):
+            argv.extend(['--' + option, str(path)])
+        with patch('sys.argv', argv), patch.object(ariadne, 'configure_logging') as logging_setup, \
+                patch.object(daily, 'run_daily', return_value={}) as consume, \
+                redirect_stdout(io.StringIO()):
+            ariadne.main()
+        logging_setup.assert_called_once_with(paths[4])
+        consume.assert_called_once_with(paths[0], db_path=paths[1], output=paths[2], lock_path=paths[3])
+
     def test_entrypoint_logs_expected_and_unexpected_exceptions_with_traceback(self):
         # Ook onverwachte runtimefouten worden aan de unattended grens afgehandeld.
         for error in (ValueError('Ongeldig auditrecord'), OSError('Schijffout'),

@@ -60,6 +60,8 @@ SQLite-schema; zie [databasebeheer](docs/database.md). Bestaande rijen en
 historische dagbestanden blijven behouden. Nieuwe items gebruiken uitsluitend
 het partmodel; het eerste item maakt part 1/revision 1.
 Zie [runtime en crashgedrag](docs/daily-runtime.md).
+Voor de verplichte systeemtest na ketenwijzigingen en de aanvullende deployment
+smoke: [testopdracht en operationele gate](docs/daily-runtime.md#systeemtest-en-operationele-gate).
 
 `daily` is de enige operationele Ariadne-taak. Er zijn geen Git-operaties,
 weekbranches, beheerde weekworktree, weekrapport of automatische retentie nodig.
