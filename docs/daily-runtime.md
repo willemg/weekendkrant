@@ -175,7 +175,12 @@ geen automatische aanbieding. Deze stap voegt geen cronjob toe.
 
 ## Installeren en handmatig controleren op bibib
 
-Python 3.9.2 blijft ondersteund. Vanuit `/home/weekendkrant/app`:
+Python 3.9.2 blijft ondersteund. Voor de volledige testsuite (`./start_tests.sh`)
+is daarnaast Node.js >=18.3.0 op `PATH` vereist; de generieke systeemtest draait
+de JavaScript-brug en voert eerst de gedeelde Node-versie-/featurepreflight uit.
+De backend en `daily` zelf hebben geen Node-afhankelijkheid. Zie
+[onderbouwing en pluginchecks](../plugin/weekendkrant_ingress/README.md#lokaal-testen-en-bouwen).
+Vanuit `/home/weekendkrant/app`:
 
 ```bash
 python3 -m venv .venv
@@ -287,7 +292,10 @@ TIKTOKEN_CACHE_DIR=/home/weekendkrant/.cache/tiktoken .venv/bin/python -m unitte
 ```
 
 De test is ook onderdeel van de gewone `unittest discover -s tests` en
-`./start_tests.sh`. De zelfstandige opdracht duurt normaliter enkele seconden.
+`./start_tests.sh`. Die volledige suite bevat tevens `test_system_job_control.py`
+en vereist Node.js >=18.3.0. De bovenstaande zelfstandige fase-2.5-test gebruikt
+alleen Python; voer beide systeemketens uit met
+`.venv/bin/python -m unittest discover -s tests -p 'test_system*.py' -v`. De zelfstandige opdracht duurt normaliter enkele seconden.
 Bij een ontbrekende/corrupte cache faalt hij zichtbaar vóór runtime-start,
 zonder download of skip. Vul de cache zo nodig **vooraf**, tijdens installatie
 (met netwerk), met dezelfde interpreter en gewenste `TIKTOKEN_CACHE_DIR`:

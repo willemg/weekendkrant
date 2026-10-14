@@ -1,1 +1,1 @@
-{"name":"weekendkrant-ingress","private":true,"type":"module","scripts":{"test":"node --test","build":"node scripts/build.mjs"}}
+{"name":"weekendkrant-ingress","private":true,"type":"module","scripts":{"test":"node --test","build":"node scripts/build.mjs","pretest":"node scripts/check-runtime.mjs","prebuild":"node scripts/check-runtime.mjs"},"engines":{"node":">=18.3.0"}}

@@ -111,7 +111,10 @@ Zij bedenkt geen onderzoeksvragen en interpreteert geen inhoudelijke relevantie.
 Leonardo kan bijvoorbeeld een dossierverband of missie formuleren; Ariadne
 valideert identifiers, contract en budget en maakt de toegestane job beschikbaar.
 
-Begin met één scheduler, topicrotatie en harde limieten. Voeg pas schedulers toe
+Fase 5 introduceert de minimale deterministische Sherlock-jobproductie met
+topicrotatie en één scheduler, zodat de generieke executor concrete jobs krijgt.
+Fase 7 bouwt daarop de algemene/state-driven dispatcher en verdere concurrency-/
+policyregels. Voeg pas schedulers toe
 als een aantoonbare backlog van nuttig intelligent werk dat rechtvaardigt.
 Niet-uitvoerbaar werk en lege slots veroorzaken geen vervangende bezigheid.
 
@@ -364,10 +367,20 @@ productie-upgrade zijn geen bewijs of wijziging van deze fase-4-PR.
 
 ### Fase 5 — Sherlock naar generieke executor migreren
 
-- [ ] Eerst uitsluitend Sherlock via het nieuwe jobmodel laten lopen.
+- [ ] Minimale deterministische Sherlock-jobproductie/topicrotatie met één scheduler invoeren, met concrete rol-, input- en outputcontractreferenties.
+- [ ] Jobproductie en claim aan dezelfde scheduled activation koppelen; retries behouden operatie-/activationidentiteit en maken geen dubbele job of tweede attempt.
+- [ ] Eerst uitsluitend Sherlock via het nieuwe jobmodel en de generieke executor laten lopen.
 - [ ] Drie topics, zoekworkflow, filtering, source-audit en fichepublicatie behouden.
 - [ ] Batching en bestaand experimenteel safety-retrybeleid behouden.
 - [ ] Source-audit en queue-output aan `job_id` koppelen en herstelgedrag bewijzen.
+
+Fase 4 claimt alleen een expliciet bestaand `job_id` en maakt of selecteert geen
+werk. Daarom hoort de minimale Sherlock-jobproducent bij fase 5: iedere scheduled
+activation krijgt via die deterministische topicrotatie een concrete opdracht
+voor de generieke executor. Deze beperkte productie is een voorwaarde voor de
+Sherlock-migratie en wacht niet op de algemene dispatcher van fase 7. De precieze
+producer-/activationadapter en het retrycontract worden in fase 5 geïmplementeerd
+en bewezen; deze PR past alleen de fasering aan.
 
 Andere rollen toevoegen nadat dit pad stabiel is; retries mogen geen nieuwe
 rolkeuze of tweede job binnen dezelfde scheduled activatie veroorzaken.
@@ -388,12 +401,15 @@ geschiktheid, niet een al uitgevoerde productie-installatie. Fase 6 blijft deels
 Deze fase moet vóór de eerste Sherlock/Leonardo-cyclus operationeel zijn; een
 dagelijkse materialisatie mag geen urenoude oogst achter een klaarstaande job houden.
 
-### Fase 7 — dispatcher introduceren
+### Fase 7 — algemene/state-driven dispatcher introduceren
 
-- [ ] Beginnen met topicrotatie als jobs en één scheduler.
+- [ ] Voortbouwen op de minimale Sherlock-jobproductie en één scheduler uit fase 5; algemene workselectie over beschikbare jobs/state toevoegen.
 - [ ] Harde start-/concurrencylimieten en pause/kill switch vastleggen.
 - [ ] Bij geen nuttig werk geen intelligente job teruggeven.
-- [ ] Daarna state-driven planning op expliciete voorwaarden verfijnen.
+- [ ] State-driven planning op expliciete voorwaarden verfijnen.
+
+Fase 7 generaliseert selectie, concurrency en policy nadat Sherlock zelfstandig
+via fase 5 kan draaien; zij is geen voorwaarde meer voor die eerste migratie.
 
 ### Fase 8 — Leonardo-state en Leonardo-job
 

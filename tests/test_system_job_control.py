@@ -18,7 +18,13 @@ from jobs import JobStore
 
 class GenericSystemTests(unittest.TestCase):
     def test_bridge_to_persistent_control_with_lost_claim_and_finish_responses(self):
-        self.assertIsNotNone(shutil.which('node'), 'Node is required for the generic system gate')
+        node = shutil.which('node')
+        self.assertIsNotNone(node, 'Node.js >=18.3.0 is required for the generic system gate')
+        root = Path(__file__).resolve().parents[1]
+        preflight = subprocess.run([node, str(root /
+            'plugin/weekendkrant_ingress/scripts/check-runtime.mjs')],
+            capture_output=True, text=True, timeout=5)
+        self.assertEqual(preflight.returncode, 0, 'Node runtime preflight: ' + preflight.stderr)
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'system.sqlite3'
             server = create_server(Config(token='fictional-system-token', db_path=path, port=0))
@@ -56,7 +62,7 @@ assert.equal((await callTool('validate_weekendkrant_claim',authority,env,bridge)
 assert.equal((await callTool('claim_weekendkrant_job',{...args,operation_id:'system:second',job_id:Number(process.argv[3])},env,bridge)).code,'conflict');
 console.log(JSON.stringify({job_id,attempt_id:claim.attempt_id}));
 '''
-                result = subprocess.run(['node', '--input-type=module', '-e', script,
+                result = subprocess.run([node, '--input-type=module', '-e', script,
                     'http://%s:%s' % server.server_address, str(job), str(other)],
                     cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True, timeout=20)
                 self.assertEqual(result.returncode, 0, result.stderr)

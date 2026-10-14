@@ -107,7 +107,24 @@ Sites beheert overige deployment-, plugin- en toegangsmetadata buiten deze bron.
 
 ## Lokaal testen en bouwen
 
-Gebruik Node.js 22 of nieuwer. Geen dependencies, echte secret of netwerk nodig:
+De functionele minimumversie voor tests en build is **Node.js 18.3.0**.
+`package.json` legt dit vast met `engines.node`. De gebruikte features bepalen
+deze grens:
+
+| Feature | Beschikbaarheid / bewijs |
+| --- | --- |
+| `fetch`, `Request`, `Response` zonder extra flags | Vanaf Node 18.0.0 standaard aanwezig ([Node 18-aankondiging](https://nodejs.org/en/blog/announcements/v18-release-announce)) |
+| `node:test` en `node --test` | Testmodule vanaf 18.0.0; CLI-flag vanaf 18.1.0 ([CLI-documentatie](https://nodejs.org/api/cli.html#--test)) |
+| `Response.json()` | Ontbreekt in echte Node 18.2.0; aanwezig in 18.3.0. De volledige suites zijn op 18.3.0 gecontroleerd. Node 18.3.0 bundelt Undici 5.4.0 ([release](https://nodejs.org/en/blog/release/v18.3.0)). Dit is de bepalende ondergrens. |
+| `AbortSignal.timeout()`, `Object.hasOwn`, ES modules/top-level await, `node:fs/promises` | Beschikbaar vóór 18.3.0; de concrete test/buildpaden zijn op 18.3.0 gecontroleerd. |
+
+Dit is een featureminimum, geen eis dat de test-runner- of fetch-API destijds al
+als stabiel gemarkeerd was, en geen versiecontract voor de gehoste worker.
+`npm test` en `npm run build` draaien vooraf `scripts/check-runtime.mjs`.
+De Python-systeemtest gebruikt dezelfde preflight vóór tijdelijke database/server
+worden gestart: een ontbrekende/te oude Node of uitgeschakelde fetch-feature geeft
+een concrete fout, geen stille skip. Er zijn geen Node-packageafhankelijkheden,
+echte secrets of extern netwerk nodig om de tests/build uit te voeren:
 
 ```sh
 npm --prefix plugin/weekendkrant_ingress test

@@ -233,7 +233,13 @@ Sherlock-ingress/Ariadne/part/revision-systeemgate blijft daarnaast verplicht.
 Validatie van fase 4 op 14 oktober 2026: **231 Python-tests groen**, inclusief
 13 control-protocoltests, 3 HTTP-tests en beide systeemketens (3 systeemtests
 inclusief cachepreflight); **32 plugintests groen** en pluginbuild geslaagd.
-Uitgevoerd met Python 3.12 en Node.js 24.19.0. Voor de gecombineerde Python-suite is
-nu ook Node.js 22+ nodig om de JavaScript/HTTP/SQLite-systeemtest uit te voeren;
-het bestaande offline tokenizercache-preflight blijft gelden. Dit is lokaal
+Opnieuw uitgevoerd na de gerichte documentatie-/preflightcorrecties, met Python
+3.12 en zowel Node.js 24.19.0 als de featureminimumversie 18.3.0: de volledige
+Python- en pluginsuite en de pluginbuild zijn op beide versies groen. Node 18.2.0
+wordt door de preflight geweigerd omdat `Response.json()` ontbreekt; een ontbrekende
+fetch-feature geeft eveneens een concrete fout. Voor de gecombineerde Python-suite
+is Node.js >=18.3.0 op `PATH` nodig om de JavaScript/HTTP/SQLite-systeemtest uit te voeren;
+de gedeelde Node-versie-/featurepreflight en het bestaande offline
+tokenizercache-preflight blijven gelden. Zie [featureminimum en
+onderbouwing](../plugin/weekendkrant_ingress/README.md#lokaal-testen-en-bouwen). Dit is lokaal
 bewijs, geen afzonderlijke uitvoering op bibib of publieke deployment smoke.

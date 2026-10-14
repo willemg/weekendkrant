@@ -35,7 +35,10 @@ Zie de ontwerpdocumentatie:
 Het [ontwerpbesluit van 13 oktober 2026](docs/intelligent-worker-orchestration.md)
 kiest generieke scheduled executors met één begrensde rol/job per activatie en
 minstens uurlijk, mogelijk sneller lokaal materialiseren als doelrichting.
-De generieke jobruntime is nog niet geïmplementeerd. De bestaande `daily` is
+Generieke jobopslag (fase 3) en de MCP/control-plane (fase 4) zijn geïmplementeerd.
+Geïntegreerde jobproductie en de generieke executor volgen voor Sherlock in fase 5;
+de algemene/state-driven dispatcher volgt in fase 7. Sherlock draait voorlopig
+op zijn bestaande specifieke runtime. De bestaande `daily` is
 geschikt voor herhaalde kwartierstarts; het voorlopige croncontract hieronder
 wordt na merge handmatig ingevoerd en bewijst geen reeds gewijzigde productiecrontab.
 
@@ -82,6 +85,11 @@ niet door deze cleanup.
 ## Installatie en uitvoering
 
 Python 3.9 of nieuwer en de tokenizer uit `requirements.txt` zijn vereist.
+Voor `./start_tests.sh` en de volledige Python-suite is ook Node.js **18.3.0 of
+nieuwer** op `PATH` nodig: de generieke systeemtest start de JavaScript-brug.
+Dezelfde functionele ondergrens geldt voor plugintests/build. De Node-preflight
+controleert versie en runtimefeatures; zie [onderbouwing en testvereisten](plugin/weekendkrant_ingress/README.md#lokaal-testen-en-bouwen).
+De Python-backend en Ariadne zelf gebruiken geen Node.js.
 De installatie staat onder `/home/weekendkrant/app`:
 
 ```bash
