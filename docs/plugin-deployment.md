@@ -135,6 +135,11 @@ Zo kan uit het laatste bevestigde publicatierapport worden afgeleid welke
 GitHub-versie in productie draait. Dit is een rapportagecontract; er wordt geen
 deploymentdatabase of automatische state geïntroduceerd.
 
+Dit is het rapportagecontract voor nieuwe deployments, geen bewijs dat alle
+identifiers historisch zijn vastgelegd. Voor de smoke van 14 oktober 2026 is
+geen exact productie-SHA geregistreerd; de fase-2.5-gate steunt op de hieronder
+beschreven complementaire systeemtest en bevestigde externe fichewrite.
+
 ## Runtimezaken buiten Git
 
 `WEEKENDKRANT_INGRESS_TOKEN` blijft een runtime-secret. De repository bevat alleen
@@ -154,9 +159,21 @@ Deze procedure vult de [lokale systeemtest en canonieke operationele
 regel](daily-runtime.md#systeemtest-en-operationele-gate) aan. Voer haar uit wanneer
 plugin/Sites, ingress-auth/configuratie, tunnel/discovery, systemd of productie-
 ingress geraakt zijn. Na alleen een lokale runtimewijziging blijft controle van
-de geïnstalleerde Ariadne-wrapper en daadwerkelijke materialisatie nodig.
+de geïnstalleerde Ariadne-wrapper nodig; de materialisatieketen wordt bewezen
+met de relevante geïsoleerde systeemtest.
 Voer vóór deployment de lokale systeemtest uit op de gekozen broncommit.
-Dit contract beschrijft controles, deze PR voert geen productie-smoke uit.
+Dit contract beschrijft controles, deze PR voert geen nieuwe productie-smoke uit.
+
+De fase-2.5-gate steunt op twee complementaire bewijzen:
+
+- De geïsoleerde lokale systeemtest bewijst ingress → SQLite → Ariadne →
+  part/revision → processed.
+- De echte deployment smoke bewijst de werkelijk gepubliceerde externe route →
+  productie-ingress → persistente fichewrite.
+
+Samen vormen zij de operationele gate. Een productie-item later door Ariadne
+zien verwerken mag aanvullende observatie zijn, maar is geen verplichte
+wachttijd om de deployment smoke groen te verklaren.
 
 ### 1. Veilige controles zonder redactionele writes
 
@@ -226,11 +243,46 @@ topic en het bevestigde `queue_item_id` van één legitieme fiche.
 Een onbekende POST-uitkomst mag niet blind opnieuw worden gepubliceerd: ingress
 heeft geen deduplicatiesleutel. Onderzoek eerst logs/DB en meld onzekerheid.
 
-Controleer de betreffende queue-/runkoppeling read-only op bibib. Laat de normale
-kwartierconsument verwerken of start de bestaande `./start_ariadne.sh daily`
-handmatig onder het bestaande `flock` (geen configuratie- of statuswijzigingen).
-Als het slot bezet is, wacht op de lopende/volgende run. Controleer daarna, met
-het echte ID als argument in plaats van `123`:
+Controleer de persistente queue-/runkoppeling read-only op bibib, met het echte
+ID als argument in plaats van `123`. Zowel pending als processed is toegestaan:
+het bewijs betreft de bevestigde productie-write, niet het consumptiemoment.
+
+```bash
+.venv/bin/python - 123 <<'PY'
+from contextlib import closing
+import json
+import sqlite3
+import sys
+identity = int(sys.argv[1])
+with closing(sqlite3.connect('file:/home/weekendkrant/weekendkrant.sqlite3?mode=ro', uri=True)) as db:
+    row = db.execute('''SELECT q.id,q.status,q.payload,f.run_id,r.topic
+        FROM ingress_queue q
+        JOIN sherlock_fiches f ON f.queue_item_id=q.id
+        JOIN sherlock_runs r ON r.id=f.run_id WHERE q.id=?''', (identity,)).fetchone()
+assert row is not None, 'Persistente fichewrite of runkoppeling ontbreekt'
+queue_id, status, raw, run_id, topic = row
+payload = json.loads(raw)
+assert payload['topic'] == topic, 'Topicmatch ontbreekt'
+assert isinstance(payload['content'], str) and payload['content'].strip(), 'Fichecontent ontbreekt'
+print(dict(queue_item_id=queue_id, run_id=run_id, topic=topic, status=status))
+PY
+```
+
+Een succesvolle check, samen met de echte pluginpublicatie en bijbehorende
+backend-audit, bewijst de externe schrijfroute tot de persistente fichewrite.
+De fiche is normale gewenste redactionele state; er is niets op te ruimen.
+Verwijder of reset nooit handmatig queue-, audit- of provenancegegevens om een
+smoke groen te maken. Als geen geschikte echte bron beschikbaar is, noteer de
+schrijfgrens expliciet als **niet uitgevoerd** en laat de operationele gate open.
+De veilige controles uit stap 1 kunnen wel al groen zijn.
+
+### 3. Aanvullende observatie: latere productie-materialisatie
+
+Deze controle is optioneel en bepaalt niet of de deployment smoke groen is.
+Laat de normale kwartierconsument verwerken; er hoeft geen handmatige Ariadne-run
+te worden gestart en er hoeft niet op een bezet slot te worden gewacht om de
+smoke af te sluiten. Wie de latere verwerking wil observeren, kan na de normale
+consumptie onderstaande read-only controle uitvoeren:
 
 ```bash
 .venv/bin/python - 123 <<'PY'
@@ -263,20 +315,27 @@ print(dict(queue_item_id=identity, run_id=run, week=week, topic=topic,
 PY
 ```
 
-Een succesvolle check bewijst de echte gepubliceerde schrijfroute én materialisatie
-met coherente bron-/revisieprovenance. De fiche is normale gewenste redactionele
-state; er is niets op te ruimen. Verwijder of reset nooit handmatig queue-, audit-
-of provenancegegevens om een smoke groen te maken. Als geen geschikte echte bron
-beschikbaar is, noteer de schrijfgrens expliciet als **niet uitgevoerd** en laat
-de operationele gate open. De veilige controles uit stap 1 kunnen wel al groen zijn.
+Een succesvolle aanvullende check bevestigt productie-materialisatie met coherente
+bron-/revisieprovenance. Een nog pending item maakt een reeds bevestigde
+persistente fichewrite niet ongeldig en houdt de deployment smoke niet open.
 
-### 3. Bewijs vastleggen vóór onbeheerde runs
+### 4. Bewijs vastleggen vóór onbeheerde runs
 
-Rapporteer app/plugin-commit en Sites-publicatie, tijdstip, lokale systeemtest,
-service/health-resultaten, read-only pluginresultaat met corresponderende backend-
-audit, en het echte run-/queue-ID plus processed part/revision-controle. Noem iedere
-niet uitgevoerde grens expliciet. Een geslaagde lokale call of alleen groene
+Rapporteer de lokale systeemtest, tijdstip en uitkomst, service/health-resultaten,
+read-only pluginresultaat met corresponderende backend-audit en de echte
+run-/queue-identiteit met bevestigde persistente fichewrite. Leg app/plugin-commit
+en Sites-publicatie vast wanneer beschikbaar volgens het deploymentcontract;
+ontbrekende historische identifiers blijven expliciet onbekend, geen geraden SHA.
+Een processed part/revision-controle mag als aanvullende observatie worden
+opgenomen en is geen vereiste voor de gate. Noem iedere niet uitgevoerde
+verplichte grens expliciet. Een geslaagde lokale call of alleen groene
 unit-/integratietests mag geen volledig geslaagde deployment-smokeclaim opleveren.
 Bij fouten: deployment stoppen/onderzoeken via de bestaande bronbeheerroute;
 geen nachtelijke/onbeheerde werking als operationeel bewezen vrijgeven zolang
-de relevante grens onbewezen is. Fase 2.5 blijft dan open vóór fase 3.
+de relevante verplichte grens onbewezen is. Fase 2.5 blijft dan open vóór fase 3.
+
+Het geregistreerde operatorbewijs van 14 oktober 2026 is: 192 tests groen op bibib
+en een echte Sherlock-run via de herstartte productie-ingress, met succesvolle
+runstart, source-audit, fichepublicaties en runfinish. Samen dekken de lokale
+systeemtest en deze deployment smoke de fase-2.5-gate. Een exact productie-SHA of
+handmatig geverifieerd processed/revision-ID is hierbij niet geregistreerd.

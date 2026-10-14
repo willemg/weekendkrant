@@ -280,3 +280,24 @@ os._exit(9)
             self.claim()
         self.assertEqual(self.store.get(self.job)['status'], 'blocked')
         self.assertEqual(self.store.attempts(self.job)[0]['status'], 'expired')
+
+    def test_default_lease_accepts_long_healthy_job_until_one_hour(self):
+        identity = self.store.create('sherlock', [], 'contract:v1')
+        self.assertEqual(self.store.get(identity)['lease_seconds'], 3600)
+        claim = self.store.claim(identity, 'long-healthy-activation')
+        self.assertEqual(claim['lease_until'], (self.now + timedelta(seconds=3600)).isoformat(timespec='microseconds'))
+        self.now += timedelta(seconds=3599)
+        self.store.finish(claim, 'succeeded', ['artifact:long-result'])
+        self.assertEqual(self.store.get(identity)['status'], 'succeeded')
+
+    def test_default_lease_expires_at_one_hour_and_upper_bound_remains_configurable(self):
+        identity = self.store.create('sherlock', [], 'contract:v1')
+        claim = self.store.claim(identity, 'one-hour-activation')
+        maximum = self.store.create('sherlock', [], 'contract:v1', lease_seconds=86400)
+        max_claim = self.store.claim(maximum, 'maximum-lease-activation')
+        self.assertEqual(max_claim['lease_until'], (self.now + timedelta(seconds=86400)).isoformat(timespec='microseconds'))
+        self.now += timedelta(seconds=3600)
+        with self.assertRaises(ValueError):
+            self.store.finish(claim, 'succeeded', [])
+        self.assertEqual(self.store.get(identity)['status'], 'blocked')
+        self.assertEqual(self.store.get(maximum)['status'], 'running')

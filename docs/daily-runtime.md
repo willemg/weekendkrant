@@ -263,6 +263,13 @@ Deze discipline is de [fase-2.5-gate vóór fase 3](intelligent-worker-orchestra
 | Systeem | Bestaande runtime via echte proces-, HTTP-, SQLite- en bestandgrenzen, zonder interne functies achter elkaar aan te roepen. |
 | Deployment smoke | Operationele controle van de werkelijk geïnstalleerde/gepubliceerde componenten en hun configuratie. Aanvullend op lokale systeemtests. |
 
+De fase-2.5-gate combineert twee complementaire bewijzen: de geïsoleerde lokale
+systeemtest bewijst ingress → SQLite → Ariadne → part/revision → processed;
+de echte deployment smoke bewijst de werkelijk gepubliceerde externe route →
+productie-ingress → persistente fichewrite. Samen maken zij de gate operationeel
+groen. Latere verwerking van dat productie-item door Ariadne is aanvullende
+observatie, geen verplichte wachttijd om de deployment smoke groen te verklaren.
+
 ### Opdracht en eenmalige voorbereiding
 
 Vanuit de repositoryroot, met geïnstalleerde `requirements.txt` en een aanwezige

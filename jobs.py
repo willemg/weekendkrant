@@ -90,7 +90,7 @@ class JobStore:
             row['output_refs'] = json.loads(row['output_refs'])
         return rows
 
-    def create(self, role, input_refs, output_contract_ref, lease_seconds=600):
+    def create(self, role, input_refs, output_contract_ref, lease_seconds=3600):
         role = _text(role, 128)
         refs = _refs(input_refs)
         contract = _text(output_contract_ref)

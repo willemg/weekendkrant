@@ -36,17 +36,24 @@ Een toekomstige control plane moet die identiteit betrouwbaar aanleveren, bij
 retry behouden en tokens niet loggen of aan andere executors blootstellen.
 
 Alle tijden zijn UTC ISO 8601 met microseconden. Leaseduur is expliciet 1..86400
-gehele seconden, standaard 600 seconden. Een lease geldt uitsluitend zolang
+gehele seconden, standaard 3600 seconden. Een lease geldt uitsluitend zolang
 `now < lease_until`; op de grens vervalt hij. Geen heartbeat of leaseverlenging:
 een job moet binnen zijn vooraf gekozen duur afronden. De backendklok moet
 betrouwbaar en gesynchroniseerd zijn; workerklokken beslissen niet. Dit is een
 autorisatiegrens, geen proceskill of bewijs dat model-/netwerkwerk gestopt is.
 
+De default van 3600 seconden is in de eerste meetfase een voorlopige
+conservatieve veiligheidsgrens, geen gemeten optimum of gewenste jobduur.
+Lange maar gezonde jobs mogen binnen die grens worden geobserveerd. Een job die
+richting één uur loopt levert nuttige operationele meetinformatie voor later
+lease- en capaciteitsbeleid; dat is geen doel om elke job een uur te laten duren.
+De lease blijft per job configureerbaar, met dezelfde bovengrens van 86400 seconden.
+
 ## Lifecycle en herstel
 
 | Operatie/conditie | Job | Attempt | Gevolg |
 | --- | --- | --- | --- |
-| `create(role, input_refs, output_contract_ref, lease_seconds=600)` | `ready` | Geen | Retourneert stabiele job-ID; iedere create is een nieuwe opdracht |
+| `create(role, input_refs, output_contract_ref, lease_seconds=3600)` | `ready` | Geen | Retourneert stabiele job-ID; iedere create is een nieuwe opdracht |
 | `claim(job_id, activation_id)` op ready | `running` | Nieuwe `running` | Retourneert job-ID, attempt-ID, token en lease-einde |
 | Zelfde claim opnieuw, binnen lease | `running` | Dezelfde | Exact hetzelfde claimantwoord, geen nieuwe attempt |
 | Andere claim op niet-ready | Ongewijzigd | Geen nieuwe | `None`; geen selectie of dispatcher |
@@ -130,7 +137,7 @@ python -m unittest discover -s tests
 python -m unittest discover -s tests -p 'test_system_e2e.py' -v
 ```
 
-Validatie van deze fase op 14 oktober 2026: 212 tests groen in de volledige
-Python-suite, waaronder 20 jobtests; de afzonderlijke systeemtest is 2/2 groen.
+Validatie van deze fase op 14 oktober 2026: 214 tests groen in de volledige
+Python-suite, waaronder 22 jobtests; de afzonderlijke systeemtest is 2/2 groen.
 Deze lokale uitvoering gebruikt Python 3.12; het operatorbewijs van 192 tests
 op bibib betreft de voorafgaande fase-2.5-runtime.

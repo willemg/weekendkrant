@@ -297,14 +297,23 @@ Sherlock → ingress → SQLite → Ariadne-keten na een grote wijziging.
 - [x] Veilige operationele smokeprocedure voor het werkelijk gedeployde pad vastleggen.
 - [x] Verplichte relevante systeemtest en, bij deploymentwijzigingen, smoke na grote wijzigingen aan runtime, ingress, plugin, database of orchestratie canoniek vastleggen.
 - [x] Operationele deployment smoke met een echte Sherlock-run via de herstartte productie-ingress bevestigen en het aangeleverde bewijs vastleggen.
-- [x] Gate operationeel groen verklaren op de gekozen gedeployde commit, vóór fase 3 start.
+- [x] Gate operationeel groen verklaren met de complementaire systeemtest en echte deployment smoke, vóór fase 3 start.
 
 Zie [runtime/testcontract en operationele discipline](daily-runtime.md#systeemtest-en-operationele-gate)
 voor de ene canonieke regel, testniveaus, opdracht, isolatie en beperkingen;
 zie [deployment smoke](plugin-deployment.md#operationele-deployment-smoke) voor
 het aanvullende productiepad. Lokale tests bewijzen geen deployment. Fase 3 mag
 pas starten nadat de relevante systeemtest én deployment smoke aantoonbaar groen
-zijn. Bestaande fase-2-restpunten en andere roadmapstatussen blijven ongewijzigd.
+zijn. Samen vormen die twee complementaire bewijzen de operationele gate:
+
+- De geïsoleerde lokale systeemtest bewijst ingress → SQLite → Ariadne →
+  part/revision → processed.
+- De echte deployment smoke bewijst de werkelijk gepubliceerde externe route →
+  productie-ingress → persistente fichewrite.
+
+Een productie-item later door Ariadne zien verwerken is aanvullende observatie,
+geen verplichte wachttijd voor een groene deployment smoke.
+Bestaande fase-2-restpunten en andere roadmapstatussen blijven ongewijzigd.
 
 Operationeel afgerond op 14 oktober 2026, op basis van het door de operator
 bevestigde bewijs: 192 tests groen op bibib en een echte Sherlock-run via de
@@ -321,7 +330,12 @@ of afzonderlijk processed/revision-ID is hierbij niet aangeleverd.
 - [x] Nieuwe additieve SQLite-migratie implementeren en concurrency/herstel valideren.
 
 Zie [jobopslag en herstelcontract](jobs.md) voor ontwerp, API, grenzen en tests.
-Schema 7 maakt uitsluitend lokale opslag beschikbaar. Expiry blokkeert de job;
+Schema 7 maakt uitsluitend lokale opslag beschikbaar. De voorlopige defaultlease
+is 3600 seconden, een conservatieve veiligheidsgrens voor de eerste meetfase,
+geen gemeten optimum of gewenste jobduur. Een gezonde job richting één uur levert
+juist meetinformatie voor later lease-/capaciteitsbeleid. De lease blijft per job
+configureerbaar tot 86400 seconden, zonder heartbeat/renewal.
+Expiry blokkeert de job;
 een nieuwe attempt vereist expliciete reconciliatie met bewijs van gestopte
 executor en bekende effecten. Attempt-ID plus unieke token fence resultaatacceptatie.
 Er is geen automatische retry van onzekere side effects en geen exactly-once-
