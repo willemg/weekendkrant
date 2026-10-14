@@ -82,6 +82,11 @@ De Quick Tunnel-component publiceert de actuele endpoint-URL via
 Zie [ingress-runtime](docs/ingress-runtime.md); tunnel/plugin/Sherlock veranderen
 niet door deze cleanup.
 
+Architecturaal grondmotief: **bibib lean and mean**. Op bibib komen alleen
+componenten en dependencies die daar werkelijk nodig zijn in productie.
+Ontwikkel-, build- en testdependencies van externe lagen blijven bij hun eigen
+laag; de MCP/Sites-plugin wordt afzonderlijk ontwikkeld en getest.
+
 ## Installatie en uitvoering
 
 Python 3.9 of nieuwer en de tokenizer uit `requirements.txt` zijn vereist.

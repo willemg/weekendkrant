@@ -5,7 +5,8 @@ Leonardo als aparte voornaamste betaalde API-laag, de genoemde modelrollen en
 API-dollarbudgettering zijn het oudere doelontwerp, geen huidige runtime.
 Voor toekomstige execution identity, scheduled capaciteit en gedeelde allowance
 is het [ontwerpbesluit van 13 oktober 2026](intelligent-worker-orchestration.md)
-leidend. De nieuwe generieke jobruntime is nog niet geïmplementeerd.
+leidend. Generieke jobopslag (fase 3) en de MCP/control-plane (fase 4) zijn geïmplementeerd;
+geïntegreerde jobproductie, executor en dispatcher volgen nog.
 
 ## Uitgangspunt
 

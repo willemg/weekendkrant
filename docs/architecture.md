@@ -15,6 +15,28 @@ en met vandaag in `Europe/Brussels`, inclusief achterstand. Toekomstige fiches
 blijven pending. De payloaddatum is provenance en ordening; geen afgesloten
 consumptievenster. Succesvolle dagrecords blokkeren nooit nieuw pending werk.
 
+## Grondmotief: bibib lean and mean
+
+Bibib blijft een compacte productiehost: iedere geïnstalleerde component en
+dependency moet nodig zijn voor werk dat daar in productie werkelijk draait.
+Dat omvat de Python-backend, SQLite, deterministische Ariadne-verwerking en de
+bestaande tunnel/discoverycomponenten met hun eigen productievereisten.
+Een gezamenlijke repository maakt bibib niet tot ontwikkel- of buildhost voor
+alle onderdelen van Weekendkrant.
+
+Ontwikkel-, build- en testdependencies van externe lagen blijven bij die laag.
+De JavaScript MCP-bridge draait op ChatGPT Sites; Node.js hoort uitsluitend bij
+plugin-development en pluginchecks. De gewone Python unit-, integratie- en
+systeemtests op bibib gebruiken de lokale productiecomponenten en blijven volledig
+Node-vrij, inclusief `./start_tests.sh` en de Python-systeemgate.
+
+De expliciete bridge → HTTP → SQLite-developmenttest staat onder de plugin-tests
+in een afzonderlijke ontwikkelomgeving, buiten de Python-discovery. Het werkelijk
+gepubliceerde Sites → tunnel → backend-pad wordt apart bewezen door de bestaande
+deployment-smoke. Zo blijft lokale testdekking behouden zonder dependencies van
+de externe laag op bibib te installeren. Zie [testlagen en bewijsgrenzen](jobs.md#testlagen-en-bewijsgrenzen)
+en [pluginchecks](../plugin/weekendkrant_ingress/README.md#lokaal-testen-en-bouwen).
+
 ## Lokale runtime
 
 | Pad | Functie |
@@ -99,6 +121,13 @@ Logginginitialisatiefouten stoppen de CLI met exitcode 1 en een stderr-diagnose.
 Geïmplementeerd: persistente backlog, cross-day week/topic-parts, open parts,
 immutable revisions, exact bronarchief, deterministische overflow en crashsafe
 registratie en expliciete lokale offer/seal-registratie. Legacy-dagbestanden worden niet retroactief gemigreerd.
+
+Ook geïmplementeerd: de generieke job-/attemptopslag van fase 3 en de expliciete
+MCP/control-plane van fase 4, met claimvalidatie en persistente operatieretries.
+Dit is geen bewijs van productie-invoering of geïntegreerde jobuitvoering.
+Geïntegreerde Sherlock-jobproductie/topicrotatie en de generieke executor volgen
+in fase 5; de algemene/state-driven dispatcher en bredere policy volgen in fase 7.
+Zie [het canonieke board](intelligent-worker-orchestration.md) en [jobprotocol](jobs.md).
 
 [Leonardo-geheugen en regie](leonardo-memory-and-orchestration.md) beschrijft ook
 het toekomstige ontwerp. Een offer bevriest de actieve revisie en sluit de part
