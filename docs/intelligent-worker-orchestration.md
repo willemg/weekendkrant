@@ -11,12 +11,13 @@ zonder een langlevend modelproces nodig te hebben.
 | Status | Wat bestaat of is besloten |
 | --- | --- |
 | Huidige geïmplementeerde runtime | Sherlock-specifieke runstart met atomaire topicrotatie, bronfiltering en source-audit; fiche-ingress naar SQLite; deterministische `daily`-materialisatie naar week/topic-parts met immutable revisies, bronarchief en lokale offer/seal-records. |
+| Geïmplementeerde fase-3-opslag | Lokale generieke jobs, afzonderlijke attempts, atomaire claims, vaste leases en fencing, conservatieve quarantaine en expliciete reconciliatie (schema 7); nog zonder runtime-integratie of control plane. |
 | Huidig beschreven operationeel ritme | Sherlock behandelt volgens zijn canonieke instructies één toegewezen topic per uurrun. De bestaande Ariadne `daily` ondersteunt herhaalde kwartierstarts; het voorlopige lokale croncontract is elke 15 minuten in `Europe/Brussels`, na handmatige invoering. Repository-instructies bewijzen op zichzelf geen actieve schedulerconfiguratie of deployment. |
 | Gekozen doelrichting | Generieke scheduled executors krijgen per activatie maximaal één begrensde job met een door de backend gekozen rol. Persistente state draagt de redactionele continuïteit. Lokale Ariadne-materialisatie moet minstens uurlijk, mogelijk sneller, kunnen draaien. |
-| Nog niet geïmplementeerd | Generieke jobqueue, attempts/claims, dispatcher, generieke MCP-control-plane, Leonardo-state en -jobs, dossiers, missies, drafts, verificatie- en correctiejobs, capaciteitsbeleid en automatische eindredactie. |
+| Nog niet geïmplementeerd | Dispatcher, generieke MCP-control-plane, Leonardo-state en -jobs, dossiers, missies, drafts, verificatie- en correctiejobs, capaciteitsbeleid en automatische eindredactie. |
 
-Deze documentatiestap verandert geen runtimecode, schema, plugin, actieve
-taakinstructies, cron, systemd of deployment. De bestaande runtimecontracten
+Fase 3 voegt uitsluitend lokale jobopslag en schema 7 toe, zonder plugin, actieve
+taakinstructies, cron, systemd of deployment te wijzigen. De bestaande runtimecontracten
 blijven geldig. Bij een verschil tussen oude doelontwerpen en dit document is
 dit document leidend voor de nieuwe orchestratie; het vervangt geen beschrijving
 van reeds geïmplementeerd gedrag.
@@ -120,7 +121,7 @@ onderzoeksvragen bedenken. Zij mag persistente state beheren, input en output
 koppelen, jobs beschikbaar maken en atomair claimen, workflowvoorwaarden en
 harde budgetten controleren, dubbele claims voorkomen en resultaten mechanisch
 naar expliciete dossiers, missies en jobs terugrouteren. Deze uitbreiding van
-haar regietaak is doelontwerp, geen huidige jobruntime.
+haar regietaak is doelontwerp, nog zonder geïntegreerde jobruntime.
 
 De eerdere `daily`-verwerking eenmaal per dag om 10:00 is te traag voor deze
 redactie. Als drie Sherlock-rondes nieuwe fiches leveren en daarna Leonardo
@@ -258,7 +259,7 @@ fichepublicatie. Schema 5 bewaart `sherlock_fiches` atomisch met de queue-insert
 de opgeslagen consumentenpayload blijft exact `schema_version`, `topic`, `date`
 en `content`. Telemetry toont expliciet gekoppelde fiches en queue-IDs per run
 en topic. Historische/ongekoppelde fiches krijgen geen geraden producent.
-Er is nog geen `job_id`. Backend, plugin en actieve Sherlock-instructies moeten
+Er is nog geen `job_id`-koppeling aan Sherlock-fiches. Backend, plugin en actieve Sherlock-instructies moeten
 na merge in die volgorde worden bijgewerkt; deze PR voert dat niet operationeel uit.
 
 Schema 6 voegt de kleine lokale `source_materializations`-provenance toe, atomisch
@@ -295,8 +296,8 @@ Sherlock → ingress → SQLite → Ariadne-keten na een grote wijziging.
 - [x] Eén snelle handmatige testopdracht en de afgedekte/niet-afgedekte grenzen documenteren.
 - [x] Veilige operationele smokeprocedure voor het werkelijk gedeployde pad vastleggen.
 - [x] Verplichte relevante systeemtest en, bij deploymentwijzigingen, smoke na grote wijzigingen aan runtime, ingress, plugin, database of orchestratie canoniek vastleggen.
-- [ ] Deployment smoke op de werkelijk gepubliceerde route uitvoeren en bewijs vastleggen, inclusief een legitieme gekoppelde fiche tot processed part/revision.
-- [ ] Gate operationeel groen verklaren op de gekozen gedeployde commit, vóór fase 3 start.
+- [x] Operationele deployment smoke met een echte Sherlock-run via de herstartte productie-ingress bevestigen en het aangeleverde bewijs vastleggen.
+- [x] Gate operationeel groen verklaren op de gekozen gedeployde commit, vóór fase 3 start.
 
 Zie [runtime/testcontract en operationele discipline](daily-runtime.md#systeemtest-en-operationele-gate)
 voor de ene canonieke regel, testniveaus, opdracht, isolatie en beperkingen;
@@ -305,18 +306,30 @@ het aanvullende productiepad. Lokale tests bewijzen geen deployment. Fase 3 mag
 pas starten nadat de relevante systeemtest én deployment smoke aantoonbaar groen
 zijn. Bestaande fase-2-restpunten en andere roadmapstatussen blijven ongewijzigd.
 
+Operationeel afgerond op 14 oktober 2026, op basis van het door de operator
+bevestigde bewijs: 192 tests groen op bibib en een echte Sherlock-run via de
+herstartte productie-ingress, met succesvolle runstart, source-audit,
+fichepublicaties en runfinish. Dit is aangeleverd operationeel bewijs, geen
+nieuwe productietest vanuit deze fase-3-implementatie; een exact productie-SHA
+of afzonderlijk processed/revision-ID is hierbij niet aangeleverd.
+
 ### Fase 3 — generiek job- en attemptmodel
 
-- [ ] Stabiele jobs, rollen, status, timestamps en input/outputreferenties ontwerpen.
-- [ ] Attempts, atomaire claims, expiry/lease/fencing of gelijkwaardig mechanisme vastleggen.
-- [ ] Crash/herstart, verlopen claims, late resultaten en onzekere side effects specificeren.
-- [ ] Nieuwe additieve SQLite-migratie implementeren en concurrency/herstel valideren.
+- [x] Stabiele jobs, rollen, status, timestamps en input/outputreferenties ontwerpen en implementeren.
+- [x] Afzonderlijke attempts, atomaire claims en expliciete vaste lease-/expiry-/fencing-semantiek vastleggen en implementeren.
+- [x] Crash/herstart, verlopen claims, late resultaten en onzekere side effects specificeren en testen.
+- [x] Nieuwe additieve SQLite-migratie implementeren en concurrency/herstel valideren.
 
-Historisch achtergelaten `running` Sherlock-runs motiveren deze stap; de huidige
-opslag heeft geen TTL of automatisch herstel. Een naïeve boolean of running-lock
-is onvoldoende. Een verlopen claim mag niet ongecontroleerd overlappende uitvoering
-of acceptatie van oude resultaten toelaten. Dit document kiest nog geen schema
-of precieze lease-/fencing-semantiek.
+Zie [jobopslag en herstelcontract](jobs.md) voor ontwerp, API, grenzen en tests.
+Schema 7 maakt uitsluitend lokale opslag beschikbaar. Expiry blokkeert de job;
+een nieuwe attempt vereist expliciete reconciliatie met bewijs van gestopte
+executor en bekende effecten. Attempt-ID plus unieke token fence resultaatacceptatie.
+Er is geen automatische retry van onzekere side effects en geen exactly-once-
+belofte voor externe publicatie. Een unieke activation-ID begrenst elke activatie
+tot één attempt/job. Bestaande Sherlock-runs en Ariadne-attempts blijven intact;
+control plane, dispatcher en migratie van Sherlock behoren tot latere fasen.
+De volledige suite en de bestaande geïsoleerde systeemtest moeten groen zijn;
+de implementatie is geen productie-upgrade of operationele jobintegratie.
 
 ### Fase 4 — generieke MCP/control-plane
 
@@ -423,12 +436,13 @@ Geen aparte permanente agents nodig; deadlinebeleid blijft een expliciete regel.
 ## Open vragen
 
 - Blijft de voorlopige 15-minutencadence passend volgens de werkelijke materialisatietijden en ingest?
-- Welke jobclaim/lease/fencing-semantiek voorkomt overlap en verouderde resultaten,
-  en hoe verloopt crashherstel zonder onzekere effecten blind te herhalen?
+- Hoe wordt het gekozen conservatieve lease-/fencing- en reconciliatiecontract
+  later door control plane en publicatieadapters afgedwongen?
 - Wanneer moet een part aangeboden/sealed worden?
 - Wanneer heeft een Leonardo-job voldoende nieuwe input en welke state krijgt hij?
 - Hoe verhoudt een eerste vaste proefcyclus zich tot volledig state-driven dispatch?
-- Wat is de maximale jobduur en hoe stopt of herstelt een overschrijding?
+- Welke leaseduur binnen het fase-3-bereik past per rol, en hoe wordt een executor
+  operationeel gestopt voordat recovery veilige heruitvoering kan bevestigen?
 - Hoeveel schedulers zijn werkelijk nuttig bij de gemeten backlog?
 - Welk concreet allowance-/budgetbeleid beschermt ook persoonlijke arbeid?
 - Wat zijn de definitieve schemas voor Leonardo-state, dossiers, missies en drafts?

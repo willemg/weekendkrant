@@ -33,6 +33,14 @@ verwerken en runafsluiten veranderen deze immutable relatie niet. Optionele
 Historische/ongekoppelde fiches worden niet achteraf op tijd/topic toegeschreven.
 Zie [databasebeheer](database.md) en [ingressprovenance](ingress-runtime.md#sherlock-ficheprovenance).
 
+## Generieke execution-audit (fase 3)
+
+Schema 7 registreert jobidentiteit, concrete input-/outputreferenties, afzonderlijke
+attempts met claim/lease en immutable terminale uitkomsten. Expired of uncertain
+attempts blijven zichtbaar; een herstelbeslissing krijgt eigen bewijsreferentie
+in `job_recoveries`. Deze lokale audit is nog niet gekoppeld aan Sherlock-fiches,
+modelusage of redactionele claims. Zie [job- en herstelcontract](jobs.md).
+
 ## Minimale kwaliteitslabels
 
 ### verified_first_pass
