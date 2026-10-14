@@ -117,5 +117,6 @@ Zie [invoering en rollback](docs/daily-runtime.md#croncontract-na-merge).
 
 Zie [docs/database.md](docs/database.md) voor het canonieke SQLite-schema, scratch-build en migraties.
 
-Generieke lokale jobopslag (fase 3, schema 7) en het conservatieve claim-/herstelcontract
+Generieke jobopslag (fase 3) en MCP/control-plane (fase 4, schema 8), met het
+conservatieve claim-/herstel- en operation-retrycontract
 staan in [docs/jobs.md](docs/jobs.md); runtime-integratie volgt in latere fasen.

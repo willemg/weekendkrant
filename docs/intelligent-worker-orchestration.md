@@ -11,10 +11,11 @@ zonder een langlevend modelproces nodig te hebben.
 | Status | Wat bestaat of is besloten |
 | --- | --- |
 | Huidige geïmplementeerde runtime | Sherlock-specifieke runstart met atomaire topicrotatie, bronfiltering en source-audit; fiche-ingress naar SQLite; deterministische `daily`-materialisatie naar week/topic-parts met immutable revisies, bronarchief en lokale offer/seal-records. |
-| Geïmplementeerde fase-3-opslag | Lokale generieke jobs, afzonderlijke attempts, atomaire claims, vaste leases en fencing, conservatieve quarantaine en expliciete reconciliatie (schema 7); nog zonder runtime-integratie of control plane. |
+| Geïmplementeerde fase-3-opslag | Lokale generieke jobs, afzonderlijke attempts, atomaire claims, vaste leases en fencing, conservatieve quarantaine en expliciete reconciliatie (schema 7); zonder workerintegratie; de aanvullende fase-4-control-plane staat hieronder. |
 | Huidig beschreven operationeel ritme | Sherlock behandelt volgens zijn canonieke instructies één toegewezen topic per uurrun. De bestaande Ariadne `daily` ondersteunt herhaalde kwartierstarts; het voorlopige lokale croncontract is elke 15 minuten in `Europe/Brussels`, na handmatige invoering. Repository-instructies bewijzen op zichzelf geen actieve schedulerconfiguratie of deployment. |
 | Gekozen doelrichting | Generieke scheduled executors krijgen per activatie maximaal één begrensde job met een door de backend gekozen rol. Persistente state draagt de redactionele continuïteit. Lokale Ariadne-materialisatie moet minstens uurlijk, mogelijk sneller, kunnen draaien. |
-| Nog niet geïmplementeerd | Dispatcher, generieke MCP-control-plane, Leonardo-state en -jobs, dossiers, missies, drafts, verificatie- en correctiejobs, capaciteitsbeleid en automatische eindredactie. |
+| Geïmplementeerde fase-4-control-plane | Expliciete generieke claim/finish/abandon/validate-tools, persistente operatiebevestigingen (schema 8), aparte operatorrecovery; lokaal getest, nog niet gedeployed. |
+| Nog niet geïmplementeerd | Dispatcher, Leonardo-state en -jobs, dossiers, missies, drafts, verificatie- en correctiejobs, capaciteitsbeleid en automatische eindredactie. |
 
 Fase 3 voegt uitsluitend lokale jobopslag en schema 7 toe, zonder plugin, actieve
 taakinstructies, cron, systemd of deployment te wijzigen. De bestaande runtimecontracten
@@ -43,7 +44,7 @@ worker, en claimt na afronding geen tweede job binnen dezelfde activatie.
 | Scheduled executor / worker | Generieke intelligente uitvoerder die bij een scheduled activatie één opdracht kan uitvoeren; heeft geen permanente redactionele rol of betrouwbaar eigen geheugen. |
 | Role | Inhoudelijk contract voor Sherlock, Leonardo, Kuifje, Striktland of Minos. Bepaalt verantwoordelijkheden, toegestane acties en vereiste output. |
 | Job | Eén begrensde opdracht met stabiele `job_id`, rol, inputreferenties, uitvoeringsvoorwaarden en outputcontract. |
-| Job attempt | Eén geregistreerde uitvoeringspoging van dezelfde job, met eigen identiteit, claim, tijden en uitkomst. Een retry van uitvoering hoeft geen nieuwe job te worden. Een losse toolretry is niet automatisch een nieuwe attempt; de exacte grens volgt later. |
+| Job attempt | Eén geregistreerde uitvoeringspoging van dezelfde job, met eigen identiteit, claim, tijden en uitkomst. Een retry van uitvoering hoeft geen nieuwe job te worden. Een bevestigde toolretry met dezelfde operatie-identiteit maakt geen nieuwe attempt; zie fase 4. |
 | Dispatcher | Deterministische backendlogica die op expliciete work/state en configureerbare regels beslist welke uitvoerbare job beschikbaar komt. |
 | Persistent state/artifact | Opgeslagen bronmateriaal, concrete partrevisie, dossierstateversie, missie, draft, resultaat of audit met stabiele referenties; onafhankelijk van workergeheugen. |
 | Dossier | Langlevend inhoudelijk onderzoek met eigen identiteit, state, hypotheses, claims, bronverwijzingen en eventuele missies. Een topic of fysieke part is niet automatisch een dossier. |
@@ -55,7 +56,8 @@ het toekomstige intelligente job-attemptmodel.
 
 ## Protocol en invarianten
 
-Het conceptuele protocol, zonder nu toolnamen of schemas vast te leggen:
+Het conceptuele doelprotocol; het reeds geïmplementeerde fase-4-protocol staat in
+[jobs.md](jobs.md#fase-4-protocol-identiteit-en-operation-receipts):
 
 1. Een scheduled activatie vraagt de backend om werk en claimt atomair een job.
 2. Is er geen uitvoerbaar nuttig werk, dan stopt de activatie.
@@ -74,8 +76,8 @@ Daarbij gelden de volgende doelinvarianten:
   Een inhoudelijk missievoorstel wordt opgeslagen en door de backend gevalideerd.
 - Continuïteit zit in persistente state en expliciet meegegeven bronnen.
   Een modelsamenvatting wordt nooit vanzelf een primaire bron.
-- Input, output, duur en toegestane acties zijn begrensd. Concrete grenzen en
-  herstelovergangen moeten nog worden gekozen.
+- Input, output, duur en toegestane acties zijn begrensd. Jobopslag en control-plane leggen referentie-, lease- en herstelgrenzen vast;
+  inhoudelijke rol-/contextgrenzen volgen bij workerintegratie.
 - Resultaten worden gekoppeld aan job, attempt en gebruikte inputversies.
   Een onbevestigde finish geldt niet als bevestigde succesvolle uitvoering.
 - Gelijktijdige executors mogen dezelfde job niet dubbel uitvoeren. Claims en
@@ -341,16 +343,24 @@ executor en bekende effecten. Attempt-ID plus unieke token fence resultaataccept
 Er is geen automatische retry van onzekere side effects en geen exactly-once-
 belofte voor externe publicatie. Een unieke activation-ID begrenst elke activatie
 tot één attempt/job. Bestaande Sherlock-runs en Ariadne-attempts blijven intact;
-control plane, dispatcher en migratie van Sherlock behoren tot latere fasen.
+De control-plane is in fase 4 toegevoegd; dispatcher en migratie van Sherlock
+blijven latere fasen.
 De volledige suite en de bestaande geïsoleerde systeemtest moeten groen zijn;
 de implementatie is geen productie-upgrade of operationele jobintegratie.
 
 ### Fase 4 — generieke MCP/control-plane
 
-- [ ] Claim/start, resultaat/finish en waar nodig fout/abandon ontwerpen en implementeren.
-- [ ] Compacte auditmetadata, claimvalidatie en veilige concurrency opnemen.
-- [ ] Retry-/idempotentiecontract per operatie expliciet maken.
-- [ ] Bestaande Sherlock-tools aanvankelijk backwards compatible laten bestaan.
+- [x] Claim/start, resultaat/finish en waar nodig fout/abandon ontwerpen en implementeren.
+- [x] Compacte auditmetadata, claimvalidatie en veilige concurrency opnemen.
+- [x] Retry-/idempotentiecontract per operatie expliciet maken.
+- [x] Bestaande Sherlock-tools aanvankelijk backwards compatible laten bestaan.
+
+Zie [het fase-4-protocol](jobs.md#fase-4-protocol-identiteit-en-operation-receipts)
+voor velden, fencing, transportretries, persistente receipts en afzonderlijke
+operatorauthenticatie. Claim kiest alleen een aangeleverd job-ID. Sherlock blijft
+op de specifieke runtime; geen dispatcher, scheduler- of capacitywijziging.
+Implementatie en lokale systeemtests zijn gerealiseerd; Sites-publicatie en
+productie-upgrade zijn geen bewijs of wijziging van deze fase-4-PR.
 
 ### Fase 5 — Sherlock naar generieke executor migreren
 
@@ -451,7 +461,7 @@ Geen aparte permanente agents nodig; deadlinebeleid blijft een expliciete regel.
 
 - Blijft de voorlopige 15-minutencadence passend volgens de werkelijke materialisatietijden en ingest?
 - Hoe wordt het gekozen conservatieve lease-/fencing- en reconciliatiecontract
-  later door control plane en publicatieadapters afgedwongen?
+  door latere publicatieadapters voor externe effecten afgedwongen?
 - Wanneer moet een part aangeboden/sealed worden?
 - Wanneer heeft een Leonardo-job voldoende nieuwe input en welke state krijgt hij?
 - Hoe verhoudt een eerste vaste proefcyclus zich tot volledig state-driven dispatch?

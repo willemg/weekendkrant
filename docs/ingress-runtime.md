@@ -77,7 +77,7 @@ onthouden. Een andere pagina over hetzelfde verhaal blijft een afzonderlijke bro
 er is geen story-deduplicatie. Zie [databasebeheer](database.md) voor het schema
 en de actuele schemaversie.
 
-De MCP-plugin met vijf tools is geïmplementeerd in `plugin/weekendkrant_ingress/`:
+De MCP-plugin met de bestaande vijf tools en vier aanvullende generieke tools is geïmplementeerd in `plugin/weekendkrant_ingress/`:
 `submit_weekendkrant_fiche`, `start_sherlock_run`, `filter_sherlock_sources`,
 `record_sherlock_source` en `finish_sherlock_run`. Implementatie in GitHub is
 geen bewijs van actieve publicatie in Sites. Zie
@@ -279,3 +279,34 @@ pluginpublicatie gebeuren afzonderlijk; deze PR voert ze niet uit.
 De tests gebruiken fake subprocess-output en tijdelijke lokale Git-remotes;
 geen Cloudflare- of GitHub-call. De productiecode gebruikt alleen de Python
 3.9-standaardbibliotheek en Git-opties die Git 2.30.2 ondersteunt.
+
+
+## Generieke control-plane (fase 4)
+
+Naast de bestaande routes biedt dezelfde backend `/jobs/claim`, `/jobs/finish`,
+`/jobs/abandon` en `/jobs/validate`. Alle gebruiken dezelfde strikte JSON-parser,
+bodylimiet, socket-timeout, ingressauthenticatie en compacte toolnaam/statuslogs.
+Elke request opent een eigen SQLite-connection; korte transacties en persistente
+operation receipts serialiseren ook calls uit onafhankelijke backendconnections.
+Er is geen dispatcher, jobproducer of schedulerwijziging. De bestaande HTTPServer
+verwerkt requests serieel; de storagecontracten zijn daarnaast getest tegen echte
+concurrerende connections, zonder afhankelijkheid van die HTTP-serialisatie.
+
+Het operatorendpoint `/jobs/reconcile` vereist alleen de afzonderlijke
+`WEEKENDKRANT_RECOVERY_TOKEN`; de ingresssecret wordt daar geweigerd. Zonder
+recoverysecret is het gesloten. De waarde moet van de ingresssecret verschillen.
+Geef dit secret niet aan Sites, MCP-workers of rolcontracten. De operator moet
+vóór retry bewezen executorstop en veilige effecten vaststellen. De backend
+valideert de bewijsreferentie en execution identity, niet de inhoud van het bewijs.
+
+Succes is HTTP 200 (ook claimreceipt of `claim: null`), ongeldige velden 400,
+authenticatiefout 401, claim-/operationconflict 409, SQLite-onbeschikbaarheid 503.
+Een timeout/503 rechtvaardigt alleen opnieuw aanbieden van dezelfde operation-ID
+en argumenten, geen heruitvoering van externe effecten. Validate heeft actuele,
+leasegevoelige state zonder receipt; het kan expiry persistent registreren.
+Zie [het volledige protocol](jobs.md#fase-4-protocol-identiteit-en-operation-receipts).
+
+Bij latere invoering: eerst backend/schema 8 bijwerken en lokaal testen, daarna
+pluginimport en publicatie volgens de bestaande deploymentprocedure. Sherlock
+blijft voorlopig zijn specifieke runtime en instructies gebruiken. Deze PR voert
+geen productie-upgrade, pluginpublicatie of operationele jobstart uit.

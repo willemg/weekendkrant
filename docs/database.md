@@ -9,7 +9,7 @@ Schema en migraties staan wel in Git; er worden geen productiegegevens meegeleve
 
 ## Eén migratieketen
 
-`database.py` beheert alle DDL en `PRAGMA user_version`. De actuele versie is **7**.
+`database.py` beheert alle DDL en `PRAGMA user_version`. De actuele versie is **8**.
 De genummerde SQL-bestanden in `migrations/` zijn de bron van waarheid:
 
 | Versie | Migratie | Verantwoordelijkheid |
@@ -21,6 +21,7 @@ De genummerde SQL-bestanden in `migrations/` zijn de bron van waarheid:
 | 5 | `005_sherlock_fiches.sql` | Immutable Sherlock-run→queue-item-provenance |
 | 6 | `006_source_materializations.sql` | Immutable UTC-materialisatietijd per gearchiveerd queue-item |
 | 7 | `007_jobs.sql` | Generieke jobs, afzonderlijke attempts/claims en reconciliatieaudit |
+| 8 | `008_job_operations.sql` | Immutable control-plane-operation receipts |
 
 De historische nummering blijft behouden. Versie 0 kan een lege database zijn,
 maar ook reeds de voorheen ongeversioneerde runtime-tabellen bevatten.
@@ -193,8 +194,23 @@ blijft ongewijzigd Ariadnes runtimefoutaudit.
 `jobs.JobStore` migreert via dezelfde centrale keten en gebruikt korte atomaire
 transacties. Expiry blokkeert uitvoering, late resultaten worden gefenced en
 een nieuwe attempt vereist expliciete veilige reconciliatie. Er is geen
-backfill, dispatcher, control plane of wijziging aan bestaande runtimecontracten.
+backfill of dispatcher. Fase 4 voegt de control-plane toe; bestaande
+runtimecontracten blijven behouden.
 Zie [volledig lifecycle-, herstel- en testcontract](jobs.md).
+
+## Control-plane-operationaudit (schema 8)
+
+Migratie `008_job_operations.sql` voegt uitsluitend immutable `job_operations`
+toe. Een globaal unieke operation-ID bindt het operatietype en een SHA-256 van
+canonieke argumenten aan job-ID, eventueel attempt-ID, compact antwoord zonder
+claimtoken en backendtijd. Lifecyclemutatie en receipt committen samen. Exacte
+retries herhalen het bevestigde antwoord; gewijzigde argumenten geven conflict.
+Tokens worden voor claimreplay uit de bestaande attempttabel gelezen.
+
+Geen backfill of mutatie van bestaande tabellen, jobs of attempts. Upgrade van 7
+naar 8, verse opbouw, herhaalde migratie en rollback bij mislukte DDL zijn getest.
+`user_version=8` en de nieuwe tabel/triggers committen samen. Zie
+[control-protocol](jobs.md#fase-4-protocol-identiteit-en-operation-receipts).
 
 ## Volgende schemawijzigingen
 

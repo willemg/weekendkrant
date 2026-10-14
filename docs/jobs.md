@@ -1,7 +1,7 @@
-# Generieke jobs en attempts (schema 7)
+# Generieke jobs, attempts en control-plane (schema 8)
 
-Dit is de lokale opslaglaag van fase 3. Er is geen dispatcher, MCP/control plane,
-worker of productiejob geïntegreerd. Sherlock, ingress en Ariadne blijven hun
+Dit omvat de lokale opslaglaag van fase 3 en de generieke MCP/control-plane
+van fase 4. Er is geen dispatcher, worker of productiejob geïntegreerd. Sherlock, ingress en Ariadne blijven hun
 bestaande contract gebruiken. `attempts` blijft Ariadnes foutaudit;
 `job_attempts` is uitsluitend de nieuwe generieke uitvoeringsaudit.
 
@@ -32,8 +32,9 @@ starttijd, `lease_until`, status, eindtijd, outputreferenties en eventuele fout
 (maximaal 2048 tekens). De oplopende attempt-ID vormt de fencing-generatie, de
 token bewijst bezit van de claim. De unieke activation-ID voorkomt een tweede
 job/attempt binnen dezelfde scheduled activatie, ook voor een andere rol of job.
-Een toekomstige control plane moet die identiteit betrouwbaar aanleveren, bij
-retry behouden en tokens niet loggen of aan andere executors blootstellen.
+De control-plane vereist die identiteit bij claim. De vertrouwde activationadapter
+moet haar globaal uniek en stabiel aanleveren, ook bij retry. Tokens worden niet
+gelogd of aan andere executors blootgesteld. Een scheduleradapter bestaat nog niet.
 
 Alle tijden zijn UTC ISO 8601 met microseconden. Leaseduur is expliciet 1..86400
 gehele seconden, standaard 3600 seconden. Een lease geldt uitsluitend zolang
@@ -75,7 +76,8 @@ Een onbevestigde finish moet eerst dezelfde operatie herhalen of opgeslagen stat
 raadplegen, niet alvast opnieuw publiceren. `get(job_id)` en `attempts(job_id)`
 geven inspecteerbare state; ze maken een verlopen lease niet opnieuw geldig.
 
-Reconciliatie is een **trusted recovery-operatie**, nog zonder externe endpoint.
+Reconciliatie is een **trusted recovery-operatie**. Fase 4 biedt hiervoor een
+afzonderlijk geauthenticeerd operatorendpoint, geen gewone MCP-tool.
 Een niet-lege bewijsreferentie moet naar een controle verwijzen die aantoont dat
 de oude executor gestopt is en de effecten bekend zijn. Voor `retry` moet ook
 vaststaan dat heruitvoering veilig is: geen onbehandelde effecten, of geverifieerde
@@ -86,9 +88,9 @@ Alleen tijdsverloop of een nieuwe schedulerstart is onvoldoende bewijs.
 
 Iedere reconciliatie krijgt één immutable `job_recoveries`-record, gekoppeld aan
 de oude attempt, met beslissing, bewijs, outputs en tijd. Een oude attempt wordt
-niet achteraf van expired/uncertain naar succeeded herschreven. Een herhaalde
-reconciliatie wordt geweigerd; inspecteer de opgeslagen beslissing voordat je
-een nieuwe actie neemt. Outputregistratie publiceert geen artifact en veroorzaakt
+niet achteraf van expired/uncertain naar succeeded herschreven. Een herhaalde lokale `JobStore.reconcile` wordt geweigerd; de fase-4-control-plane
+herhaalt met dezelfde bevestigde operation-ID uitsluitend het opgeslagen antwoord.
+Inspecteer de opgeslagen beslissing voordat je een nieuwe actie neemt. Outputregistratie publiceert geen artifact en veroorzaakt
 geen externe side effect. Dat voorkomt een verborgen exactly-once-belofte.
 
 ## Crash- en concurrency-invarianten
@@ -141,3 +143,97 @@ Validatie van deze fase op 14 oktober 2026: 214 tests groen in de volledige
 Python-suite, waaronder 22 jobtests; de afzonderlijke systeemtest is 2/2 groen.
 Deze lokale uitvoering gebruikt Python 3.12; het operatorbewijs van 192 tests
 op bibib betreft de voorafgaande fase-2.5-runtime.
+
+
+## Fase 4: protocol, identiteit en operation receipts
+
+`job_control.JobControl` bouwt op de bestaande lifecycle. Het claimt uitsluitend
+het expliciete `job_id`: jobs worden lokaal voorbereid met `JobStore.create`.
+Er is geen MCP-create, werkselectie, dispatcher of schedulerintegratie.
+De claim/start is één atomaire operatie, geen aparte tweede startcall.
+Het antwoord bevat `job_id`, `attempt_id` (fencing-generatie), geheime `token`,
+`lease_until`, `role`, `input_refs` en `output_contract_ref`. Een onbeschikbare job
+geeft `{"claim": null}`. Resultaten registreren concrete bestaande versies;
+geen van deze operaties voert modelwerk uit of publiceert artifacts.
+
+| MCP-tool / HTTP POST | Vereiste argumenten | Semantiek en retry |
+| --- | --- | --- |
+| `claim_weekendkrant_job` / `/jobs/claim` | `operation_id`, `job_id`, `activation_id` | Specifieke ready job claimen. Exacte bevestigde retry geeft dezelfde attempt/token en oorspronkelijke lease terug, ook als de attempt ondertussen gesloten is. Een bevestigd null-antwoord blijft null. |
+| `finish_weekendkrant_job` / `/jobs/finish` | `operation_id`, `job_id`, `attempt_id`, `token`, `status`, `output_refs`; optioneel `error` | `succeeded` of `failed` is terminaal; `uncertain` blokkeert. Bevestigde exacte operatie herhaalt alleen het antwoord. Nieuwe operatie-ID met exact dezelfde al bevestigde finish volgt de bestaande no-op-semantiek; conflicterende finish wordt geweigerd. |
+| `abandon_weekendkrant_job` / `/jobs/abandon` | `operation_id`, `job_id`, `attempt_id`, `token`, `error` | Conservatieve finish als uncertain met lege outputs, job blocked. Geen automatische heruitvoering. Exacte bevestigde retry herhaalt alleen het antwoord. |
+| `validate_weekendkrant_claim` / `/jobs/validate` | `job_id`, `attempt_id`, `token` | Actuele claimstatus, `valid` en lease; geen gecachte receipt of operation-ID. Herhalen kan na tijdsverloop een andere status geven. Verlopen attempts worden persistent geblokkeerd. Onbekende/vervalste claim geeft conflict. |
+| Alleen operator: `/jobs/reconcile` | `operation_id`, `job_id`, `attempt_id`, `decision`, `evidence_ref`; optioneel `output_refs` | Beslissing `retry`, `succeeded` of `failed`, met hetzelfde bewijscontract als lokale recovery. Exacte bevestigde retry geeft de oorspronkelijke bevestiging terug, ook na een nieuwe attempt; voert geen tweede recovery uit. |
+
+**Een receipt bewijst een oude commit, geen actuele uitvoeringsbevoegdheid.**
+Controleer een claim met validate vóór uitvoering en controleer het lease-einde.
+Een stale claimreceipt mag geen inhoudelijk werk opnieuw starten. Finish valideert
+opnieuw onder de schrijfslot; een race na validate kan dus alsnog finish weigeren.
+Externe effecten vereisen een eigen adapter met idempotentie en ontvangerfencing,
+plus onderzoek bij onzeker antwoord. Validate alleen voorkomt geen side-effectrace.
+
+De vertrouwde caller kiest één globale `activation_id` per activation en behoudt
+haar gedurende de hele activation, over tools, rollen en transportretries heen.
+Een nieuwe toolcall of een gesloten attempt is geen nieuwe activation. De database
+weigert een tweede attempt bij dezelfde activation, ook voor een andere job.
+Caller-selected IDs zijn hier protocolidentiteiten, geen bewijs van een echte
+schedulerstart; de betrouwbare binding wordt bij latere schedulerintegratie gedaan.
+
+Iedere mutatie vereist een globaal unieke, niet-lege `operation_id` van maximaal
+128 tekens. Gebruik een UUID of namespaced unieke identiteit. Behoud ID én exacte
+argumenten bij timeout, verloren antwoord, HTTP 503 of onzekere bridge-response.
+JSON-objectkeyvolgorde is irrelevant; expliciete optional null versus weglaten en
+volgorde van outputreferenties horen bij de identiteit. Hergebruik van een ID met
+een ander operatietype of andere argumenten geeft HTTP 409, nooit nieuwe uitvoering.
+Een onbevestigde fout schrijft geen receipt; dezelfde operatie mag opnieuw worden
+aangeboden zodra de transport-/lockfout weg is. Een 400 vereist inputcorrectie,
+een 401 authenticatiecorrectie en een 409 stateonderzoek. De bridge retryt niet
+zelf en maakt nooit nieuwe IDs. Transportretry is geen retry van jobuitvoering.
+
+Migratie `008_job_operations.sql` voegt immutable `job_operations` toe met
+operation-ID, operatietype, SHA-256 van canonieke argumenten, job-/attempt-ID,
+compact antwoord zonder token en backendtijd. Geen payload, reasoning of secret
+wordt in requestlogs geschreven. Claimtokens blijven uitsluitend in de bestaande
+attempttabel en worden bij claimreplay daaruit teruggelezen. Receipts hebben geen
+retentietermijn en mogen niet worden verwijderd of overschreven.
+
+Receipt en lifecyclemutatie committen samen in één korte `BEGIN IMMEDIATE`.
+De bestaande lifecycleprimitieven gebruiken intern diezelfde transactie en klok;
+een savepoint rolt een geweigerde operatie terug zonder de vooraf vastgestelde
+expiryquarantaine te verliezen. De klok wordt pas na het verkrijgen van de lock
+gelezen. Geen HTTP-verkeer, filewerk of modelcall vindt plaats onder de schrijfslot.
+Vóór commit crashen laat geen attempt/receipt achter, erna blijft beide bestaan.
+SQLite-lockfouten blijven HTTP 503; concurrency geeft geen dubbele attempts.
+
+De gewone tools gebruiken de bestaande ingresssecret en MCP-userauthenticatie.
+Recovery vereist uitsluitend `WEEKENDKRANT_RECOVERY_TOKEN`, een apart operatorsecret
+in de backendomgeving dat van de ingresssecret moet verschillen. Zonder die variabele
+is het endpoint gesloten. Bewaar het nooit in Sites/pluginenv of workercontracten.
+De endpointauthenticatie begrenst wie bewijs mag bevestigen; de backend beoordeelt
+het inhoudelijke bewijs zelf niet. Expirysweeping blijft lokaal beschikbaar met
+`JobStore.recover_expired`; tijdsverloop maakt een blocked job nooit automatisch ready.
+
+Alle JSON-objecten hebben strikte velden. IDs zijn positieve veilige JSON-integers
+(maximaal 9007199254740991). Artifact-, token-, fout- en activationgrenzen volgen
+het bovenstaande opslagcontract; plugin en backend controleren dezelfde grenzen.
+Bestaande vijf Sherlock/fichetools en hun routes, schemas en runtime blijven bestaan.
+De generieke toolnamen worden uitsluitend toegevoegd. Deze implementatie en lokale
+tests bewijzen geen gepubliceerde Sites-deployment of productie-upgrade.
+
+```bash
+.venv/bin/python -m unittest discover -s tests
+.venv/bin/python -m unittest discover -s tests -p 'test_system*.py' -v
+node --test plugin/weekendkrant_ingress/tests/*.test.js
+```
+
+De nieuwe systeemtest draait de echte JavaScript-brug, HTTP-backend en tijdelijke
+SQLite samen; alleen discovery en bestemming worden naar loopback gemapt. Verloren
+claim- en finishantwoorden na commit worden werkelijk geïnjecteerd. De bestaande
+Sherlock-ingress/Ariadne/part/revision-systeemgate blijft daarnaast verplicht.
+
+Validatie van fase 4 op 14 oktober 2026: **231 Python-tests groen**, inclusief
+13 control-protocoltests, 3 HTTP-tests en beide systeemketens (3 systeemtests
+inclusief cachepreflight); **32 plugintests groen** en pluginbuild geslaagd.
+Uitgevoerd met Python 3.12 en Node.js 24.19.0. Voor de gecombineerde Python-suite is
+nu ook Node.js 22+ nodig om de JavaScript/HTTP/SQLite-systeemtest uit te voeren;
+het bestaande offline tokenizercache-preflight blijft gelden. Dit is lokaal
+bewijs, geen afzonderlijke uitvoering op bibib of publieke deployment smoke.

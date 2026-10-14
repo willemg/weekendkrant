@@ -29,6 +29,34 @@ const contracts={
  record_sherlock_source:{path:'/sherlock/sources',valid:x=>strict(x,['run_id','topic','url','outcome','rationale'],['title'])&&positive(x.run_id)&&topic(x.topic)&&['url','outcome','rationale'].every(k=>nonempty(x[k]))&&(!Object.hasOwn(x,'title')||x.title===null||typeof x.title==='string'),result:r=>nonempty(r.canonical_url)?{canonical_url:r.canonical_url}:null},
  finish_sherlock_run:{path:'/sherlock/runs/finish',valid:x=>strict(x,['run_id','status'])&&positive(x.run_id)&&runStatus(x.status),result:(r,x)=>positive(r.run_id)&&r.run_id===x.run_id&&runStatus(r.status)&&r.status===x.status?{run_id:r.run_id,run_status:r.status}:null}
 };
+// Generic operations select no work and publish no artifacts. Stable IDs are caller-owned.
+const bounded=(x,n=512)=>nonempty(x)&&x.length<=n;
+const refs=x=>Array.isArray(x)&&x.length<=32&&x.every(v=>bounded(v));
+const boundedSchema=n=>({...textSchema,maxLength:n});
+const referenceSchema={type:'array',maxItems:32,items:boundedSchema(512)};
+const authoritySchema={job_id:integer,attempt_id:integer,token:boundedSchema(512)};
+const authority=x=>positive(x.job_id)&&positive(x.attempt_id)&&bounded(x.token);
+const operationSchema={operation_id:boundedSchema(128)};
+const stamp=x=>typeof x==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}\+00:00$/.test(x)&&Number.isFinite(Date.parse(x));
+const generic=[
+ {name:'claim_weekendkrant_job',path:'/jobs/claim',description:'Claim één expliciet aangeleverde job, zonder werkselectie. Gebruik dezelfde globale activation_id voor de hele activatie, en dezelfde operation_id en argumenten bij ieder transportretry. Een bevestigd antwoord kan een oude receipt zijn: controleer lease en validate_weekendkrant_claim vóór uitvoering. Geen tweede job binnen dezelfde activatie.',properties:{...operationSchema,job_id:integer,activation_id:boundedSchema(128)},
+ valid:x=>strict(x,['operation_id','job_id','activation_id'])&&positive(x.job_id)&&bounded(x.operation_id,128)&&bounded(x.activation_id,128),
+ result:(r,x)=>strict(r,['claim'])&&r.claim===null?{claim:null}:strict(r,['job_id','attempt_id','token','lease_until','role','input_refs','output_contract_ref'])&&authority(r)&&r.job_id===x.job_id&&stamp(r.lease_until)&&bounded(r.role,128)&&refs(r.input_refs)&&bounded(r.output_contract_ref)?r:null},
+ {name:'finish_weekendkrant_job',path:'/jobs/finish',description:'Registreer bestaande immutable outputreferenties en uitkomst van één job, zonder publicatie. Claim-ID/token/fencing en lease worden gecontroleerd. Herhaal dezelfde operation_id en exacte argumenten bij onzeker antwoord, nooit het inhoudelijke werk of side effect. uncertain blokkeert voor operatoronderzoek; failed is terminaal.',properties:{...operationSchema,...authoritySchema,status:{type:'string',enum:['succeeded','failed','uncertain']},output_refs:referenceSchema,error:{type:['string','null'],minLength:1,maxLength:2048,pattern:'\\S'}},required:['operation_id','job_id','attempt_id','token','status','output_refs'],
+ valid:x=>strict(x,['operation_id','job_id','attempt_id','token','status','output_refs'],['error'])&&authority(x)&&bounded(x.operation_id,128)&&['succeeded','failed','uncertain'].includes(x.status)&&refs(x.output_refs)&&(x.error==null||bounded(x.error,2048)),
+ result:(r,x)=>strict(r,['job_id','attempt_id','job_status'])&&r.job_id===x.job_id&&r.attempt_id===x.attempt_id&&r.job_status===(x.status==='uncertain'?'blocked':x.status)?r:null},
+ {name:'abandon_weekendkrant_job',path:'/jobs/abandon',description:'Geef een nog geldige claim op met onzekere effecten: registreert uncertain en blokkeert de job, geeft geen toestemming tot retry. Compacte foutnotitie, geen private reasoning. Herhaal dezelfde operation_id en exacte argumenten als het antwoord verloren gaat.',properties:{...operationSchema,...authoritySchema,error:boundedSchema(2048)},
+ valid:x=>strict(x,['operation_id','job_id','attempt_id','token','error'])&&authority(x)&&bounded(x.operation_id,128)&&bounded(x.error,2048),
+ result:(r,x)=>strict(r,['job_id','attempt_id','job_status'])&&r.job_id===x.job_id&&r.attempt_id===x.attempt_id&&r.job_status==='blocked'?r:null},
+ {name:'validate_weekendkrant_claim',path:'/jobs/validate',description:'Controleer huidige claimautoriteit bij de backend. Leasegevoelige actuele state, geen gecachte bevestiging. valid=false verbiedt nieuwe uitvoering/resultaatmutatie; een geldig antwoord is geen fencing of exactly-once-garantie voor externe side effects.',properties:authoritySchema,
+ valid:x=>strict(x,['job_id','attempt_id','token'])&&authority(x),
+ result:(r,x)=>strict(r,['job_id','attempt_id','claim_status','valid','lease_until'])&&r.job_id===x.job_id&&r.attempt_id===x.attempt_id&&['running','expired','uncertain','succeeded','failed'].includes(r.claim_status)&&r.valid===(r.claim_status==='running')&&stamp(r.lease_until)?r:null}
+];
+for(const tool of generic){
+ TOOLS.push({name:tool.name,description:'Werkt uitsluitend op private Weekendkrant-jobstate. '+tool.description,inputSchema:schema(tool.properties,tool.required),annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:true,openWorldHint:false}});
+ contracts[tool.name]={path:tool.path,valid:tool.valid,result:tool.result};
+}
+
 async function post(path,payload,env,fetcher,legacy=false){
  let d;
  try{d=await fetcher(DISCOVERY,{redirect:'manual',signal:AbortSignal.timeout(10000),headers:{Accept:'application/json'}});}catch{return fail('discovery_unreachable');}

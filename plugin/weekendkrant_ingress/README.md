@@ -6,7 +6,7 @@ Deployment bestaat uit synchronisatie van één gemergede commit, gevolgd door
 publicatie. Zie [het canonieke deploymentdocument](../../docs/plugin-deployment.md)
 voor de werkwijze, architecturale motivatie en deploymentidentiteit.
 
-## Vijf MCP-tools
+## Bestaande vijf MCP-tools
 
 | Tool | Input | Compact succesresultaat |
 | --- | --- | --- |
@@ -38,7 +38,31 @@ reasoning/chain-of-thought. Finish sluit de run definitief af.
 
 De filtertool is read-only; de overige vier tools wijzigen backendstate. Alle
 calls vereisen de bestaande `oai-authenticated-user-id`-header. De MCP-handler
-biedt exact deze vijf tools en weigert onbekende toolnamen met een JSON-RPC-error.
+behoudt deze vijf tools en voegt vier generieke tools toe. Onbekende toolnamen
+geven een JSON-RPC-error.
+
+## Generieke control-plane (fase 4)
+
+| Tool | Input | Compact succesresultaat (naast `status: success`) |
+| --- | --- | --- |
+| `claim_weekendkrant_job` | `operation_id`, `job_id`, `activation_id` | Claim-ID/token/lease, rol en immutable input/contractrefs; of `claim: null` |
+| `validate_weekendkrant_claim` | `job_id`, `attempt_id`, `token` | Job/attempt-ID, `claim_status`, `valid`, `lease_until` |
+| `finish_weekendkrant_job` | `operation_id`, claim-ID/token, `status` (`succeeded`/`failed`/`uncertain`), `output_refs`; optioneel `error` | Job/attempt-ID en `job_status` |
+| `abandon_weekendkrant_job` | `operation_id`, claim-ID/token, `error` | Job/attempt-ID en `job_status: blocked` |
+
+Strikte velden en begrensde teksten/referenties; de plugin controleert ook
+response-identiteiten. Alle vier wijzigen private jobstate (validate kan expiry
+vastleggen), zijn idempotent volgens het operatiecontract en publiceren niets.
+Gebruik bij transportretry dezelfde operation-ID en exacte argumenten. Dezelfde
+activation-ID geldt voor de hele activation, ook na jobfinish. Een oude claimreceipt
+is geen nieuwe uitvoeringsbevoegdheid: valideer vóór werk en respecteer de lease.
+De control-plane claimt alleen een expliciet job-ID, zonder dispatcher of jobcreate.
+Zie [protocol en retries](../../docs/jobs.md#fase-4-protocol-identiteit-en-operation-receipts).
+
+Recovery is uitsluitend een apart backend-operatorendpoint met een afzonderlijk
+secret. De plugin heeft geen reconcile-tool en krijgt geen recoverysecret.
+Backend/schema 8 moeten vóór import/publicatie van deze pluginversie gereed zijn.
+Bestaande Sherlock-instructies gebruiken voorlopig uitsluitend hun huidige tools.
 
 ## Discovery en HTTP
 
@@ -53,6 +77,7 @@ bouwt sibling endpoints met `URL` op dezelfde gevalideerde host:
 - `/sherlock/sources/filter`
 - `/sherlock/sources`
 - `/sherlock/runs/finish`
+- `/jobs/claim`, `/jobs/validate`, `/jobs/finish`, `/jobs/abandon`
 
 Callers kunnen geen host of backendpad kiezen. Alle POSTs gebruiken uitsluitend
 `WEEKENDKRANT_INGRESS_TOKEN`. Sites beheert de echte waarde buiten deze bron.
@@ -89,7 +114,7 @@ npm --prefix plugin/weekendkrant_ingress test
 npm --prefix plugin/weekendkrant_ingress run build
 ```
 
-Tests dekken de bestaande fichetool, strikte discovery, vijf toolschemas en
+Tests dekken de bestaande fichetool, strikte discovery, negen toolschemas en
 annotations, exacte authenticated POSTs, input- en responsevalidatie, foutmapping,
 secretbescherming en MCP-dispatch. De build kopieert worker en hostingmanifest
 naar `dist/server/index.js` en `dist/.openai/hosting.json`. Deze lokale buildoutput

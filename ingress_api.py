@@ -12,9 +12,15 @@ import sqlite3
 
 from ingress_queue import IngressQueue, FicheRunConflict
 from sherlock_state import SherlockState
+from job_control import JobControl, ControlConflict
 
 
 TOOL_ROUTES = {
+    '/jobs/claim': 'claim_weekendkrant_job',
+    '/jobs/validate': 'validate_weekendkrant_claim',
+    '/jobs/finish': 'finish_weekendkrant_job',
+    '/jobs/abandon': 'abandon_weekendkrant_job',
+    '/jobs/reconcile': 'reconcile_weekendkrant_job',
     '/ingress': 'submit_weekendkrant_fiche',
     '/sherlock/runs': 'start_sherlock_run',
     '/sherlock/sources/filter': 'filter_sherlock_sources',
@@ -33,8 +39,11 @@ class Config:
     db_path: Path = Path('/home/weekendkrant/weekendkrant.sqlite3')
     host: str = '127.0.0.1'
     port: int = 8000
+    recovery_token: str = field(default='', repr=False)
 
     def __post_init__(self):
+        if self.recovery_token and self.recovery_token == self.token:
+            raise ValueError('Recovery token must be distinct from ingress token')
         if not self.token:
             raise ValueError('WEEKENDKRANT_INGRESS_TOKEN ontbreekt of is leeg')
 
@@ -46,7 +55,8 @@ class Config:
         parser.add_argument('--db', type=Path, default=cls.db_path)
         args = parser.parse_args(argv)
         return cls(token=os.environ.get('WEEKENDKRANT_INGRESS_TOKEN', ''),
-                   db_path=args.db, host=args.host, port=args.port)
+                   db_path=args.db, host=args.host, port=args.port,
+                   recovery_token=os.environ.get('WEEKENDKRANT_RECOVERY_TOKEN', ''))
 
 
 def create_server(config):
@@ -112,8 +122,9 @@ def create_server(config):
                 self.reply(404, {'error': 'not_found'})
                 return
             authorization = self.headers.get('Authorization', '')
-            expected = 'Bearer ' + config.token
-            if not hmac.compare_digest(authorization.encode('utf-8'), expected.encode('utf-8')):
+            token = config.recovery_token if self.path == '/jobs/reconcile' else config.token
+            expected = 'Bearer ' + token
+            if not token or not hmac.compare_digest(authorization.encode('utf-8'), expected.encode('utf-8')):
                 self.reply(401, {'error': 'unauthorized'})
                 return
             try:
@@ -153,9 +164,14 @@ def create_server(config):
                 return
 
             try:
-                self.handle_sherlock(payload)
+                if self.path.startswith('/jobs/'):
+                    self.handle_job(payload)
+                else:
+                    self.handle_sherlock(payload)
+            except ControlConflict:
+                self.reply(409, {'error': 'job_conflict'})
             except sqlite3.IntegrityError:
-                self.reply(409, {'error': 'source_conflict'})
+                self.reply(409, {'error': 'job_conflict' if self.path.startswith('/jobs/') else 'source_conflict'})
             except sqlite3.Error:
                 self.reply(503, {'error': 'database_unavailable'})
             except ValueError as error:
@@ -193,6 +209,13 @@ def create_server(config):
             if not isinstance(payload, dict):
                 raise ValueError('Expected JSON object')
             return payload
+
+        def handle_job(self, payload):
+            with closing(sqlite3.connect(config.db_path, timeout=5)) as db:
+                control = JobControl(db)
+                operation = self.path.rsplit('/', 1)[-1]
+                result = control.validate(payload) if operation == 'validate' else control.execute(operation, payload)
+                self.reply(200, result)
 
         def handle_sherlock(self, payload):
             def schema(required, optional=()):
