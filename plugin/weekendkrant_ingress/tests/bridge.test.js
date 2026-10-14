@@ -70,7 +70,11 @@ const annotationMatrix=[
  ['start_sherlock_run',false,false,false,false],
  ['filter_sherlock_sources',true,false,true,false],
  ['record_sherlock_source',false,false,true,false],
- ['finish_sherlock_run',false,true,true,false]
+ ['finish_sherlock_run',false,true,true,false],
+ ['claim_weekendkrant_job',false,true,true,false],
+ ['finish_weekendkrant_job',false,true,true,false],
+ ['abandon_weekendkrant_job',false,true,true,false],
+ ['validate_weekendkrant_claim',false,true,true,false]
 ];
 for(const [name,readOnlyHint,destructiveHint,idempotentHint,openWorldHint] of annotationMatrix)test(`${name} advertises exact bounded annotations`,async()=>{
  const r=await worker.fetch(new Request('https://site.test/mcp',{method:'POST',body:JSON.stringify({id:1,method:'tools/list'})}),{});

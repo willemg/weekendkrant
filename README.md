@@ -28,6 +28,7 @@ Zie de ontwerpdocumentatie:
 - [Leonardo: geheugen, draden en deterministische regie](docs/leonardo-memory-and-orchestration.md)
 - [Token- en kostenstrategie](docs/token-and-cost-strategy.md)
 - [Audit trail en kwaliteitslabels](docs/audit-trail.md)
+- [Technisch leerlog: incidenten en blijvende regels](docs/lessons-learned.md)
 - [Redactionele principes](docs/editorial-principles.md)
 
 ## Huidige runtime

@@ -52,7 +52,33 @@ geven een JSON-RPC-error.
 
 Strikte velden en begrensde teksten/referenties; de plugin controleert ook
 response-identiteiten. Alle vier wijzigen private jobstate (validate kan expiry
-vastleggen), zijn idempotent volgens het operatiecontract en publiceren niets.
+vastleggen) en publiceren niets. De metadata-audit geldt voor alle vier hints:
+
+| Tool | readOnlyHint | destructiveHint | idempotentHint | openWorldHint |
+| --- | --- | --- | --- | --- |
+| `claim_weekendkrant_job` | false | true | true | false |
+| `validate_weekendkrant_claim` | false | true | true | false |
+| `finish_weekendkrant_job` | false | true | true | false |
+| `abandon_weekendkrant_job` | false | true | true | false |
+
+- `readOnlyHint=false`: claim schrijft een attempt/receipt; finish en abandon
+  sluiten bestaande attempts af. Ook validate kan persistent expiry vastleggen.
+- `destructiveHint=true`: finish maakt succeeded/failed terminaal; abandon
+  sluit de attempt als uncertain en blokkeert de job. **Alle vier**, inclusief
+  claim en validate, voeren eerst de expiryquarantaine uit: verlopen running
+  attempts worden expired en hun jobs blocked, ook buiten de aangeleverde job
+  en bij een geweigerde operatie of receipt-replay. Dit is geen louter additieve write.
+- `idempotentHint=true`: exacte claim/finish/abandon-retries met dezelfde
+  operation-ID en argumenten gebruiken persistente receipts. Validate herhaalt
+  dezelfde actuele controle zonder extra attempt of resultaat; expiry is een
+  herhaalbare lifecycle-overgang. Een voortschrijdende backendklok kan het
+  antwoord en de expiryquarantaine veranderen; de hint belooft geen vast antwoord.
+- `openWorldHint=false`: effecten blijven binnen de private Weekendkrant-state.
+  De vaste discovery en backend zijn transport binnen deze begrensde dienst;
+  input-/outputreferenties worden niet bezocht en er is geen externe publicatie.
+
+`tests/bridge.test.js` controleert per tool via `tools/list` exact het volledige
+annotations-object, net als voor de vijf bestaande tools.
 Gebruik bij transportretry dezelfde operation-ID en exacte argumenten. Dezelfde
 activation-ID geldt voor de hele activation, ook na jobfinish. Een oude claimreceipt
 is geen nieuwe uitvoeringsbevoegdheid: valideer vóór werk en respecteer de lease.
