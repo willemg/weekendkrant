@@ -181,7 +181,7 @@ def intelligent_backlog_report():
         'source': 'current_runtime_contract',
         'ready_items': None,
         'oldest_ready_at': None,
-        'reason': 'De huidige runtime registreert geen klaarstaand intelligent werk; ingress-pending, parts, offers en Sherlock-runs zijn geen intelligente werkqueue.',
+        'reason': 'De intelligente backlogmeting is nog niet aangesloten op generieke jobstate; ingress-pending, parts, offers en Sherlock-runs worden niet als intelligente werkqueue geteld.',
     }
 
 
@@ -209,7 +209,7 @@ def report(db_path=DB_PATH, hours=24, now=None):
             'Alleen geregistreerde reviews; ongeregistreerde inhoudelijke reviews zijn onbekend.',
             'Fichetellingen omvatten alleen expliciet gekoppelde queue-items; legacy/ongekoppelde producers blijven onbekend.',
             'Historische materialisatietijden zonder expliciete registratie en werkelijk modelgebruik blijven onbekend.',
-            'Geen generieke jobs: intelligente backlog niet bepaalbaar; pending is alleen ingressbacklog.',
+            'Generieke jobstate is nog niet op deze backlogmeting aangesloten; pending is alleen ingressbacklog.',
             'Offers zijn lokale seals, geen bewijs van modelontvangst; running kan achtergelaten zijn.',
         ],
     }

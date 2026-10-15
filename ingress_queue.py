@@ -65,9 +65,11 @@ class IngressQueue:
             if cursor.rowcount != 1:
                 raise ValueError(f'Queue-item niet pending: queue:{identity}')
 
-    def add(self, payload, run_id=None):
+    def add(self, payload, run_id=None, claim=None):
         if not isinstance(payload, dict):
             raise ValueError('Payload moet een JSON-object zijn')
+        if claim is not None and run_id is None:
+            raise FicheRunConflict('Claim requires run_id')
         if run_id is not None:
             if type(run_id) is not int or not 0 < run_id <= 9007199254740991:
                 raise ValueError('run_id moet een positieve safe integer zijn')
@@ -80,7 +82,16 @@ class IngressQueue:
         with closing(sqlite3.connect(self.db_path)) as db, db:
             db.execute('PRAGMA foreign_keys=ON')
             db.execute('BEGIN IMMEDIATE')
+            if (run_id is None
+                    and db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='sherlock_assignments'").fetchone()
+                    and db.execute('SELECT 1 FROM sherlock_assignments').fetchone()):
+                raise FicheRunConflict('Job-backed ingress requires run and claim')
             if run_id is not None:
+                from sherlock_executor import require_run_authority
+                try:
+                    require_run_authority(db, run_id, claim)
+                except ValueError as error:
+                    raise FicheRunConflict(str(error)) from error
                 run = db.execute('SELECT topic,status FROM sherlock_runs WHERE id=?', (run_id,)).fetchone()
                 if run is None or run != (payload['topic'], 'running'):
                     raise FicheRunConflict('Fiche vereist een running run met hetzelfde topic')

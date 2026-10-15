@@ -373,3 +373,13 @@ aangeleverde bevestiging; er is hierbij geen nieuwe productietest uitgevoerd
 en geen exact productie-SHA of afzonderlijke bewijs-ID vastgelegd. De generieke
 tools waren beschikbaar, maar Sherlocks actieve instructies waren nog niet
 gemigreerd en bleven de bestaande specifieke tools gebruiken.
+
+
+## Fase-5-plugin en invoering
+
+De tiende tool `start_weekendkrant_executor` en de optionele claimmetadata bij
+bron-/fichewrites vereisen eerst backend/schema 9. De lokale bridge/backendtest
+omvat nu ook verloren executorstart- en finishantwoorden, met run/job/attempt/
+queue-provenance. Dit bewijst geen nieuwe externe deployment. Volg de expliciete
+[invoervolgorde en occurrencecontrole](sherlock-executor.md#testen-en-operationele-invoering).
+De scheduler blijft gepauzeerd; deze PR publiceert geen plugin en activeert geen taak.

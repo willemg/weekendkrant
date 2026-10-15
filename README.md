@@ -37,9 +37,11 @@ Het [ontwerpbesluit van 13 oktober 2026](docs/intelligent-worker-orchestration.m
 kiest generieke scheduled executors met één begrensde rol/job per activatie en
 minstens uurlijk, mogelijk sneller lokaal materialiseren als doelrichting.
 Generieke jobopslag (fase 3) en de MCP/control-plane (fase 4) zijn geïmplementeerd.
-Geïntegreerde jobproductie en de generieke executor volgen voor Sherlock in fase 5;
-de algemene/state-driven dispatcher volgt in fase 7. Sherlock draait voorlopig
-op zijn bestaande specifieke runtime. De bestaande `daily` is
+Fase 5 implementeert nu de minimale Sherlock-jobproductie, atomaire executorstart
+en gefencete bron-/ficheadapters; zie [Sherlock-executor](docs/sherlock-executor.md).
+De algemene/state-driven dispatcher volgt in fase 7. Productie-invoering en de
+actieve schedulerinstructies zijn afzonderlijke stappen; de bestaande productie-
+runtime wordt niet door een repositorywijziging omgeschakeld. De bestaande `daily` is
 geschikt voor herhaalde kwartierstarts; het voorlopige croncontract hieronder
 wordt na merge handmatig ingevoerd en bewijst geen reeds gewijzigde productiecrontab.
 
@@ -130,6 +132,7 @@ Zie [invoering en rollback](docs/daily-runtime.md#croncontract-na-merge).
 
 Zie [docs/database.md](docs/database.md) voor het canonieke SQLite-schema, scratch-build en migraties.
 
-Generieke jobopslag (fase 3) en MCP/control-plane (fase 4, schema 8), met het
+Generieke jobopslag (fase 3) en MCP/control-plane (fase 4), Sherlock-adapter (fase 5, schema 9), met het
 conservatieve claim-/herstel- en operation-retrycontract
-staan in [docs/jobs.md](docs/jobs.md); runtime-integratie volgt in latere fasen.
+staan in [docs/jobs.md](docs/jobs.md) en [Sherlock-executor](docs/sherlock-executor.md);
+operationele invoering volgt afzonderlijk.

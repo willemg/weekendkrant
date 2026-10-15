@@ -23,7 +23,7 @@ from jobs import JobStore
 
 
 class GenericSystemTests(unittest.TestCase):
-    def test_bridge_to_persistent_control_with_lost_claim_and_finish_responses(self):
+    def test_bridge_control_and_sherlock_executor_with_lost_committed_answers(self):
         node = shutil.which('node')
         self.assertIsNotNone(node, 'Node.js >=18.3.0 is required for the plugin-development integration test')
         root = REPO
@@ -66,7 +66,26 @@ assert.equal((await callTool('finish_weekendkrant_job',finish,env,bridge)).code,
 assert.equal((await callTool('finish_weekendkrant_job',finish,env,bridge)).job_status,'succeeded');
 assert.equal((await callTool('validate_weekendkrant_claim',authority,env,bridge)).valid,false);
 assert.equal((await callTool('claim_weekendkrant_job',{...args,operation_id:'system:second',job_id:Number(process.argv[3])},env,bridge)).code,'conflict');
-console.log(JSON.stringify({job_id,attempt_id:claim.attempt_id}));
+const startArgs={operation_id:'start:phase5',activation_id:'system:phase5'};
+lose=true;
+assert.equal((await callTool('start_weekendkrant_executor',startArgs,env,bridge)).code,'backend_unreachable');
+const scout=await callTool('start_weekendkrant_executor',startArgs,env,bridge);
+assert.equal(scout.status,'success');assert.equal(scout.role,'Sherlock');
+const scoutClaim={job_id:scout.job_id,attempt_id:scout.attempt_id,token:scout.token};
+assert.equal((await callTool('validate_weekendkrant_claim',scoutClaim,env,bridge)).valid,true);
+assert.equal((await callTool('record_sherlock_source',{run_id:scout.run_id,topic:scout.input.topic,
+ url:'https://example.invalid/bridge-phase5',outcome:'fixture',rationale:'isolated system source',claim:scoutClaim},env,bridge)).status,'success');
+const fiche=await callTool('submit_weekendkrant_fiche',{run_id:scout.run_id,topic:scout.input.topic,
+ schema_version:1,date:scout.input.date,content:'isolated bridge fixture',claim:scoutClaim},env,bridge);
+assert.equal(fiche.status,'success');
+const scoutFinish={...scoutClaim,operation_id:'finish:phase5',status:'succeeded',output_refs:[scout.result_ref]};
+lose=true;
+assert.equal((await callTool('finish_weekendkrant_job',scoutFinish,env,bridge)).code,'backend_unreachable');
+assert.equal((await callTool('finish_weekendkrant_job',scoutFinish,env,bridge)).job_status,'succeeded');
+assert.deepEqual(await callTool('start_weekendkrant_executor',startArgs,env,bridge),scout);
+assert.equal((await callTool('validate_weekendkrant_claim',scoutClaim,env,bridge)).valid,false);
+console.log(JSON.stringify({job_id,attempt_id:claim.attempt_id,scout_job:scout.job_id,
+ scout_attempt:scout.attempt_id,run_id:scout.run_id,queue_id:fiche.queue_item_id}));
 '''
                 result = subprocess.run([node, '--input-type=module', '-e', script,
                     'http://%s:%s' % server.server_address, str(job), str(other)],
@@ -81,7 +100,13 @@ console.log(JSON.stringify({job_id,attempt_id:claim.attempt_id}));
                     self.assertEqual(len(attempts), 1)
                     self.assertEqual(attempts[0]['id'], identity['attempt_id'])
                     self.assertEqual(store.attempts(other), [])
-                    self.assertEqual(db.execute('SELECT count(*) FROM job_operations').fetchone()[0], 2)
+                    self.assertEqual(db.execute('SELECT count(*) FROM job_operations').fetchone()[0], 3)
+                    self.assertEqual(db.execute('SELECT count(*) FROM sherlock_activations').fetchone()[0], 1)
+                    self.assertEqual(db.execute('''SELECT r.job_id,r.attempt_id,r.run_id,f.queue_item_id
+                        FROM sherlock_job_runs r JOIN sherlock_fiches f USING(run_id)''').fetchone(),
+                        (identity['scout_job'], identity['scout_attempt'], identity['run_id'], identity['queue_id']))
+                    self.assertEqual(len(store.attempts(identity['scout_job'])), 1)
+                    self.assertEqual(store.get(identity['scout_job'])['status'], 'succeeded')
                     self.assertEqual(db.execute('PRAGMA integrity_check').fetchone()[0], 'ok')
             finally:
                 server.shutdown()

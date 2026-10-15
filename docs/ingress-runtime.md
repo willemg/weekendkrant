@@ -288,7 +288,9 @@ Naast de bestaande routes biedt dezelfde backend `/jobs/claim`, `/jobs/finish`,
 bodylimiet, socket-timeout, ingressauthenticatie en compacte toolnaam/statuslogs.
 Elke request opent een eigen SQLite-connection; korte transacties en persistente
 operation receipts serialiseren ook calls uit onafhankelijke backendconnections.
-Er is geen dispatcher, jobproducer of schedulerwijziging. De bestaande HTTPServer
+Deze fase-4-routes produceren geen jobs en wijzigen geen scheduler. De fase-5-
+startadapter hieronder produceert uitsluitend Sherlock-opdrachten; er is geen
+algemene dispatcher. De bestaande HTTPServer
 verwerkt requests serieel; de storagecontracten zijn daarnaast getest tegen echte
 concurrerende connections, zonder afhankelijkheid van die HTTP-serialisatie.
 
@@ -306,7 +308,20 @@ en argumenten, geen heruitvoering van externe effecten. Validate heeft actuele,
 leasegevoelige state zonder receipt; het kan expiry persistent registreren.
 Zie [het volledige protocol](jobs.md#fase-4-protocol-identiteit-en-operation-receipts).
 
-Bij latere invoering: eerst backend/schema 8 bijwerken en lokaal testen, daarna
-pluginimport en publicatie volgens de bestaande deploymentprocedure. Sherlock
-blijft voorlopig zijn specifieke runtime en instructies gebruiken. Deze PR voert
-geen productie-upgrade, pluginpublicatie of operationele jobstart uit.
+De fase-4-productie-invoering is door de operator bevestigd op 14 oktober 2026;
+zie [deploymentbewijs](plugin-deployment.md). Fase 5 vereist opnieuw eerst de
+backend/schema-9-upgrade en tests, daarna pluginimport/publicatie en afzonderlijke
+instructiesync. De repository wijzigt geen actieve taak of productieconfiguratie.
+
+
+## Sherlock-executorstart (fase 5)
+
+`POST /executor/sherlock/start` bindt één aangeleverde activation_id en operation_id
+atomair aan Sherlock-jobproductie, topic, contractsnapshot, claim en run, of een
+persistente lege beslissing. Auth, strikte JSON, bodylimiet en requestlogging
+blijven gelijk. Bronregistratie en fiche-ingress accepteren aanvullend claim;
+job-backed runs vereisen actuele execution authority onder dezelfde schrijflock
+als de write. Geen claimgegevens in de consumentenpayload of requestlogs.
+Generieke finish sluit de gekoppelde run mee af. Legacy-runstart wordt geweigerd
+zodra de adapter assignments heeft gemaakt; bestaande legacy-runs blijven
+afsluitbaar. Zie [het volledige protocol](sherlock-executor.md).

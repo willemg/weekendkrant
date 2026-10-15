@@ -190,3 +190,42 @@ sys.addaudithook(offline)
             self.assertEqual({p: (p.read_bytes(), p.stat().st_mtime_ns)
                               for p in self.output.rglob('*') if p.is_file()}, files,
                              'replay: immutable artifacts unchanged')
+
+    def test_generic_sherlock_job_to_materialized_source(self):
+        args = dict(operation_id='start:system-occurrence', activation_id='system-occurrence')
+        code, start = self.request('POST', '/executor/sherlock/start', args)
+        self.assertEqual(code, 200, str(start))
+        self.assertEqual(self.request('POST', '/executor/sherlock/start', args), (code, start))
+        claim = {k: start[k] for k in ('job_id', 'attempt_id', 'token')}
+        self.assertTrue(self.request('POST', '/jobs/validate', claim)[1]['valid'])
+        source = dict(run_id=start['run_id'], topic=start['input']['topic'],
+            url='https://example.invalid/generic-system-gate', outcome='fixture',
+            rationale='synthetic isolated system source', claim=claim)
+        self.assertEqual(self.request('POST', '/sherlock/sources', source)[0], 201)
+        fiche = dict(schema_version=1, topic=start['input']['topic'], date='2026-10-05',
+            content='# Generic system source\n\nhttps://example.invalid/generic-system-gate\n')
+        code, receipt = self.request('POST', '/ingress', dict(fiche, run_id=start['run_id'], claim=claim))
+        self.assertEqual(code, 201)
+        finish = dict(claim, operation_id='finish:system-occurrence', status='succeeded', output_refs=[start['result_ref']])
+        answer = self.request('POST', '/jobs/finish', finish)
+        self.assertEqual(answer[0], 200)
+        self.assertEqual(self.request('POST', '/jobs/finish', finish), answer)
+        self.assertEqual(self.request('POST', '/executor/sherlock/start', args), (200, start))
+        self.assertFalse(self.request('POST', '/jobs/validate', claim)[1]['valid'])
+        self.assertEqual(self.request('POST', '/ingress', dict(fiche, run_id=start['run_id'], claim=claim))[0], 409)
+        self.assertEqual(self.rows('''SELECT s.run_id,r.job_id,r.attempt_id,f.queue_item_id
+            FROM sherlock_sources s JOIN sherlock_job_runs r USING(run_id)
+            JOIN sherlock_fiches f USING(run_id)'''),
+            [(start['run_id'], start['job_id'], start['attempt_id'], receipt['id'])])
+        self.assertEqual(json.loads(self.rows('SELECT payload FROM ingress_queue')[0][0]), fiche)
+        self.assertEqual(self.rows('SELECT status FROM sherlock_runs'), [('completed',)])
+        self.assertEqual(self.rows('SELECT status FROM jobs'), [('succeeded',)])
+        self.stop_server()
+        self.daily(1)
+        self.assertEqual(self.rows('SELECT status FROM ingress_queue'), [('processed',)])
+        self.assertEqual(self.rows('SELECT queue_id FROM source_archive'), [(receipt['id'],)])
+        self.assertEqual(self.rows('SELECT queue_id FROM revision_sources'), [(receipt['id'],)])
+        before = self.snapshot()
+        self.daily(0)
+        self.assertEqual(self.snapshot(), before)
+        self.assertEqual(self.rows('PRAGMA foreign_key_check'), [])

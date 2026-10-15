@@ -68,3 +68,28 @@ class JobHTTPTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             Config(token='same', recovery_token='same')
         self.assertEqual(Config(token='worker').recovery_token, '')
+
+    def test_executor_start_and_fenced_source_fiche_finish_contract(self):
+        args = dict(operation_id='start:occurrence', activation_id='occurrence')
+        self.assertEqual(self.post('/executor/sherlock/start', args, 'wrong')[0], 401)
+        self.assertEqual(self.post('/executor/sherlock/start', dict(args, topic=2))[0], 400)
+        code, answer = self.post('/executor/sherlock/start', args)
+        self.assertEqual(code, 200)
+        self.assertEqual(self.post('/executor/sherlock/start', args), (code, answer))
+        self.assertEqual(self.post('/executor/sherlock/start', dict(args, operation_id='changed'))[0], 409)
+        authority = {k: answer[k] for k in ('job_id', 'attempt_id', 'token')}
+        source = dict(run_id=answer['run_id'], topic=answer['input']['topic'],
+            url='https://example.org/phase5', outcome='reviewed', rationale='fixture', claim=authority)
+        self.assertEqual(self.post('/sherlock/sources', dict(source, claim=dict(authority, token='forged')))[0], 400)
+        self.assertEqual(self.post('/sherlock/sources', source)[0], 201)
+        fiche = dict(run_id=answer['run_id'], schema_version=1, topic=answer['input']['topic'],
+                     date=answer['input']['date'], content='isolated fixture')
+        self.assertEqual(self.post('/ingress', fiche)[0], 409)
+        self.assertEqual(self.post('/ingress', dict(fiche, claim=authority))[0], 201)
+        finish = dict(authority, operation_id='finish:occurrence', status='succeeded', output_refs=[answer['result_ref']])
+        self.assertEqual(self.post('/jobs/finish', finish)[0], 200)
+        self.assertEqual(self.post('/jobs/finish', finish)[0], 200)
+        self.assertEqual(self.post('/ingress', dict(fiche, claim=authority))[0], 409)
+        with sqlite3.connect(self.path) as db:
+            self.assertEqual(db.execute('SELECT count(*) FROM sherlock_job_runs').fetchone()[0], 1)
+            self.assertEqual(db.execute('SELECT status FROM sherlock_runs').fetchone()[0], 'completed')

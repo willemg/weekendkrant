@@ -9,7 +9,7 @@ Schema en migraties staan wel in Git; er worden geen productiegegevens meegeleve
 
 ## Eén migratieketen
 
-`database.py` beheert alle DDL en `PRAGMA user_version`. De actuele versie is **8**.
+`database.py` beheert alle DDL en `PRAGMA user_version`. De actuele versie is **9**.
 De genummerde SQL-bestanden in `migrations/` zijn de bron van waarheid:
 
 | Versie | Migratie | Verantwoordelijkheid |
@@ -22,6 +22,7 @@ De genummerde SQL-bestanden in `migrations/` zijn de bron van waarheid:
 | 6 | `006_source_materializations.sql` | Immutable UTC-materialisatietijd per gearchiveerd queue-item |
 | 7 | `007_jobs.sql` | Generieke jobs, afzonderlijke attempts/claims en reconciliatieaudit |
 | 8 | `008_job_operations.sql` | Immutable control-plane-operation receipts |
+| 9 | `009_sherlock_executor.sql` | Immutable Sherlock-opdrachten, contractsnapshots, run/job/attempt-binding en activatiereceipts |
 
 De historische nummering blijft behouden. Versie 0 kan een lege database zijn,
 maar ook reeds de voorheen ongeversioneerde runtime-tabellen bevatten.
@@ -211,6 +212,18 @@ Geen backfill of mutatie van bestaande tabellen, jobs of attempts. Upgrade van 7
 naar 8, verse opbouw, herhaalde migratie en rollback bij mislukte DDL zijn getest.
 `user_version=8` en de nieuwe tabel/triggers committen samen. Zie
 [control-protocol](jobs.md#fase-4-protocol-identiteit-en-operation-receipts).
+
+## Sherlock-executor (schema 9)
+
+Vier additieve tabellen: `sherlock_contracts` (inhoud met SHA-256-ref),
+`sherlock_assignments` (job/topic/datum/contractrefs), `sherlock_job_runs`
+(run→job/attempt, met unieke attemptbinding) en `sherlock_activations`
+(operation/activation-ID, tokenloze receipt en backendtijd). UPDATE, DELETE en
+REPLACE zijn verboden; relaties gebruiken foreign keys. Geen legacy-backfill.
+Bronnen en fiches blijven via hun bestaande run_id gekoppeld. Job, attempt, run,
+assignment en startreceipt committen samen. DDL en user_version=9 committen samen;
+een fout houdt versie 8 intact. Bestaande gegevens blijven bytegetrouw behouden.
+Zie [Sherlock-executor](sherlock-executor.md) voor recovery- en testgrenzen.
 
 ## Volgende schemawijzigingen
 
