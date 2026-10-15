@@ -162,7 +162,7 @@ class JobControl:
             raise ControlConflict('Sherlock recovery requires its concrete run result')
         self.atomic.reconcile(args['job_id'], args['attempt_id'], args['decision'],
                               args['evidence_ref'], args.get('output_refs'))
-        self.db.execute("""UPDATE sherlock_runs SET status=?,finished_at=?
+        self.db.execute("""UPDATE sherlock_runs SET status=?,finished_at=COALESCE(finished_at,?)
             WHERE (status='running' OR ?='succeeded') AND id IN
             (SELECT run_id FROM sherlock_job_runs WHERE job_id=? AND attempt_id=?)""",
             ('completed' if args['decision'] == 'succeeded' else 'failed',

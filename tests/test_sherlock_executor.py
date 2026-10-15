@@ -150,6 +150,21 @@ class ExecutorTests(unittest.TestCase):
                 self.assertEqual(control.execute('reconcile', args), result)
                 self.assertEqual(self.recovery_snapshot(), snapshot)
 
+    def test_successful_recovery_preserves_original_run_finished_at(self):
+        for mode in ('uncertain', 'abandon'):
+            with self.subTest(mode=mode):
+                answer = self.start(mode)
+                args = dict(self.quarantine(answer, mode), operation_id='recovery:'+mode,
+                            decision='succeeded', output_refs=[answer['result_ref']])
+                original = self.db.execute('SELECT finished_at FROM sherlock_runs WHERE id=?',
+                                           (answer['run_id'],)).fetchone()[0]
+                self.assertIsNotNone(original)
+                later = datetime.now(timezone.utc) + timedelta(hours=2)
+                JobControl(self.db, clock=lambda: later).execute('reconcile', args)
+                self.assertEqual(self.db.execute('SELECT status,finished_at FROM sherlock_runs WHERE id=?',
+                                                 (answer['run_id'],)).fetchone(),
+                                 ('completed', original))
+
     def test_successful_recovery_rejects_missing_empty_and_wrong_results(self):
         answer = self.start()
         args = dict(self.quarantine(answer, 'abandon'), decision='succeeded')
