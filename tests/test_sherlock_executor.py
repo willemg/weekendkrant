@@ -5,6 +5,7 @@ from pathlib import Path
 import sqlite3
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from job_control import JobControl, ControlConflict
 from jobs import JobStore
@@ -35,6 +36,8 @@ class ExecutorTests(unittest.TestCase):
             operation_id='finish:'+str(answer['attempt_id']), status=status,
             output_refs=[answer['result_ref']]))
 
+    # Isolate protocol/rotation from the development cadence (tested separately).
+    @patch('sherlock_executor.SHERLOCK_NEW_JOB_COOLDOWN', timedelta(0))
     def test_restart_replay_rotation_and_one_job_per_activation(self):
         first = self.start()
         self.assertEqual((first['role'], first['input']['topic']), ('Sherlock', 1))
@@ -92,6 +95,8 @@ class ExecutorTests(unittest.TestCase):
         self.assertEqual(self.start('blocked'), {'claim': None})
         self.assertEqual(queue.pending_count(), 1)
 
+    # Isolate protocol/rotation from the development cadence (tested separately).
+    @patch('sherlock_executor.SHERLOCK_NEW_JOB_COOLDOWN', timedelta(0))
     def test_uncertain_recovery_reuses_job_topic_with_new_attempt_and_run(self):
         answer = self.start()
         JobControl(self.db).execute('abandon', dict(self.authority(answer), operation_id='abandon', error='unknown'))
@@ -131,6 +136,8 @@ class ExecutorTests(unittest.TestCase):
         return dict(operation_id='recovery', job_id=answer['job_id'],
                     attempt_id=answer['attempt_id'], evidence_ref='audit:investigated')
 
+    # Isolate protocol/rotation from the development cadence (tested separately).
+    @patch('sherlock_executor.SHERLOCK_NEW_JOB_COOLDOWN', timedelta(0))
     def test_successful_recovery_preserves_attempt_and_replays_without_mutation(self):
         for mode in ('uncertain', 'abandon', 'expiry'):
             with self.subTest(mode=mode):
@@ -150,6 +157,8 @@ class ExecutorTests(unittest.TestCase):
                 self.assertEqual(control.execute('reconcile', args), result)
                 self.assertEqual(self.recovery_snapshot(), snapshot)
 
+    # Isolate protocol/rotation from the development cadence (tested separately).
+    @patch('sherlock_executor.SHERLOCK_NEW_JOB_COOLDOWN', timedelta(0))
     def test_successful_recovery_preserves_original_run_finished_at(self):
         for mode in ('uncertain', 'abandon'):
             with self.subTest(mode=mode):
@@ -205,6 +214,8 @@ class ExecutorTests(unittest.TestCase):
                 self.db.commit()
         JobControl(self.db).execute('reconcile', args)
 
+    # Isolate protocol/rotation from the development cadence (tested separately).
+    @patch('sherlock_executor.SHERLOCK_NEW_JOB_COOLDOWN', timedelta(0))
     def test_concurrent_same_and_distinct_activations(self):
         def start(identity):
             with sqlite3.connect(self.path, timeout=5) as db:

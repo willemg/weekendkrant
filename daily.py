@@ -115,7 +115,6 @@ def run_daily(root, db_path=DB_PATH, output=OUTPUT_PATH, now=None, lock_path=LOC
     root = Path(root).resolve()
     db_path, output = outside_repo(root, db_path), outside_repo(root, output)
     lock_path = outside_repo(root, lock_path)
-    logger.info('Dagverwerking gestart: datum=%s week=%s zone=Europe/Brussels', day, week)
     with runtime_lock(lock_path):
         db = database(db_path)
         try:
@@ -130,7 +129,6 @@ def run_daily(root, db_path=DB_PATH, output=OUTPUT_PATH, now=None, lock_path=LOC
                 grouped.setdefault((week_name(original_day), fiche.topic), []).append(fiche)
                 new_sources.append(fiche)
             if not items:
-                logger.info('Geen verwerkbare pending fiches: datum=%s', day)
                 return {'date': str(day), 'week': week, 'status': 'success', 'threads': 0}
             store = PartStore(db)
             snapshots, existing = {}, {}

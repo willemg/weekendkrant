@@ -4,15 +4,24 @@ Voer per scheduled activatie maximaal één backendopdracht uit. Eén scheduler 
 voorlopig eenmaal per uur gebruikt. Deze instructie is een deploymentartifact;
 het bestand wijzigt of activeert geen bestaande scheduled taak.
 
-1. Neem de stabiele occurrence-identiteit uit de schedulercontext. Een native
-   occurrence-ID is geschikt. Anders gebruikt de operatoradapter de vaste naam
-   `weekendkrant:scheduler-1:` plus het **geplande UTC-uurslot**, bijvoorbeeld
-   `2026-10-15T12:00:00Z`. Dit is het oorspronkelijke geplande tijdstip, nooit de
-   actuele tijd bij een retry of een nieuwe batch. Eén scheduler en één UTC-slot
-   hebben steeds dezelfde activation_id. Gebruik `start:` plus die waarde als
-   operation_id. Beide waarden blijven maximaal 128 tekens. Ontbreekt een
-   betrouwbaar gepland tijdstip of occurrence-ID, stop zonder starttoolcall en
-   meld ontbrekende schedulercontext. Verzin geen UUID of tijdstip.
+1. Gebruik onze eigen logische scheduler-occurrence, geen platform-run-ID.
+   Scheduler-ID is vast `weekendkrant:executor-1`, cadence exact uurlijks, slotbasis
+   UTC. Observeer bij binnenkomst één verse betrouwbare timezone-aware huidige
+   tijd en normaliseer die naar UTC. De klokbron hoeft niet zelf UTC te leveren.
+   Een naïeve timestamp, alleen een datum of oude gesprekstimestamp volstaat
+   niet. Ontbreekt een betrouwbare klok, stop.
+   Eerste admission mag uitsluitend vanaf HH:00:00 inclusief tot HH:10:00
+   exclusief. Buiten die eerste tien minuten: stop zonder starttoolcall.
+   Vorm binnen het venster het hele UTC-uurslot als `YYYY-MM-DDTHH:00:00Z` en
+   `activation_id=weekendkrant:executor-1:<slot>`, met
+   `operation_id=start:<activation_id>`. Bewaar beide waarden vóór de eerste
+   startcall onveranderlijk voor de gehele uitvoering en alle transportretries,
+   ook na HH:10 of een volgende uurovergang. Bereken voor een retry nooit opnieuw
+   een slot. Bij hervatting zonder de oorspronkelijke IDs: stop, geen nieuwe
+   admission. Gebruik geen UUID, lokale tijd of actuele retrytimestamp.
+   De tien minuten zijn een voorlopige operationele parameter. De pure
+   referentieadapter `executor_slot.start_arguments` beschrijft dezelfde regel;
+   de cloudtaak voert dit contract uit en importeert geen Python van bibib.
 2. Roep `start_weekendkrant_executor({operation_id, activation_id})` aan. Bij
    transporttimeout/verloren antwoord/503 herhaal exact dezelfde operatie met
    dezelfde twee IDs; voer geen inhoudelijk werk uit zolang de uitkomst onbekend
@@ -47,10 +56,25 @@ bestaande expliciete safety-retrybeleid uit het rolcontract blijven gelden.
 Onzekere netwerk-side effects vallen niet onder safety-retries. Claimtokens
 komen nooit in rapportage, broninhoud of reproduceerbare publieke foutpayloads.
 
-De occurrence-identiteit is caller-supplied schedulercontext, geen cryptografisch
-platformattest. De huidige MCP-authenticatie bewijst de private caller, niet een
-native scheduler-occurrence. De backend bindt de opgegeven identiteit persistent,
-weigert hergebruik en serialiseert Sherlockwerk. Productie-invoering vereist dat
-de operator de stabiele occurrencecontext in de echte taak heeft gecontroleerd;
-bij ontbrekende context blijft de taak uit. Dit document claimt geen reeds
-geteste platforminjectie en verandert de gepauzeerde taak niet.
+Deze identiteit is onze eigen logische UTC-occurrence, geen OpenAI-attest.
+Platform-occurrence-metadata is niet vereist. Dubbele starts binnen hetzelfde
+venster delen activation/operation-ID en dus dezelfde persistente receipt.
+Een volgend toegelaten uur is een andere logische activatie. UTC voorkomt DST-
+ambiguïteit; klokfouten worden niet gecorrigeerd door dit protocol.
+
+Het venster verwerpt late binnenkomsten buiten admission. Een oude platform-run
+die pas binnen een volgend toegestaan uurvenster voor het eerst binnenkomt,
+is zonder platformmetadata niet herkenbaar als oud: hij behoort uitsluitend tot
+dat nieuwe logische slot. De invariant is maximaal één job/attempt per scheduler
+per logisch slot, niet identificatie van alle oorspronkelijke platform-runs.
+
+Receipts en fencing blijven autoritatief. Gelijktijdige callers kunnen dezelfde
+claim terugkrijgen; validate is geen exclusieve executor-lock. Dit model bewijst
+geen exactly-once inhoudelijke uitvoering of fichepublicatie. Een bekend dubbel
+of reeds uitgevoerd resultaat mag niet opnieuw worden uitgevoerd; bij onzekere
+side effects geldt uncertain/abandon/reconciliatie. Deze bestaande replaygrens
+wordt door slotting niet opgelost of verruimd.
+
+De taak blijft gepauzeerd totdat na merge/deployment deze instructie bewust is
+geconfigureerd en één begeleide uitvoering binnen admission met persistente
+statecontrole is bewezen. Dit bestand alleen wijzigt geen scheduled taak.

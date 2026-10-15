@@ -3,7 +3,7 @@
 No network, model or scheduling calls. Empty activations are durable decisions.
 Role/output contracts are immutable content-addressed snapshots in SQLite.
 """
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 from pathlib import Path
@@ -11,6 +11,9 @@ from zoneinfo import ZoneInfo
 
 from job_control import JobControl, ControlConflict
 from jobs import _stamp, _text
+
+# Temporary development policy, not a schema or dispatcher invariant.
+SHERLOCK_NEW_JOB_COOLDOWN = timedelta(hours=30)
 
 ROOT = Path(__file__).resolve().parent
 
@@ -49,7 +52,7 @@ class SherlockExecutor:
         self.db = db
 
     def start(self, args):
-        """One stable platform occurrence ID, one atomic durable decision.
+        """One stable logical activation ID, one atomic durable decision.
 
         Identity is supplied by the single scheduler adapter, never generated
         in the bridge. Changed operation identity for a used activation conflicts.
@@ -116,6 +119,16 @@ class SherlockExecutor:
         if ready:
             job_id = ready[0]
         else:
+            # Only new production is throttled. Explicit ready recovery above
+            # retains its original job/topic and starts a new real run.
+            latest = self.db.execute(
+                'SELECT started_at FROM sherlock_runs ORDER BY julianday(started_at) DESC LIMIT 1').fetchone()
+            if latest is not None:
+                started = datetime.fromisoformat(latest[0])
+                if started.utcoffset() is None:
+                    raise ValueError('Sherlock runstart must be timezone-aware')
+                if now - started < SHERLOCK_NEW_JOB_COOLDOWN:
+                    return {'claim': None}
             previous = self.db.execute('SELECT topic FROM sherlock_runs ORDER BY id DESC LIMIT 1').fetchone()
             topic = 1 if previous is None else previous[0] % 3 + 1
             for ref, content in contracts:
