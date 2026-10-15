@@ -363,3 +363,13 @@ Discovery en bestemming worden voor deze test naar loopback gemapt; dit is geen
 bewijs van de gepubliceerde externe route. Bij latere deployment blijft de echte
 deployment smoke een afzonderlijke operationele gate. Deze fase-4-PR publiceert
 geen plugin en claimt geen nieuw productie- of smoke-bewijs.
+
+
+### Operatorbevestiging fase 4, 14 oktober 2026
+
+Na merge van PR #48 bevestigde de operator de productie-invoering en een
+geslaagde deployment-smoke, nadat de tunnel was gestart. Dit registreert de
+aangeleverde bevestiging; er is hierbij geen nieuwe productietest uitgevoerd
+en geen exact productie-SHA of afzonderlijke bewijs-ID vastgelegd. De generieke
+tools waren beschikbaar, maar Sherlocks actieve instructies waren nog niet
+gemigreerd en bleven de bestaande specifieke tools gebruiken.

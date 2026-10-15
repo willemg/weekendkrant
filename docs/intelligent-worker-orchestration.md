@@ -14,7 +14,7 @@ zonder een langlevend modelproces nodig te hebben.
 | Geïmplementeerde fase-3-opslag | Lokale generieke jobs, afzonderlijke attempts, atomaire claims, vaste leases en fencing, conservatieve quarantaine en expliciete reconciliatie (schema 7); zonder workerintegratie; de aanvullende fase-4-control-plane staat hieronder. |
 | Huidig beschreven operationeel ritme | Sherlock behandelt volgens zijn canonieke instructies één toegewezen topic per uurrun. De bestaande Ariadne `daily` ondersteunt herhaalde kwartierstarts; het voorlopige lokale croncontract is elke 15 minuten in `Europe/Brussels`, na handmatige invoering. Repository-instructies bewijzen op zichzelf geen actieve schedulerconfiguratie of deployment. |
 | Gekozen doelrichting | Generieke scheduled executors krijgen per activatie maximaal één begrensde job met een door de backend gekozen rol. Persistente state draagt de redactionele continuïteit. Lokale Ariadne-materialisatie moet minstens uurlijk, mogelijk sneller, kunnen draaien. |
-| Geïmplementeerde fase-4-control-plane | Expliciete generieke claim/finish/abandon/validate-tools, persistente operatiebevestigingen (schema 8), aparte operatorrecovery; lokaal getest, nog niet gedeployed. |
+| Geïmplementeerde fase-4-control-plane | Expliciete generieke claim/finish/abandon/validate-tools, persistente operatiebevestigingen (schema 8), aparte operatorrecovery; lokaal getest; productie-invoering en geslaagde deployment-smoke op 14 oktober 2026 door de operator bevestigd. |
 | Nog niet geïmplementeerd | Dispatcher, Leonardo-state en -jobs, dossiers, missies, drafts, verificatie- en correctiejobs, capaciteitsbeleid en automatische eindredactie. |
 
 Fase 3 voegt uitsluitend lokale jobopslag en schema 7 toe, zonder plugin, actieve
@@ -362,8 +362,12 @@ Zie [het fase-4-protocol](jobs.md#fase-4-protocol-identiteit-en-operation-receip
 voor velden, fencing, transportretries, persistente receipts en afzonderlijke
 operatorauthenticatie. Claim kiest alleen een aangeleverd job-ID. Sherlock blijft
 op de specifieke runtime; geen dispatcher, scheduler- of capacitywijziging.
-Implementatie en lokale backendtests zijn gerealiseerd; Sites-publicatie en
-productie-upgrade zijn geen bewijs of wijziging van deze fase-4-PR.
+Implementatie en lokale backendtests zijn gerealiseerd. Na merge van PR #48 heeft
+de operator op 14 oktober 2026 de productie-invoering en geslaagde deployment-smoke
+bevestigd, na het starten van de tunnel. Dit is aangeleverd operationeel bewijs,
+geen nieuwe controle vanuit deze documentatiecorrectie. Een exact productie-SHA
+of nieuwe afzonderlijke bewijs-ID is niet geregistreerd. De actieve Sherlock-
+instructies gebruikten de nieuwe generieke tools toen nog niet.
 
 De testlagen blijven gescheiden: de Python-suite en systeemgate op bibib zijn
 Node-vrij; JavaScript-pluginchecks en de expliciete bridge/backend-developmenttest
