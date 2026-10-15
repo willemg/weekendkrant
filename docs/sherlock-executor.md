@@ -3,8 +3,8 @@
 ## Status en scope
 
 De repository implementeert de eerste Sherlock-jobproducent en de generieke
-executorinstructie voor één uurlijkse scheduler. Productie-invoering, werkelijke
-schedulercontext en een nieuwe deployment-smoke zijn afzonderlijke open stappen.
+executorinstructie voor één uurlijkse scheduler. De eigen logische UTC-slotidentiteit is geïmplementeerd als pure referentieadapter;
+instructiesync en een begeleide job/deployment-smoke blijven operationele stappen.
 Sherlock blijft gepauzeerd zolang de operator hem niet bewust opnieuw activeert.
 Er is geen algemene dispatcher, andere rol, extra scheduler of modelcall op bibib.
 
@@ -126,9 +126,9 @@ Na review/merge volgt een bewuste invoering:
    [plugin-deployment](plugin-deployment.md). De plugin krijgt één extra tool;
    dit is een afzonderlijke deployment na de backendupgrade.
 4. Vervang de instructie van uitsluitend de bestaande scheduler door
-   [executor.md](agents/executor.md). Controleer met echte taakcontext de stabiele
-   occurrence-ID of het oorspronkelijke geplande UTC-uurslot. Als die context
-   ontbreekt, blijft de taak uit en wordt eerst de adapter aangepast. Het bestand
+   [executor.md](agents/executor.md). Gebruik het eigen logische UTC-slot met betrouwbare klok en admission
+   [HH:00, HH:10), zonder native platform-occurrence-metadata. Controleer de
+   klok en bewaar de startargumenten vóór de eerste call. Het bestand
    alleen bewijst geen actieve instructiesync.
 5. Doe één begeleide echte Sherlock-job met claimvalidatie, gekoppelde bronnen en
    legitieme fichepublicatie. Noteer activation/job/attempt/run/queue-ID en finish,
@@ -167,22 +167,57 @@ per-uitvoering `scheduled_for` of retrybinding. Dat bewijst niet dat de
 uitvoeringscontext die nooit kan bevatten, maar levert de vereiste gate niet.
 Het rooster en de huidige klok reconstrueren geen betrouwbare retry-identiteit.
 
-De taak blijft daarom gepauzeerd. Er is geen executorstart, job of proefpublicatie
-uitgevoerd. Beide operationele fase-5-checkboxes blijven open: de persistente
-deployment-smoke en de begeleide scheduled job zijn nog niet bewezen.
+De taak bleef bij deze controle gepauzeerd; geen proefjob is uitgevoerd.
+De bovenstaande metadata-audit is historisch bewijs, geen huidige eis om native
+platformcontext toe te voegen. De opvolgende oplossing gebruikt eigen logische slots.
 
-Minimale adaptervoorwaarde: geef aan elke uitvoering een native stabiele
-occurrence-ID of het oorspronkelijke geplande UTC-tijdstip mee en bewaar die
-waarde ongewijzigd bij retries. Bind de fallback aan
-`weekendkrant:scheduler-1:<gepland-UTC-uurslot>`. Controleer deze injectie en
-retrybinding in echte uitvoeringscontext vóór een starttoolcall. Een prompt kan
-ontbrekende platformmetadata niet zelf leveren. De beschikbare `run_now`-actie
-vereist een ingeschakelde taak en biedt geen parameter voor occurrencecontext;
-zij is daarom niet gebruikt.
+## Eigen logische slots en resterende operationele gate
 
-Na die controle moet de operator één begeleide scheduled job laten uitvoeren en
-activation_id, job_id, attempt_id, run_id, topic, result_ref, eventuele
-queue_item_ids, bevestigde finish en consistente persistente job/runstate
-vastleggen, zonder claimtoken. Bij onzekere effecten geldt het bestaande
-uncertain/abandon/reconciliatiecontract. Pas met dit bewijs kunnen de gates
-worden gesloten; reguliere heractivering blijft een afzonderlijke keuze.
+`executor_slot.py` is een pure, Node-vrije referentieadapter zonder backend- of
+scheduler-side effects. De cloudtaak volgt de identieke regel uit
+[executor.md](agents/executor.md): vaste scheduler-ID `weekendkrant:executor-1`,
+UTC-uur, eerste admission in [HH:00:00, HH:10:00). Tien minuten is een voorlopige
+operationele marge; de geobserveerde laatste start om 12:04:25 valt daarbinnen,
+maar is geen empirische garantie voor toekomstige vertragingen.
+
+Dubbele starts binnen hetzelfde slot gebruiken identieke startargumenten.
+Transportretry bewaart die argumenten ook voorbij het venster of de uurovergang.
+Nieuwe admission buiten het venster en hervatting zonder bewaarde identiteit
+stoppen zonder startcall. Een toegelaten volgend uur krijgt een andere identiteit.
+UTC-normalisatie voorkomt ambiguïteit rond Belgische DST-overgangen.
+
+Dit model voldoet aan maximaal één backendjob/attempt per logisch slot; het
+identificeert geen interne platform-run. Een oude run die voor het eerst binnen
+het volgende admission window arriveert, is niet als oud te herkennen en deelt
+het nieuwe slot. Een eis om ook die run categorisch te verwerpen zou alsnog
+vertrouwde oorspronkelijke occurrencecontext vereisen. Dat is niet onze invariant.
+Receiptreplay kan dezelfde claim aan gelijktijdige callers leveren: claimvalidatie
+is geen uitvoeringsmutex en niet-idempotente fichepublicatie is niet exactly-once.
+Deze bestaande beperking blijft gelden; geen blinde heruitvoering bij onzekerheid.
+
+Na merge/deployment blijft de taak eerst gepauzeerd. Vervang haar prompt door de
+nieuwe executorinstructie. Laat vervolgens één begeleide uitvoering binnen een
+bewust gekozen admission window lopen (tijdelijk inschakelen voor die uitvoering,
+vervolgens opnieuw pauzeren). Leg logical slot, activation_id, job_id, attempt_id,
+run_id, topic, result_ref, eventuele queue_item_ids, bevestigde finish en read-only
+gecontroleerde persistente job/runstate vast, zonder token. Geen tweede job ter
+compensatie; volg bij onzekere effecten uncertain/abandon/reconciliatie.
+Pas daarna mogen de twee operationele checkboxes sluiten. Native metadata is
+geen blokkade meer; instructiesync en werkelijk uitvoeringsbewijs ontbreken nog.
+
+### Lokale validatie van het slotcontract
+
+Vijf nieuwe tests in `tests/test_executor_slot.py` bewijzen de inclusieve uurgrens,
+exclusieve tienminutengrens, dubbele starts (ook concurrent), bevroren
+startargumenten en receipt-replay na finish, geen job buiten admission, een
+volgend slot met andere identiteit, expliciete timezonevereiste en UTC-normalisatie
+rond beide Europe/Brussels-DST-overgangen. De bestaande 17 executortests bewijzen
+onder meer replay/concurrency, expiry, gefencete writes en recovery opnieuw.
+
+Op 15 oktober 2026 lokaal uitgevoerd met Python 3.12 en de repositorydependency
+`tiktoken==0.12.0`: volledige Node-vrije Python-suite, 254 tests groen; afzonderlijke
+proces-/HTTP-systeemgate, 3 tests groen. Dit is geen bibib- of scheduled-jobbewijs.
+Geen nieuwe backendroute, schema of Sites-pluginwijziging is nodig; de Python-
+referentie is geen nieuwe productiecomponent op bibib. Na merge is de operationele
+wijziging de promptsync naar dezelfde bestaande gepauzeerde cloudtaak, gevolgd door
+de ene begeleide uitvoering zoals hierboven beschreven.

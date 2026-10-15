@@ -384,14 +384,15 @@ bestaande deployment-smoke. Zie [testlagen](jobs.md#testlagen-en-bewijsgrenzen).
 - [x] Batching en bestaand experimenteel safety-retrybeleid behouden in de nieuwe rol-/executorcontracten.
 - [x] Source-audit en queue-output via run/attempt aan job_id koppelen en herstelgedrag lokaal bewijzen.
 - [ ] Backend/schema 9 en Sites-plugin operationeel invoeren en nieuwe deployment-smoke vastleggen.
-- [ ] Stabiele occurrencecontext van de echte scheduler controleren en actieve instructies bewust naar de generieke executor omschakelen; pas daarna één begeleide echte job bewijzen.
+- [ ] Logische UTC-slotadmission met betrouwbare klok controleren en actieve instructies bewust naar de generieke executor omschakelen; pas daarna één begeleide echte job bewijzen.
 
 Zie [Sherlock-executor](sherlock-executor.md) voor protocol, invarianten, tests en
 invoervolgorde. De bestaande scheduler blijft gepauzeerd; de PR voert geen
 productie-upgrade, Sites-publicatie, taakwijziging of heractivering uit. De backend
 bindt caller-supplied occurrencecontext persistent; native platforminjectie is
-nog geen geleverd bewijs. De executor stopt als betrouwbare occurrencecontext
-ontbreekt. Eén running/blocked Sherlock-job blokkeert verdere productie, ook over
+niet vereist. De executor gebruikt de eigen logische UTC-slots met admission
+[HH:00, HH:10); zonder betrouwbare klok of buiten admission stopt hij.
+Eén running/blocked Sherlock-job blokkeert verdere productie, ook over
 verschillende activaties heen. Een lege activatie blijft leeg. Expliciet herstelde
 jobs behouden topic/opdracht en krijgen een nieuwe attempt en run.
 
@@ -402,10 +403,11 @@ fase 7. Andere rollen volgen pas nadat dit pad operationeel bewezen stabiel is.
 Operationele controle op 15 oktober 2026: dezelfde bestaande taak is hernoemd
 naar `Weekendkrant Executor 1`, met de volledige generieke executorinstructie
 en behoud van de pauze. Backend/schema 9 en Sites-publicatie zijn door de
-operator bevestigd. Een stabiele occurrence-identiteit in echte uitvoeringscontext
-en de begeleide job/persistente deployment-smoke zijn nog niet bewezen; beide
+operator bevestigd. De nieuwe logische UTC-slotinstructie moet na merge nog
+worden gesynchroniseerd;
+de begeleide job/persistente deployment-smoke is nog niet bewezen; beide
 operationele checkboxes blijven open. Zie het
-[concrete bewijs en de adaptervoorwaarde](sherlock-executor.md#operationele-controle-van-15-oktober-2026).
+[concrete bewijs en het logische slotcontract](sherlock-executor.md#eigen-logische-slots-en-resterende-operationele-gate).
 
 ### Fase 6 — Ariadne frequenter materialiseren
 

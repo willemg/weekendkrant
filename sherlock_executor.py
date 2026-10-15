@@ -49,7 +49,7 @@ class SherlockExecutor:
         self.db = db
 
     def start(self, args):
-        """One stable platform occurrence ID, one atomic durable decision.
+        """One stable logical activation ID, one atomic durable decision.
 
         Identity is supplied by the single scheduler adapter, never generated
         in the bridge. Changed operation identity for a used activation conflicts.
