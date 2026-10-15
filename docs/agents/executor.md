@@ -10,18 +10,25 @@ het bestand wijzigt of activeert geen bestaande scheduled taak.
    tijd en normaliseer die naar UTC. De klokbron hoeft niet zelf UTC te leveren.
    Een naïeve timestamp, alleen een datum of oude gesprekstimestamp volstaat
    niet. Ontbreekt een betrouwbare klok, stop.
-   Eerste admission mag uitsluitend vanaf HH:00:00 inclusief tot HH:10:00
-   exclusief. Buiten die eerste tien minuten: stop zonder starttoolcall.
-   Vorm binnen het venster het hele UTC-uurslot als `YYYY-MM-DDTHH:00:00Z` en
+   Bepaal daarna het dichtstbijzijnde hele UTC-uur: rond naar beneden bij
+   minder dan 30 minuten na het uur, anders naar boven (een exacte halfuurtie
+   kiest het volgende uur). Gebruik exacte tijdsverschillen, geen floating point
+   of lokale uurafronding. Admission geldt bij een absolute afstand van maximaal
+   15 minuten tot dat slot, beide grenzen inclusief. Buiten deze tolerantie:
+   meld expliciet een afwijkende activatietijd en stop; dit is geen normale
+   scheduler-jitter en mag geen stille no-op worden.
+   Vorm het UTC-slot als `YYYY-MM-DDTHH:00:00Z` en
    `activation_id=weekendkrant:executor-1:<slot>`, met
-   `operation_id=start:<activation_id>`. Bewaar beide waarden vóór de eerste
-   startcall onveranderlijk voor de gehele uitvoering en alle transportretries,
-   ook na HH:10 of een volgende uurovergang. Bereken voor een retry nooit opnieuw
-   een slot. Bij hervatting zonder de oorspronkelijke IDs: stop, geen nieuwe
-   admission. Gebruik geen UUID, lokale tijd of actuele retrytimestamp.
-   De tien minuten zijn een voorlopige operationele parameter. De pure
-   referentieadapter `executor_slot.start_arguments` beschrijft dezelfde regel;
-   de cloudtaak voert dit contract uit en importeert geen Python van bibib.
+   `operation_id=start:<activation_id>`. Binnen de tolerantie volgt altijd de
+   starttoolcall van stap 2, ook bij een vroege activatie vóór het hele uur.
+   Bewaar beide waarden vóór de eerste startcall onveranderlijk voor de gehele
+   uitvoering en alle transportretries, ook buiten de tolerantie of na een
+   volgende uurovergang. Bereken voor een retry nooit opnieuw een slot.
+   Bij hervatting zonder de oorspronkelijke IDs: stop, geen nieuwe admission.
+   Gebruik geen UUID, lokale tijd of actuele retrytimestamp. De symmetrische
+   tolerantie van ±15 minuten is een voorlopige operationele parameter.
+   De pure referentieadapter `executor_slot.start_arguments` beschrijft dezelfde
+   regel; de cloudtaak voert dit contract uit en importeert geen Python van bibib.
 2. Roep `start_weekendkrant_executor({operation_id, activation_id})` aan. Bij
    transporttimeout/verloren antwoord/503 herhaal exact dezelfde operatie met
    dezelfde twee IDs; voer geen inhoudelijk werk uit zolang de uitkomst onbekend
@@ -56,14 +63,19 @@ bestaande expliciete safety-retrybeleid uit het rolcontract blijven gelden.
 Onzekere netwerk-side effects vallen niet onder safety-retries. Claimtokens
 komen nooit in rapportage, broninhoud of reproduceerbare publieke foutpayloads.
 
+Kerninvariant: een normale scheduled activatie rond een uur wordt aan het
+dichtstbijzijnde logische uur gekoppeld en bereikt altijd minstens de eerste
+Weekendkrant-backendcall; scheduler-jitter mag geen onzichtbare silent no-op
+vóór onze ingress veroorzaken.
+
 Deze identiteit is onze eigen logische UTC-occurrence, geen OpenAI-attest.
-Platform-occurrence-metadata is niet vereist. Dubbele starts binnen hetzelfde
-venster delen activation/operation-ID en dus dezelfde persistente receipt.
+Platform-occurrence-metadata is niet vereist. Dubbele starts rond hetzelfde
+logische uur delen activation/operation-ID en dus dezelfde persistente receipt.
 Een volgend toegelaten uur is een andere logische activatie. UTC voorkomt DST-
 ambiguïteit; klokfouten worden niet gecorrigeerd door dit protocol.
 
-Het venster verwerpt late binnenkomsten buiten admission. Een oude platform-run
-die pas binnen een volgend toegestaan uurvenster voor het eerst binnenkomt,
+De tolerantie verwerpt afwijkende binnenkomsten buiten admission, met expliciete
+melding. Een oude platform-run die pas binnen een volgend toegestaan uurvenster voor het eerst binnenkomt,
 is zonder platformmetadata niet herkenbaar als oud: hij behoort uitsluitend tot
 dat nieuwe logische slot. De invariant is maximaal één job/attempt per scheduler
 per logisch slot, niet identificatie van alle oorspronkelijke platform-runs.
@@ -74,7 +86,3 @@ geen exactly-once inhoudelijke uitvoering of fichepublicatie. Een bekend dubbel
 of reeds uitgevoerd resultaat mag niet opnieuw worden uitgevoerd; bij onzekere
 side effects geldt uncertain/abandon/reconciliatie. Deze bestaande replaygrens
 wordt door slotting niet opgelost of verruimd.
-
-De taak blijft gepauzeerd totdat na merge/deployment deze instructie bewust is
-geconfigureerd en één begeleide uitvoering binnen admission met persistente
-statecontrole is bewezen. Dit bestand alleen wijzigt geen scheduled taak.

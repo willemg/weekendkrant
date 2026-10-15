@@ -16,19 +16,42 @@ class SlotTests(unittest.TestCase):
     def args(self, value):
         return start_arguments(datetime.fromisoformat(value))
 
-    def test_boundaries_and_next_hour(self):
-        first = self.args('2026-10-15T16:00:00+00:00')
-        self.assertEqual(first, self.args('2026-10-15T16:09:59.999999+00:00'))
-        self.assertEqual(first, dict(activation_id='weekendkrant:executor-1:2026-10-15T16:00:00Z',
-                                    operation_id='start:weekendkrant:executor-1:2026-10-15T16:00:00Z'))
-        self.assertIsNone(self.args('2026-10-15T16:10:00+00:00'))
-        self.assertIsNone(self.args('2026-10-15T16:59:59+00:00'))
-        self.assertNotEqual(first, self.args('2026-10-15T17:00:00+00:00'))
+    def test_brussels_scheduler_jitter_reaches_start(self):
+        expected = dict(
+            activation_id='weekendkrant:executor-1:2026-10-15T06:00:00Z',
+            operation_id='start:weekendkrant:executor-1:2026-10-15T06:00:00Z')
+        with sqlite3.connect(':memory:') as db:
+            executor = SherlockExecutor(db)
+            answers = []
+            for hour, minute in ((7, 49), (7, 55), (8, 0), (8, 9), (8, 10), (8, 11)):
+                with self.subTest(hour=hour, minute=minute):
+                    args = start_arguments(datetime(2026, 10, 15, hour, minute,
+                                                   tzinfo=ZoneInfo('Europe/Brussels')))
+                    self.assertEqual(args, expected)
+                    answers.append(executor.start(args))
+            self.assertTrue(all(answer == answers[0] for answer in answers))
+            self.assertEqual(db.execute('SELECT count(*) FROM jobs').fetchone()[0], 1)
+            self.assertEqual(db.execute('SELECT count(*) FROM job_attempts').fetchone()[0], 1)
+
+    def test_inclusive_tolerance_and_half_hour_tie(self):
+        previous = self.args('2026-10-15T05:00:00+00:00')
+        following = self.args('2026-10-15T06:00:00+00:00')
+        for stamp, expected in (
+            ('05:14:59.999999', previous), ('05:15:00', previous),
+            ('05:15:00.000001', None), ('05:29:59.999999', None),
+            ('05:30:00', None), ('05:30:00.000001', None),
+            ('05:44:59.999999', None), ('05:45:00', following),
+            ('05:45:00.000001', following), ('06:15:00', following),
+            ('06:15:00.000001', None)):
+            with self.subTest(stamp=stamp):
+                self.assertEqual(self.args('2026-10-15T' + stamp + '+00:00'), expected)
+        self.assertEqual(self.args('2026-10-15T23:45:00+00:00'),
+                         self.args('2026-10-16T00:00:00+00:00'))
 
     def test_no_job_outside_window_and_receipt_replay_after_hour(self):
         with sqlite3.connect(':memory:') as db:
             executor = SherlockExecutor(db)
-            args = self.args('2026-10-15T16:10:00+00:00')
+            args = self.args('2026-10-15T16:15:00.000001+00:00')
             if args is not None:
                 executor.start(args)
             self.assertEqual(db.execute('SELECT count(*) FROM jobs').fetchone()[0], 0)
@@ -64,10 +87,13 @@ class SlotTests(unittest.TestCase):
 
     def test_dst_and_timezone_normalization(self):
         brussels = ZoneInfo('Europe/Brussels')
-        for stamp in ('2026-03-29T00:01:00+00:00', '2026-03-29T01:01:00+00:00',
+        for stamp in ('2026-03-29T00:49:00+00:00', '2026-10-25T00:49:00+00:00',
+                      '2026-03-29T00:01:00+00:00', '2026-03-29T01:01:00+00:00',
                       '2026-10-25T00:01:00+00:00', '2026-10-25T01:01:00+00:00'):
             instant = datetime.fromisoformat(stamp)
             self.assertEqual(start_arguments(instant), start_arguments(instant.astimezone(brussels)))
+        self.assertEqual(self.args('2026-10-15T11:49:00+05:45'),
+                         self.args('2026-10-15T06:04:00+00:00'))
         self.assertNotEqual(self.args('2026-10-25T00:01:00+00:00'),
                             self.args('2026-10-25T01:01:00+00:00'))
 

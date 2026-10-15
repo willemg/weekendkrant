@@ -391,7 +391,9 @@ invoervolgorde. De bestaande scheduler blijft gepauzeerd; de PR voert geen
 productie-upgrade, Sites-publicatie, taakwijziging of heractivering uit. De backend
 bindt caller-supplied occurrencecontext persistent; native platforminjectie is
 niet vereist. De executor gebruikt de eigen logische UTC-slots met admission
-[HH:00, HH:10); zonder betrouwbare klok of buiten admission stopt hij.
+een inclusieve tolerantie van ±15 minuten rond het dichtstbijzijnde UTC-uur
+(halfuurtie naar het volgende uur). Binnen tolerantie volgt altijd de startcall;
+buiten tolerantie meldt hij expliciet een afwijking. Zonder betrouwbare klok stopt hij.
 Eén running/blocked Sherlock-job blokkeert verdere productie, ook over
 verschillende activaties heen. Een lege activatie blijft leeg. Expliciet herstelde
 jobs behouden topic/opdracht en krijgen een nieuwe attempt en run.

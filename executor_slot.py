@@ -7,11 +7,14 @@ The cloud task implements this same contract; it does not import this module.
 from datetime import datetime, timedelta, timezone
 
 SCHEDULER_ID = 'weekendkrant:executor-1'
-ADMISSION_WINDOW = timedelta(minutes=10)
+SLOT_TOLERANCE = timedelta(minutes=15)
 
 
 def start_arguments(now: datetime):
-    """Return frozen start arguments, or None when initial admission is closed.
+    """Return frozen start arguments, or None outside inclusive +/-15 minutes.
+
+    Normalize to UTC before rounding to the nearest hour; half-hour ties round
+    forward (and are outside tolerance). Use exact timedelta arithmetic.
 
     Caller must supply a fresh trustworthy timezone-aware clock observation.
     Naive/local assumptions are rejected. This is our logical slot, not a
@@ -21,7 +24,9 @@ def start_arguments(now: datetime):
         raise ValueError('A trustworthy timezone-aware clock is required')
     utc = now.astimezone(timezone.utc)
     slot = utc.replace(minute=0, second=0, microsecond=0)
-    if utc - slot >= ADMISSION_WINDOW:
+    if utc - slot >= timedelta(minutes=30):
+        slot += timedelta(hours=1)
+    if abs(utc - slot) > SLOT_TOLERANCE:
         return None
     activation_id = SCHEDULER_ID + ':' + slot.strftime('%Y-%m-%dT%H:00:00Z')
     return dict(activation_id=activation_id, operation_id='start:' + activation_id)

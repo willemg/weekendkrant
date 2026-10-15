@@ -127,7 +127,7 @@ Na review/merge volgt een bewuste invoering:
    dit is een afzonderlijke deployment na de backendupgrade.
 4. Vervang de instructie van uitsluitend de bestaande scheduler door
    [executor.md](agents/executor.md). Gebruik het eigen logische UTC-slot met betrouwbare klok en admission
-   [HH:00, HH:10), zonder native platform-occurrence-metadata. Controleer de
+   een inclusieve tolerantie van ±15 minuten rond het dichtstbijzijnde UTC-uur, zonder native platform-occurrence-metadata. Controleer de
    klok en bewaar de startargumenten vóór de eerste call. Het bestand
    alleen bewijst geen actieve instructiesync.
 5. Doe één begeleide echte Sherlock-job met claimvalidatie, gekoppelde bronnen en
@@ -176,14 +176,15 @@ platformcontext toe te voegen. De opvolgende oplossing gebruikt eigen logische s
 `executor_slot.py` is een pure, Node-vrije referentieadapter zonder backend- of
 scheduler-side effects. De cloudtaak volgt de identieke regel uit
 [executor.md](agents/executor.md): vaste scheduler-ID `weekendkrant:executor-1`,
-UTC-uur, eerste admission in [HH:00:00, HH:10:00). Tien minuten is een voorlopige
-operationele marge; de geobserveerde laatste start om 12:04:25 valt daarbinnen,
-maar is geen empirische garantie voor toekomstige vertragingen.
+eerst UTC-normalisatie, dan het dichtstbijzijnde hele UTC-uur, met inclusieve
+tolerantie van ±15 minuten. Een halfuurtie kiest het volgende uur en valt buiten
+de tolerantie. De marge is een voorlopige operationele parameter.
 
 Dubbele starts binnen hetzelfde slot gebruiken identieke startargumenten.
 Transportretry bewaart die argumenten ook voorbij het venster of de uurovergang.
-Nieuwe admission buiten het venster en hervatting zonder bewaarde identiteit
-stoppen zonder startcall. Een toegelaten volgend uur krijgt een andere identiteit.
+Binnen de tolerantie volgt altijd de startcall. Buiten de tolerantie wordt een
+afwijkende activatietijd expliciet gemeld; hervatting zonder bewaarde identiteit
+stopt zonder nieuwe admission. Een toegelaten volgend uur krijgt een andere identiteit.
 UTC-normalisatie voorkomt ambiguïteit rond Belgische DST-overgangen.
 
 Dit model voldoet aan maximaal één backendjob/attempt per logisch slot; het
@@ -207,8 +208,8 @@ geen blokkade meer; instructiesync en werkelijk uitvoeringsbewijs ontbreken nog.
 
 ### Lokale validatie van het slotcontract
 
-Vijf nieuwe tests in `tests/test_executor_slot.py` bewijzen de inclusieve uurgrens,
-exclusieve tienminutengrens, dubbele starts (ook concurrent), bevroren
+De tests in `tests/test_executor_slot.py` bewijzen de zes Belgische jittertijden,
+inclusieve ±15-minutengrenzen en halfuurtie, dubbele starts (ook concurrent), bevroren
 startargumenten en receipt-replay na finish, geen job buiten admission, een
 volgend slot met andere identiteit, expliciete timezonevereiste en UTC-normalisatie
 rond beide Europe/Brussels-DST-overgangen. De bestaande 17 executortests bewijzen
