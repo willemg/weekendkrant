@@ -140,3 +140,49 @@ Bij problemen: scheduler uit, geen extra activaties en geen blind opnieuw uitvoe
 Onderzoek ontvangen output en geblokkeerde attempts. Herstel via het bestaande
 apart geauthenticeerde reconciliatieprotocol. Schema/audit blijven behouden;
 geen downgrade naar een oudere backend die schema 9 niet kent.
+
+## Operationele controle van 15 oktober 2026
+
+De operator bevestigt dat PR #49 is gemerged, backend/schema 9 op bibib is
+ingevoerd en de actuele Sites-plugin is gekopieerd en gepubliceerd; in een nieuwe
+ChatGPT-context zijn alle tien tools zichtbaar, inclusief
+`start_weekendkrant_executor`. Dit is aangeleverd deploymentbewijs, geen in deze
+controle uitgevoerde persistente fiche-smoke.
+
+De bestaande taak `6a9e57a40ecc819181c758ccc090d297` heette bij inspectie
+`Sherlock Experimental Scout`, was gepauzeerd en bevatte de legacy-instructies
+met `start_sherlock_run` en `finish_sherlock_run`. Via Automations is dezelfde
+taak hernoemd naar `Weekendkrant Executor 1` en is de volledige prompt vervangen
+door de inhoud van `docs/agents/executor.md` (blob
+`644cdea7a45a02a62c06f9a1b9fd0ba9e50d2587`). De update bevestigt
+`is_enabled=false`; rooster en taakidentiteit zijn behouden.
+
+Beschikbare metadata: vaste taak-ID/naam, Europe/Brussels, VEVENT met
+`DTSTART:20260926T112223Z` en
+`RRULE:FREQ=HOURLY;INTERVAL=1;BYMINUTE=0`, en
+`last_run_time=2026-10-15T12:04:25.925787+00:00`.
+Dit laatste is een werkelijke starttijd, geen bewezen oorspronkelijk gepland
+occurrencetijdstip. De inspectie-API levert geen native occurrence-ID,
+per-uitvoering `scheduled_for` of retrybinding. Dat bewijst niet dat de
+uitvoeringscontext die nooit kan bevatten, maar levert de vereiste gate niet.
+Het rooster en de huidige klok reconstrueren geen betrouwbare retry-identiteit.
+
+De taak blijft daarom gepauzeerd. Er is geen executorstart, job of proefpublicatie
+uitgevoerd. Beide operationele fase-5-checkboxes blijven open: de persistente
+deployment-smoke en de begeleide scheduled job zijn nog niet bewezen.
+
+Minimale adaptervoorwaarde: geef aan elke uitvoering een native stabiele
+occurrence-ID of het oorspronkelijke geplande UTC-tijdstip mee en bewaar die
+waarde ongewijzigd bij retries. Bind de fallback aan
+`weekendkrant:scheduler-1:<gepland-UTC-uurslot>`. Controleer deze injectie en
+retrybinding in echte uitvoeringscontext vóór een starttoolcall. Een prompt kan
+ontbrekende platformmetadata niet zelf leveren. De beschikbare `run_now`-actie
+vereist een ingeschakelde taak en biedt geen parameter voor occurrencecontext;
+zij is daarom niet gebruikt.
+
+Na die controle moet de operator één begeleide scheduled job laten uitvoeren en
+activation_id, job_id, attempt_id, run_id, topic, result_ref, eventuele
+queue_item_ids, bevestigde finish en consistente persistente job/runstate
+vastleggen, zonder claimtoken. Bij onzekere effecten geldt het bestaande
+uncertain/abandon/reconciliatiecontract. Pas met dit bewijs kunnen de gates
+worden gesloten; reguliere heractivering blijft een afzonderlijke keuze.
