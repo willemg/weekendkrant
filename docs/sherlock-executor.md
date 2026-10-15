@@ -83,7 +83,13 @@ atomair. succeeded correspondeert met run completed; failed/uncertain/abandon me
 run failed. De backend bewijst de registratie en binding, geen inhoudelijke
 waarheid of volledigheid van de scout. Exacte finishreplay voert niets opnieuw uit.
 Expiry blokkeert de job; trusted reconciliatie sluit de oude run met een eigen
-bewijsreferentie af. Alleen retry na bewezen stop en veilige effecten maakt een
+bewijsreferentie af. Ook trusted recovery naar `succeeded` vereist exact
+`output_refs=["sherlock-run:<run_id>"]` voor de gekoppelde attempt. Job, recovery,
+runstatus en operation-receipt worden atomair bevestigd: de run wordt `completed`,
+ook als uncertain/abandon hem eerder `failed` maakte. Recovery naar `failed`
+sluit de run als `failed`; de oude attempt blijft in alle gevallen immutable.
+Exacte operation-ID-replay geeft alleen de bestaande bevestiging terug.
+Alleen retry na bewezen stop en veilige effecten maakt een
 nieuwe attempt op een latere activatie mogelijk.
 
 De legacy-tools blijven beschikbaar voor reeds bestaande legacy-runs. Zodra de

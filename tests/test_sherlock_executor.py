@@ -98,7 +98,13 @@ class ExecutorTests(unittest.TestCase):
         self.assertEqual(self.start('blocked'), {'claim': None})
         JobControl(self.db).execute('reconcile', dict(operation_id='recovery', job_id=answer['job_id'],
             attempt_id=answer['attempt_id'], decision='retry', evidence_ref='audit:stopped-and-safe'))
+        old_attempt = self.db.execute('SELECT * FROM job_attempts WHERE id=?', (answer['attempt_id'],)).fetchone()
+        old_run = self.db.execute('SELECT * FROM sherlock_runs WHERE id=?', (answer['run_id'],)).fetchone()
+        self.assertEqual(self.db.execute('SELECT status FROM jobs').fetchone()[0], 'ready')
+        self.assertEqual(self.db.execute('SELECT status FROM sherlock_runs').fetchone()[0], 'failed')
         retry = self.start('retry')
+        self.assertEqual(self.db.execute('SELECT * FROM job_attempts WHERE id=?', (answer['attempt_id'],)).fetchone(), old_attempt)
+        self.assertEqual(self.db.execute('SELECT * FROM sherlock_runs WHERE id=?', (answer['run_id'],)).fetchone(), old_run)
         self.assertEqual(retry['job_id'], answer['job_id'])
         self.assertEqual(retry['input'], answer['input'])
         self.assertNotEqual(retry['run_id'], answer['run_id'])
@@ -108,6 +114,81 @@ class ExecutorTests(unittest.TestCase):
                 'https://example.org/stale', 'reviewed', 'old', claim=self.authority(answer))
         self.finish(retry)
         self.assertEqual(self.start('next')['input']['topic'], 2)
+
+    def recovery_snapshot(self):
+        return {table: self.db.execute('SELECT * FROM '+table+' ORDER BY rowid').fetchall()
+                for table in ('jobs', 'job_attempts', 'sherlock_runs',
+                              'job_recoveries', 'job_operations')}
+
+    def quarantine(self, answer, mode):
+        control = JobControl(self.db)
+        if mode == 'expiry':
+            JobStore(self.db, clock=lambda: datetime.now(timezone.utc) + timedelta(hours=2)).recover_expired()
+        elif mode == 'abandon':
+            control.execute('abandon', dict(self.authority(answer), operation_id='abandon', error='unknown'))
+        else:
+            self.finish(answer, 'uncertain')
+        return dict(operation_id='recovery', job_id=answer['job_id'],
+                    attempt_id=answer['attempt_id'], evidence_ref='audit:investigated')
+
+    def test_successful_recovery_preserves_attempt_and_replays_without_mutation(self):
+        for mode in ('uncertain', 'abandon', 'expiry'):
+            with self.subTest(mode=mode):
+                answer = self.start(mode)
+                args = dict(self.quarantine(answer, mode), operation_id='recovery:'+mode,
+                            decision='succeeded', output_refs=[answer['result_ref']])
+                before = self.db.execute('SELECT * FROM job_attempts WHERE id=?', (answer['attempt_id'],)).fetchone()
+                control = JobControl(self.db)
+                result = control.execute('reconcile', args)
+                self.assertEqual(result['job_status'], 'succeeded')
+                self.assertEqual(self.db.execute('SELECT status,output_refs FROM jobs WHERE id=?', (answer['job_id'],)).fetchone(),
+                                 ('succeeded', '["'+answer['result_ref']+'"]'))
+                self.assertEqual(self.db.execute('SELECT status FROM sherlock_runs WHERE id=?', (answer['run_id'],)).fetchone()[0], 'completed')
+                self.assertEqual(self.db.execute('SELECT * FROM job_attempts WHERE id=?', (answer['attempt_id'],)).fetchone(), before)
+                self.assertEqual(self.db.execute('SELECT output_refs FROM job_recoveries WHERE attempt_id=?', (answer['attempt_id'],)).fetchone()[0], '["'+answer['result_ref']+'"]')
+                snapshot = self.recovery_snapshot()
+                self.assertEqual(control.execute('reconcile', args), result)
+                self.assertEqual(self.recovery_snapshot(), snapshot)
+
+    def test_successful_recovery_rejects_missing_empty_and_wrong_results(self):
+        answer = self.start()
+        args = dict(self.quarantine(answer, 'abandon'), decision='succeeded')
+        snapshot = self.recovery_snapshot()
+        for refs in (None, [], ['sherlock-run:999999'], ['artifact:other'],
+                     [answer['result_ref'], 'artifact:extra']):
+            with self.subTest(refs=refs):
+                request = dict(args)
+                if refs is not None:
+                    request['output_refs'] = refs
+                with self.assertRaises(ControlConflict):
+                    JobControl(self.db).execute('reconcile', request)
+                self.assertEqual(self.recovery_snapshot(), snapshot)
+
+    def test_failed_recovery_closes_run_and_preserves_attempt(self):
+        answer = self.start()
+        args = dict(self.quarantine(answer, 'expiry'), decision='failed')
+        before = self.db.execute('SELECT * FROM job_attempts').fetchall()
+        JobControl(self.db).execute('reconcile', args)
+        self.assertEqual(self.db.execute('SELECT status FROM jobs').fetchone()[0], 'failed')
+        self.assertEqual(self.db.execute('SELECT status FROM sherlock_runs').fetchone()[0], 'failed')
+        self.assertEqual(self.db.execute('SELECT * FROM job_attempts').fetchall(), before)
+
+    def test_recovery_failure_rolls_back_job_recovery_run_and_receipt(self):
+        answer = self.start()
+        args = dict(self.quarantine(answer, 'abandon'), decision='succeeded', output_refs=[answer['result_ref']])
+        for boundary in ('run', 'receipt'):
+            with self.subTest(boundary=boundary):
+                target = 'UPDATE ON sherlock_runs' if boundary == 'run' else 'INSERT ON job_operations'
+                self.db.execute("CREATE TRIGGER fail_recovery BEFORE "+target+
+                                " BEGIN SELECT RAISE(ABORT,'injected'); END")
+                self.db.commit()
+                snapshot = self.recovery_snapshot()
+                with self.assertRaises(sqlite3.IntegrityError):
+                    JobControl(self.db).execute('reconcile', args)
+                self.assertEqual(self.recovery_snapshot(), snapshot)
+                self.db.execute('DROP TRIGGER fail_recovery')
+                self.db.commit()
+        JobControl(self.db).execute('reconcile', args)
 
     def test_concurrent_same_and_distinct_activations(self):
         def start(identity):

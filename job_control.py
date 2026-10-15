@@ -155,12 +155,17 @@ class JobControl:
                     ('completed' if status == 'succeeded' else 'failed', _stamp(self.atomic.transaction_now), run[0]))
             return {'job_id': args['job_id'], 'attempt_id': args['attempt_id'],
                     'job_status': 'blocked' if status == 'uncertain' else status}
+        run = self.db.execute('SELECT run_id FROM sherlock_job_runs WHERE job_id=? AND attempt_id=?',
+                              (args['job_id'], args['attempt_id'])).fetchone()
+        if (run and args['decision'] == 'succeeded'
+                and args.get('output_refs') != ['sherlock-run:'+str(run[0])]):
+            raise ControlConflict('Sherlock recovery requires its concrete run result')
         self.atomic.reconcile(args['job_id'], args['attempt_id'], args['decision'],
                               args['evidence_ref'], args.get('output_refs'))
         self.db.execute("""UPDATE sherlock_runs SET status=?,finished_at=?
-            WHERE status='running' AND id IN
+            WHERE (status='running' OR ?='succeeded') AND id IN
             (SELECT run_id FROM sherlock_job_runs WHERE job_id=? AND attempt_id=?)""",
             ('completed' if args['decision'] == 'succeeded' else 'failed',
-             _stamp(self.atomic.transaction_now), args['job_id'], args['attempt_id']))
+             _stamp(self.atomic.transaction_now), args['decision'], args['job_id'], args['attempt_id']))
         return {'job_id': args['job_id'], 'attempt_id': args['attempt_id'],
                 'job_status': 'ready' if args['decision'] == 'retry' else args['decision']}
