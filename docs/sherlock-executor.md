@@ -217,7 +217,58 @@ onder meer replay/concurrency, expiry, gefencete writes en recovery opnieuw.
 Op 15 oktober 2026 lokaal uitgevoerd met Python 3.12 en de repositorydependency
 `tiktoken==0.12.0`: volledige Node-vrije Python-suite, 254 tests groen; afzonderlijke
 proces-/HTTP-systeemgate, 3 tests groen. Dit is geen bibib- of scheduled-jobbewijs.
-Geen nieuwe backendroute, schema of Sites-pluginwijziging is nodig; de Python-
-referentie is geen nieuwe productiecomponent op bibib. Na merge is de operationele
-wijziging de promptsync naar dezelfde bestaande gepauzeerde cloudtaak, gevolgd door
-de ene begeleide uitvoering zoals hierboven beschreven.
+Voor slotting is geen nieuwe backendroute, schema of Sites-pluginwijziging nodig;
+de Python-referentie is geen nieuwe productiecomponent op bibib. De aanvullende
+fase-5.5-rem vereist wel een backendupdate vóór promptsync en de begeleide
+uitvoering. De eerder genoemde 254 tests betreffen de oorspronkelijke slotstap.
+
+## Tijdelijke 30-uurs-productierem
+
+De backend gebruikt `SHERLOCK_NEW_JOB_COOLDOWN` (30 uur) uitsluitend voor nieuwe
+Sherlock-jobproductie, onder dezelfde korte `BEGIN IMMEDIATE`-starttransactie,
+met klokobservatie na lockverwerving. De meest recente werkelijke
+`sherlock_runs.started_at` bepaalt de cooldown, ongeacht status of legacy/job-
+koppeling; tijdsvolgorde is leidend, niet alleen het oplopende row-ID. Exact 30 uur
+is toegestaan. Een toekomstige runstart houdt productie conservatief tegen.
+Geen nieuwe tabel, migratie, MCP-contract of Sites-deployment is nodig.
+
+Running/blocked jobs en running legacy-runs blijven nieuwe productie blokkeren.
+Een na expliciete operatorreconciliatie ready gemaakte bestaande job wordt vóór
+de cooldown behandeld: herstel is geen nieuwe opdracht. Zijn nieuwe attempt/run
+krijgt een werkelijke starttijd die meetelt voor de daaropvolgende nieuwe job.
+Transportreplay start geen nieuwe run en verschuift de cooldown niet. Ook een
+failed run telt mee: er is daadwerkelijk een uitvoering gestart.
+
+Bij cooldown retourneert `_produce` `claim:null`; de bestaande starttransactie
+bewaart de lege receipt atomair. Er ontstaan geen job, attempt, run, assignment
+of topicverschuiving. Replay blijft leeg, ook na afloop van de cooldown; een
+andere activatie wordt opnieuw geëvalueerd. De executor bepaalt de cooldown niet.
+De 30 uur is voorlopige ontwikkelingspolicy, geen dispatcher of usage-meting.
+
+Na merge van PR #50: backend op bibib bijwerken, relevante tests en systeemgate
+uitvoeren, daarna de nieuwe prompt naar dezelfde gepauzeerde taak synchroniseren.
+Houd haar gepauzeerd tot beide overeenkomen. Eén begeleide echte activatie binnen
+admission bewijst de slotidentiteit en throttlebeslissing. Een terechte lege
+beslissing is geldig throttlebewijs, zonder deze voor smoke te omzeilen. Controleer
+daarbij persistent de lege receipt en ongewijzigde job/run/topicstate. De volledige
+Sherlock-flow voor fase 5 blijft afzonderlijk te bewijzen na natuurlijke cooldown,
+met IDs, claimvalidatie, bronregistraties, eventuele fichepublicatie, bevestigde
+finish en consistente persistente state. Geen claimtokens rapporteren.
+
+### Lokale validatie van fase 5.5
+
+Vier nieuwe throttletests met vaste geïnjecteerde backendklok (zonder sleeps)
+bewijzen de 30-uursgrens, lege receipts/replay, meerdere activaties zonder
+productie/topicrotatie, legacy-tijdvolgorde, recovery-uitzondering en herstart van
+de cooldown, plus concurrency. Twee nieuwe loggingtests voeren de werkelijke
+lege en niet-lege daily-flow uit en controleren JSON, ongewijzigde DB-state,
+stilte, succeslogging en ERROR met traceback. Bestaande DEBUG- en infrastructuur-
+tests blijven behouden. Vijf protocoltests die direct opeenvolgende jobs nodig
+hebben isoleren hun oude protocolscenario met een tijdelijke nul-cooldownfixture;
+de nieuwe throttletests gebruiken de werkelijke 30-uursdefault.
+
+Lokaal op 15 oktober 2026: logical-slot 5, throttle 4, logging 9 en bestaande
+executor 17 tests groen; volledige Node-vrije Python-suite 260 tests groen;
+afzonderlijke proces-/HTTP-systeemgate 3 tests groen; `git diff --check` schoon.
+Python 3.12, repositorydependency tiktoken 0.12.0. Dit is geen productie- of
+scheduled-jobbewijs. Fase 5 en 5.5 blijven operationeel open tot passend bewijs.

@@ -2,6 +2,8 @@ from contextlib import redirect_stderr, redirect_stdout
 import io
 import json
 import logging
+import sqlite3
+from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 import tempfile
@@ -34,6 +36,51 @@ class LoggingTests(unittest.TestCase):
         with patch.object(ariadne, 'LOG_PATH', self.path, create=True), patch(
                 'sys.argv', ['ariadne.py', 'daily', '--repo', self.tmp.name]):
             ariadne.main()
+
+    def runtime_paths(self):
+        base = Path(self.tmp.name)
+        app = base / 'app'
+        app.mkdir(exist_ok=True)
+        return app, base / 'queue.db', base / 'output', base / 'lock'
+
+    def test_real_empty_daily_is_silent_preserves_state_and_json(self):
+        app, db, output, lock = self.runtime_paths()
+        connection = daily.database(db)
+        before = list(connection.iterdump())
+        connection.close()
+        lock.touch()
+        argv = ['ariadne.py', 'daily', '--repo', str(app), '--db', str(db),
+                '--output', str(output), '--lock', str(lock), '--log', str(self.path)]
+        stdout = io.StringIO()
+        with patch('sys.argv', argv), redirect_stdout(stdout):
+            ariadne.main()
+        self.assertEqual(json.loads(stdout.getvalue())['status'], 'success')
+        self.assertEqual(json.loads(stdout.getvalue())['threads'], 0)
+        self.assertEqual(self.path.read_text(), '')
+        with sqlite3.connect(db) as connection:
+            self.assertEqual(list(connection.iterdump()), before)
+        self.assertFalse(output.exists())
+        self.assertEqual(lock.read_bytes(), b'')
+
+    def test_real_work_logs_success_and_real_error_logs_traceback(self):
+        from ingress_queue import IngressQueue
+        app, db, output, lock = self.runtime_paths()
+        ariadne.configure_logging(self.path)
+        queue = IngressQueue(db)
+        item = dict(schema_version=1, topic=1, date='2026-10-01', content='# Een bron')
+        queue.add(item)
+        now = datetime(2026, 10, 2, tzinfo=timezone.utc)
+        result = daily.run_daily(app, db, output, now=now, lock_path=lock)
+        self.assertEqual(result['threads'], 1)
+        self.assertIn('INFO daily Dagverwerking geslaagd:', self.path.read_text())
+        queue.add(item)
+        with patch.object(daily, 'token_count', side_effect=ValueError('echte flow fout')):
+            with self.assertRaises(ValueError):
+                daily.run_daily(app, db, output, now=now, lock_path=lock)
+        content = self.path.read_text()
+        self.assertIn('ERROR daily Dagverwerking mislukt:', content)
+        self.assertIn('Traceback (most recent call last)', content)
+        self.assertIn('echte flow fout', content)
 
     def test_default_path_and_module_logging(self):
         self.assertEqual(ariadne.LOG_PATH,

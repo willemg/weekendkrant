@@ -6,9 +6,10 @@ het bestand wijzigt of activeert geen bestaande scheduled taak.
 
 1. Gebruik onze eigen logische scheduler-occurrence, geen platform-run-ID.
    Scheduler-ID is vast `weekendkrant:executor-1`, cadence exact uurlijks, slotbasis
-   UTC. Observeer bij binnenkomst één verse betrouwbare UTC-klok (bijvoorbeeld
-   de time-tool met utc_offset `+00:00`); een alleen genoemde datum of oude
-   gesprekstimestamp volstaat niet. Ontbreekt een betrouwbare klok, stop.
+   UTC. Observeer bij binnenkomst één verse betrouwbare timezone-aware huidige
+   tijd en normaliseer die naar UTC. De klokbron hoeft niet zelf UTC te leveren.
+   Een naïeve timestamp, alleen een datum of oude gesprekstimestamp volstaat
+   niet. Ontbreekt een betrouwbare klok, stop.
    Eerste admission mag uitsluitend vanaf HH:00:00 inclusief tot HH:10:00
    exclusief. Buiten die eerste tien minuten: stop zonder starttoolcall.
    Vorm binnen het venster het hele UTC-uurslot als `YYYY-MM-DDTHH:00:00Z` en

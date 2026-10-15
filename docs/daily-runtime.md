@@ -226,7 +226,10 @@ of worktrees en installeert geen nieuwe zondagjob.
 Controleer met `crontab -l` dat precies één `daily`-regel bestaat en de oude
 dagelijkse regel weg is. Controleer na een volgend kwartier de logfile
 `/home/weekendkrant/logs/ariadne.log` en `./start_ariadne.sh telemetry` voor
-nieuwe bevestigde materialisaties, of een expliciete lege run. Herhaald starten
+nieuwe bevestigde materialisaties. Normale lege runs voegen geen INFO-records
+toe: stilte is op zichzelf geen bewijs van een fout. Gebruik voor expliciete
+inspectie `./start_ariadne.sh daily` (JSON met `status: success`, `threads: 0`)
+of telemetry. Herhaald starten
 maakt geen dubbele archiefbron of materialisatietijdregistratie; lege runs
 schrijven geen revisies. Een proces dat het bestaande `flock` niet krijgt stopt
 direct niet-nul met een diagnose, zonder queue/provenance aan te raken. Het wacht
@@ -354,3 +357,15 @@ tunnel/discovery, Sites-sync/publicatie, MCP/pluginregistratie, auth-secrets of
 Sherlocks actieve instructies/scheduler. Daarvoor geldt de afzonderlijke
 [deployment-smokeprocedure](plugin-deployment.md#operationele-deployment-smoke).
 Een lokale `127.0.0.1`-call bewijst nooit de gepubliceerde pluginroute.
+
+## Stille normale lege runs (fase 5.5)
+
+Een lege `pending_for_day()`-snapshot schrijft geen lifecycle-INFO: zowel
+`Dagverwerking gestart` als `Geen verwerkbare pending fiches` is verwijderd.
+De handmatige daily-CLI behoudt gestructureerde JSON op stdout; productiecron
+redirect stdout reeds naar `/dev/null`. Bij werk blijft één compacte INFO-regel
+`Dagverwerking geslaagd` met datum, fiches en draden bestaan. Warnings, fouten,
+lockconflicten en exceptiontracebacks blijven zichtbaar. INFO blijft ingeschakeld
+en expliciet configureerbare DEBUG-logging blijft beschikbaar. Een lege run maakt
+geen revisies, provenance of dag-/attemptrecord; normale schema-initialisatie en
+het bestaande lockbestand blijven onderdeel van de runtime.

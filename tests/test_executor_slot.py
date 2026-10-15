@@ -43,7 +43,8 @@ class SlotTests(unittest.TestCase):
             self.assertEqual(db.execute('SELECT count(*) FROM jobs').fetchone()[0], 1)
             self.assertEqual(db.execute('SELECT count(*) FROM job_attempts').fetchone()[0], 1)
             later = executor.start(self.args('2026-10-15T17:00:00+00:00'))
-            self.assertNotEqual(later['attempt_id'], answer['attempt_id'])
+            self.assertEqual(later, {'claim': None})  # New slot, still inside backend cooldown.
+            self.assertNotEqual(frozen, self.args('2026-10-15T17:00:00+00:00'))
 
     def test_concurrent_logical_slot_starts_share_attempt(self):
         with tempfile.TemporaryDirectory() as tmp:

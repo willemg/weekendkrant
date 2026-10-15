@@ -409,6 +409,39 @@ de begeleide job/persistente deployment-smoke is nog niet bewezen; beide
 operationele checkboxes blijven open. Zie het
 [concrete bewijs en het logische slotcontract](sherlock-executor.md#eigen-logische-slots-en-resterende-operationele-gate).
 
+### Fase 5.5 — vroege operationele begrenzing
+
+Voorlopige ontwikkelingspolicy vóór de operationele voortzetting van fase 6:
+
+- [x] Nieuwe Sherlock-jobproductie deterministisch begrenzen tot minstens 30 uur na de meest recente werkelijke runstart, inclusief legacy en recovery.
+- [x] Expliciet gereconcilieerde ready jobs herstelbaar houden en lege activationreceipts duurzaam vastleggen.
+- [x] Normale lege Ariadne-daily-runs stil maken op INFO, met behoud van CLI-JSON, succeslogging bij werk en zichtbare fouten.
+- [x] Grens-, replay-, concurrency-, recovery- en runtime-loggingtests toevoegen.
+- [ ] Backend op bibib invoeren en één echte toegelaten executoractivatie met de juiste throttlebeslissing bewijzen.
+- [ ] Stille normale lege productie-run en zichtbaar werkelijk werk/fouten operationeel controleren.
+
+`SHERLOCK_NEW_JOB_COOLDOWN = timedelta(hours=30)` is een tijdelijke expliciete
+backendparameter, geen schema-invariant, promptbeslissing of algemeen budgetbeleid.
+De starttransactie gebruikt de autoritatieve backendklok na lockverwerving en
+`sherlock_runs.started_at` als tijdsbewijs. Running/blocked-work blijft leidend;
+een expliciet herstelde ready job gaat vóór de productierem. Alleen nieuwe jobs
+worden tegengehouden. Een throttled slot krijgt duurzaam `claim:null`, verbruikt
+geen topic en blijft ook na cooldown bij replay leeg. Een nieuw slot wordt opnieuw
+beoordeeld. Zie [het throttlecontract](sherlock-executor.md#tijdelijke-30-uurs-productierem).
+Fase 7 blijft algemene workselectie; fase 13 blijft empirisch capaciteitsbeleid.
+
+Na merge: backend op bibib bijwerken en suite/systeemgate draaien, daarna de nieuwe
+prompt naar dezelfde gepauzeerde executor synchroniseren. Houd de taak uit totdat
+backend en prompt overeenkomen. Doe vervolgens één begeleide activatie binnen
+UTC-admission. Leg logical slot, activation-ID en de throttlebeslissing vast.
+Bij `claim:null`: bevestig persistent geen job/run/topicrotatie, geen bypass voor
+smoke. Dit bewijst de throttle, maar sluit fase 5 zonder echte job niet af.
+Na natuurlijke cooldown kan één inhoudelijke job de claim/validate/role/finish-
+keten en persistente output bewijzen. Leg dan job/attempt/run/topic/resultref,
+queue-IDs en bevestigde finish vast zonder token. Sluit fases 5 en 5.5 alleen op
+passend operationeel bewijs; daarna fase 6 verderzetten. Geen cronwijziging in
+deze PR en geen fictieve productiewaarnemingen.
+
 ### Fase 6 — Ariadne frequenter materialiseren
 
 - [x] Bestaande queue→parts-verwerking voor herhaalde kwartierstarts valideren, inclusief lege runs en echte procesoverlap zonder dubbel materiaal.
