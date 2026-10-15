@@ -125,8 +125,10 @@ registratie en expliciete lokale offer/seal-registratie. Legacy-dagbestanden wor
 Ook geïmplementeerd: de generieke job-/attemptopslag van fase 3 en de expliciete
 MCP/control-plane van fase 4, met claimvalidatie en persistente operatieretries.
 Dit is geen bewijs van productie-invoering of geïntegreerde jobuitvoering.
-Geïntegreerde Sherlock-jobproductie/topicrotatie en de generieke executor volgen
-in fase 5; de algemene/state-driven dispatcher en bredere policy volgen in fase 7.
+Fase 5 implementeert de eerste Sherlock-jobproductie/topicrotatie, atomaire
+executorstart en gefencete bron-/fichewrites; zie [Sherlock-executor](sherlock-executor.md).
+De actieve scheduler en externe deployment worden afzonderlijk ingevoerd.
+De algemene/state-driven dispatcher en bredere policy volgen in fase 7.
 Zie [het canonieke board](intelligent-worker-orchestration.md) en [jobprotocol](jobs.md).
 
 [Leonardo-geheugen en regie](leonardo-memory-and-orchestration.md) beschrijft ook

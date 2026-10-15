@@ -13,9 +13,11 @@ import sqlite3
 from ingress_queue import IngressQueue, FicheRunConflict
 from sherlock_state import SherlockState
 from job_control import JobControl, ControlConflict
+from sherlock_executor import SherlockExecutor
 
 
 TOOL_ROUTES = {
+    '/executor/sherlock/start': 'start_weekendkrant_executor',
     '/jobs/claim': 'claim_weekendkrant_job',
     '/jobs/validate': 'validate_weekendkrant_claim',
     '/jobs/finish': 'finish_weekendkrant_job',
@@ -147,9 +149,11 @@ def create_server(config):
                         run_id = payload['run_id']
                         if type(run_id) is not int:
                             raise ValueError('Invalid run_id')
-                        fiche = {key: value for key, value in payload.items() if key != 'run_id'}
-                        item_id = queue.add(fiche, run_id=run_id)
+                        fiche = {key: value for key, value in payload.items() if key not in ('run_id', 'claim')}
+                        item_id = queue.add(fiche, run_id=run_id, claim=payload.get('claim'))
                     else:
+                        if 'claim' in payload:
+                            raise ValueError('Claim requires run_id')
                         item_id = queue.add(payload)
                 except FicheRunConflict:
                     self.reply(409, {'error': 'run_conflict'})
@@ -164,7 +168,10 @@ def create_server(config):
                 return
 
             try:
-                if self.path.startswith('/jobs/'):
+                if self.path == '/executor/sherlock/start':
+                    with closing(sqlite3.connect(config.db_path, timeout=5)) as db:
+                        self.reply(200, SherlockExecutor(db).start(payload))
+                elif self.path.startswith('/jobs/'):
                     self.handle_job(payload)
                 else:
                     self.handle_sherlock(payload)
@@ -232,10 +239,10 @@ def create_server(config):
                     urls = state.filter_unreviewed(payload['urls'])
                     self.reply(200, {'unreviewed': urls})
                 elif self.path == '/sherlock/sources':
-                    schema({'run_id', 'topic', 'url', 'outcome', 'rationale'}, {'title'})
+                    schema({'run_id', 'topic', 'url', 'outcome', 'rationale'}, {'title', 'claim'})
                     canonical = state.record_reviewed_source(
                         payload['run_id'], payload['topic'], payload['url'],
-                        payload['outcome'], payload['rationale'], payload.get('title'))
+                        payload['outcome'], payload['rationale'], payload.get('title'), payload.get('claim'))
                     self.reply(201, {'canonical_url': canonical})
                 else:
                     schema({'run_id', 'status'})

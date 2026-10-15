@@ -93,9 +93,13 @@ class JobControl:
         conflict = None
         with self.store._write() as now:
             self.store._expire(now)
+            if self.db.execute('SELECT 1 FROM sherlock_activations WHERE operation_id=?', (args['operation_id'],)).fetchone():
+                conflict = 'Operation identity already used by executor start'
             prior = self.store._row('SELECT * FROM job_operations WHERE operation_id=?',
                                     (args['operation_id'],))
-            if prior:
+            if conflict:
+                pass
+            elif prior:
                 if prior['request_digest'] != digest or prior['operation'] != operation:
                     conflict = 'Operation identity reused with different request'
                 else:
@@ -129,6 +133,10 @@ class JobControl:
 
     def _apply(self, operation, args):
         if operation == 'claim':
+            if self.db.execute('SELECT 1 FROM sherlock_assignments WHERE job_id=?', (args['job_id'],)).fetchone():
+                raise ControlConflict('Sherlock claims require atomic executor start')
+            if self.db.execute('SELECT 1 FROM sherlock_activations WHERE activation_id=?', (args['activation_id'],)).fetchone():
+                raise ControlConflict('Activation already used by executor start')
             claim = self.atomic.claim(args['job_id'], args['activation_id'])
             if claim is None:
                 return {'claim': None}
@@ -137,11 +145,27 @@ class JobControl:
             return dict(claim, role=row[0], input_refs=json.loads(row[1]), output_contract_ref=row[2])
         if operation in ('finish', 'abandon'):
             status = 'uncertain' if operation == 'abandon' else args['status']
+            run = self.db.execute('SELECT run_id FROM sherlock_job_runs WHERE job_id=? AND attempt_id=?', (args['job_id'], args['attempt_id'])).fetchone()
+            if run and operation == 'finish' and args['output_refs'] != ['sherlock-run:'+str(run[0])]:
+                raise ControlConflict('Sherlock finish requires its concrete run result')
             self.atomic.finish(args, status, [] if operation == 'abandon' else args['output_refs'],
                                args.get('error'))
+            if run:
+                self.db.execute("UPDATE sherlock_runs SET status=?,finished_at=? WHERE id=? AND status='running'",
+                    ('completed' if status == 'succeeded' else 'failed', _stamp(self.atomic.transaction_now), run[0]))
             return {'job_id': args['job_id'], 'attempt_id': args['attempt_id'],
                     'job_status': 'blocked' if status == 'uncertain' else status}
+        run = self.db.execute('SELECT run_id FROM sherlock_job_runs WHERE job_id=? AND attempt_id=?',
+                              (args['job_id'], args['attempt_id'])).fetchone()
+        if (run and args['decision'] == 'succeeded'
+                and args.get('output_refs') != ['sherlock-run:'+str(run[0])]):
+            raise ControlConflict('Sherlock recovery requires its concrete run result')
         self.atomic.reconcile(args['job_id'], args['attempt_id'], args['decision'],
                               args['evidence_ref'], args.get('output_refs'))
+        self.db.execute("""UPDATE sherlock_runs SET status=?,finished_at=COALESCE(finished_at,?)
+            WHERE (status='running' OR ?='succeeded') AND id IN
+            (SELECT run_id FROM sherlock_job_runs WHERE job_id=? AND attempt_id=?)""",
+            ('completed' if args['decision'] == 'succeeded' else 'failed',
+             _stamp(self.atomic.transaction_now), args['decision'], args['job_id'], args['attempt_id']))
         return {'job_id': args['job_id'], 'attempt_id': args['attempt_id'],
                 'job_status': 'ready' if args['decision'] == 'retry' else args['decision']}

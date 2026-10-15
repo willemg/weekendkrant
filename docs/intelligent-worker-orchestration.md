@@ -14,7 +14,8 @@ zonder een langlevend modelproces nodig te hebben.
 | Geïmplementeerde fase-3-opslag | Lokale generieke jobs, afzonderlijke attempts, atomaire claims, vaste leases en fencing, conservatieve quarantaine en expliciete reconciliatie (schema 7); zonder workerintegratie; de aanvullende fase-4-control-plane staat hieronder. |
 | Huidig beschreven operationeel ritme | Sherlock behandelt volgens zijn canonieke instructies één toegewezen topic per uurrun. De bestaande Ariadne `daily` ondersteunt herhaalde kwartierstarts; het voorlopige lokale croncontract is elke 15 minuten in `Europe/Brussels`, na handmatige invoering. Repository-instructies bewijzen op zichzelf geen actieve schedulerconfiguratie of deployment. |
 | Gekozen doelrichting | Generieke scheduled executors krijgen per activatie maximaal één begrensde job met een door de backend gekozen rol. Persistente state draagt de redactionele continuïteit. Lokale Ariadne-materialisatie moet minstens uurlijk, mogelijk sneller, kunnen draaien. |
-| Geïmplementeerde fase-4-control-plane | Expliciete generieke claim/finish/abandon/validate-tools, persistente operatiebevestigingen (schema 8), aparte operatorrecovery; lokaal getest, nog niet gedeployed. |
+| Geïmplementeerde fase-4-control-plane | Expliciete generieke claim/finish/abandon/validate-tools, persistente operatiebevestigingen (schema 8), aparte operatorrecovery; lokaal getest; productie-invoering en geslaagde deployment-smoke op 14 oktober 2026 door de operator bevestigd. |
+| Geïmplementeerde fase-5-adapter | Minimale Sherlock-jobproductie/topicrotatie, atomaire executorstart, contractsnapshots en gefencete bron-/fichewrites (schema 9); lokale validatie, operationele invoering nog open. |
 | Nog niet geïmplementeerd | Dispatcher, Leonardo-state en -jobs, dossiers, missies, drafts, verificatie- en correctiejobs, capaciteitsbeleid en automatische eindredactie. |
 
 Fase 3 voegt uitsluitend lokale jobopslag en schema 7 toe, zonder plugin, actieve
@@ -362,33 +363,41 @@ Zie [het fase-4-protocol](jobs.md#fase-4-protocol-identiteit-en-operation-receip
 voor velden, fencing, transportretries, persistente receipts en afzonderlijke
 operatorauthenticatie. Claim kiest alleen een aangeleverd job-ID. Sherlock blijft
 op de specifieke runtime; geen dispatcher, scheduler- of capacitywijziging.
-Implementatie en lokale backendtests zijn gerealiseerd; Sites-publicatie en
-productie-upgrade zijn geen bewijs of wijziging van deze fase-4-PR.
+Implementatie en lokale backendtests zijn gerealiseerd. Na merge van PR #48 heeft
+de operator op 14 oktober 2026 de productie-invoering en geslaagde deployment-smoke
+bevestigd, na het starten van de tunnel. Dit is aangeleverd operationeel bewijs,
+geen nieuwe controle vanuit deze documentatiecorrectie. Een exact productie-SHA
+of nieuwe afzonderlijke bewijs-ID is niet geregistreerd. De actieve Sherlock-
+instructies gebruikten de nieuwe generieke tools toen nog niet.
 
 De testlagen blijven gescheiden: de Python-suite en systeemgate op bibib zijn
 Node-vrij; JavaScript-pluginchecks en de expliciete bridge/backend-developmenttest
 draaien afzonderlijk. Het gepubliceerde Sites → tunnel → backend-pad vereist de
 bestaande deployment-smoke. Zie [testlagen](jobs.md#testlagen-en-bewijsgrenzen).
 
-### Fase 5 — Sherlock naar generieke executor migreren
+### Fase 5 - Sherlock naar generieke executor migreren
 
-- [ ] Minimale deterministische Sherlock-jobproductie/topicrotatie met één scheduler invoeren, met concrete rol-, input- en outputcontractreferenties.
-- [ ] Jobproductie en claim aan dezelfde scheduled activation koppelen; retries behouden operatie-/activationidentiteit en maken geen dubbele job of tweede attempt.
-- [ ] Eerst uitsluitend Sherlock via het nieuwe jobmodel en de generieke executor laten lopen.
-- [ ] Drie topics, zoekworkflow, filtering, source-audit en fichepublicatie behouden.
-- [ ] Batching en bestaand experimenteel safety-retrybeleid behouden.
-- [ ] Source-audit en queue-output aan `job_id` koppelen en herstelgedrag bewijzen.
+- [x] Minimale deterministische Sherlock-jobproductie/topicrotatie voor één scheduler implementeren, met concrete immutable rol-, input- en outputcontractreferenties.
+- [x] Jobproductie en claim atomair aan dezelfde aangeleverde scheduled activation koppelen; retries behouden operatie-/activationidentiteit en maken geen dubbele job of tweede attempt.
+- [x] Generieke executorinstructie en eerst uitsluitend de Sherlock-adapter implementeren.
+- [x] Drie topics, zoekworkflow, filtering, source-audit en fichepublicatie behouden.
+- [x] Batching en bestaand experimenteel safety-retrybeleid behouden in de nieuwe rol-/executorcontracten.
+- [x] Source-audit en queue-output via run/attempt aan job_id koppelen en herstelgedrag lokaal bewijzen.
+- [ ] Backend/schema 9 en Sites-plugin operationeel invoeren en nieuwe deployment-smoke vastleggen.
+- [ ] Stabiele occurrencecontext van de echte scheduler controleren en actieve instructies bewust naar de generieke executor omschakelen; pas daarna één begeleide echte job bewijzen.
 
-Fase 4 claimt alleen een expliciet bestaand `job_id` en maakt of selecteert geen
-werk. Daarom hoort de minimale Sherlock-jobproducent bij fase 5: iedere scheduled
-activation krijgt via die deterministische topicrotatie een concrete opdracht
-voor de generieke executor. Deze beperkte productie is een voorwaarde voor de
-Sherlock-migratie en wacht niet op de algemene dispatcher van fase 7. De precieze
-producer-/activationadapter en het retrycontract worden in fase 5 geïmplementeerd
-en bewezen; deze PR past alleen de fasering aan.
+Zie [Sherlock-executor](sherlock-executor.md) voor protocol, invarianten, tests en
+invoervolgorde. De bestaande scheduler blijft gepauzeerd; de PR voert geen
+productie-upgrade, Sites-publicatie, taakwijziging of heractivering uit. De backend
+bindt caller-supplied occurrencecontext persistent; native platforminjectie is
+nog geen geleverd bewijs. De executor stopt als betrouwbare occurrencecontext
+ontbreekt. Eén running/blocked Sherlock-job blokkeert verdere productie, ook over
+verschillende activaties heen. Een lege activatie blijft leeg. Expliciet herstelde
+jobs behouden topic/opdracht en krijgen een nieuwe attempt en run.
 
-Andere rollen toevoegen nadat dit pad stabiel is; retries mogen geen nieuwe
-rolkeuze of tweede job binnen dezelfde scheduled activatie veroorzaken.
+Fase 4 blijft de generieke expliciet-job-ID-control-plane. Fase 5 voegt daarnaast
+één specifieke startadapter toe en wacht niet op de algemene dispatcher van
+fase 7. Andere rollen volgen pas nadat dit pad operationeel bewezen stabiel is.
 
 ### Fase 6 — Ariadne frequenter materialiseren
 

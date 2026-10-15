@@ -1,8 +1,10 @@
-# Generieke jobs, attempts en control-plane (schema 8)
+# Generieke jobs, attempts en control-plane (schema 9)
 
 Dit omvat de lokale opslaglaag van fase 3 en de generieke MCP/control-plane
-van fase 4. Er is geen dispatcher, worker of productiejob geïntegreerd. Sherlock, ingress en Ariadne blijven hun
-bestaande contract gebruiken. `attempts` blijft Ariadnes foutaudit;
+van fase 4. Fase 5 voegt de [Sherlock-executoradapter](sherlock-executor.md) toe:
+atomaire productie/start en gefencete bron-/fichewrites. De algemene dispatcher
+en andere rollen bestaan nog niet; operationele invoering volgt afzonderlijk.
+Ariadnes consumentencontract blijft behouden. `attempts` blijft Ariadnes foutaudit;
 `job_attempts` is uitsluitend de nieuwe generieke uitvoeringsaudit.
 
 ## Identiteit, grenzen en transacties
@@ -34,7 +36,7 @@ token bewijst bezit van de claim. De unieke activation-ID voorkomt een tweede
 job/attempt binnen dezelfde scheduled activatie, ook voor een andere rol of job.
 De control-plane vereist die identiteit bij claim. De vertrouwde activationadapter
 moet haar globaal uniek en stabiel aanleveren, ook bij retry. Tokens worden niet
-gelogd of aan andere executors blootgesteld. Een scheduleradapter bestaat nog niet.
+gelogd of aan andere executors blootgesteld. De eerste caller-supplied occurrencebinding staat in [de executorinstructie](agents/executor.md); een native platformattest bestaat niet.
 
 Alle tijden zijn UTC ISO 8601 met microseconden. Leaseduur is expliciet 1..86400
 gehele seconden, standaard 3600 seconden. Een lease geldt uitsluitend zolang

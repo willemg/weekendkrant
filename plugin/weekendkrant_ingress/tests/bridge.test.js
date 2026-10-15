@@ -216,3 +216,37 @@ test('generic null claims, forged responses and finish failure states are explic
   assert.deepEqual(await invoke('finish_weekendkrant_job',finish,result),{status:'success',...result});
  }
 });
+
+test('executor start advertises exact annotations and forwards stable occurrence identities',async()=>{
+ const tool=TOOLS.find(t=>t.name==='start_weekendkrant_executor');
+ assert.deepEqual(tool.annotations,{readOnlyHint:false,destructiveHint:true,idempotentHint:true,openWorldHint:false});
+ const args={operation_id:'start:occurrence',activation_id:'scheduler:occurrence'};
+ assert.deepEqual(await invoke(tool.name,args,{claim:null}),{status:'success',claim:null});
+ let n=0;
+ const result={job_id:3,attempt_id:7,token:'secret',lease_until:'2026-10-15T20:00:00.000000+00:00',
+  role:'Sherlock',run_id:9,input:{topic:2,date:'2026-10-15'},input_refs:['sha256:input','sha256:role'],
+  role_contract_ref:'sha256:role',role_contract:'role text',output_contract_ref:'sha256:output',
+  output_contract:'output text',result_ref:'sherlock-run:9'};
+ assert.deepEqual(await callTool(tool.name,args,env,async(url,options)=>{
+  if(!n++)return ok({url:good});
+  assert.equal(new URL(url).pathname,'/executor/sherlock/start');
+  assert.deepEqual(JSON.parse(options.body),args);return ok(result);
+ }),{status:'success',...result});
+ for(const bad of [{...args,extra:true},{...args,activation_id:''},{}])
+  assert.equal((await callTool(tool.name,bad,env,()=>assert.fail('network'))).code,'invalid_request');
+ for(const bad of [{...result,role:'Leonardo'},{...result,input:{topic:4,date:'x'}},{...result,run_id:0},{...result,result_ref:'sherlock-run:8'},{...result,extra:'secret'}])
+  assert.equal((await invoke(tool.name,args,bad)).code,'response_invalid');
+});
+test('job-backed source and fiche forward exact claim while refusing malformed claims locally',async()=>{
+ const claim={job_id:3,attempt_id:7,token:'secret'};
+ assert.equal((await invoke('record_sherlock_source',{...record,claim},{canonical_url:record.url})).status,'success');
+ const payload={run_id:17,schema_version:1,topic:2,date:'2026-10-15',content:'fiche',claim};
+ let n=0;
+ assert.equal((await submit(payload,env,async(url,options)=>{
+  if(!n++)return ok({url:good});assert.deepEqual(JSON.parse(options.body),payload);return ok({id:42});
+ })).queue_item_id,42);
+ for(const bad of [null,{}, {...claim,extra:true},{...claim,job_id:true}]){
+  assert.equal((await callTool('record_sherlock_source',{...record,claim:bad},env,()=>assert.fail('network'))).code,'invalid_request');
+  assert.equal((await submit({...payload,claim:bad},env,()=>assert.fail('network'))).code,'invalid_payload');
+ }
+});

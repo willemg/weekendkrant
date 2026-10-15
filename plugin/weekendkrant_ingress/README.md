@@ -186,3 +186,31 @@ development, niet voor bibib. `./start_tests.sh` en de Python-systeemgate op bib
 blijven volledig Node-vrij. De backend/Python-tests bewijzen hun eigen persistente
 replay-/idempotentiecontract; de werkelijk gepubliceerde Sites-route wordt apart
 bewezen door de bestaande deployment-smoke.
+
+
+## Fase 5: executorstart en gefencete Sherlock-writes
+
+Tiende tool: `start_weekendkrant_executor({operation_id,activation_id})` →
+`POST /executor/sherlock/start`. Productie, topickeuze, claim en run committen
+samen. De response bevat claim, concrete input en immutable rol-/outputcontracten,
+of `claim:null`. IDs komen uit de schedulercontext, blijven exact gelijk bij
+transportretry en worden niet door deze brug aangemaakt. Geen automatische retries.
+
+Metadata-audit van deze tool: readOnlyHint=false (persistente productie/receipt),
+destructiveHint=true (expiryquarantaine en afsluiten van oude run na expliciete
+recovery), idempotentHint=true (persistente exacte replay, geen actuele
+uitvoeringsbevoegdheid), openWorldHint=false (alleen private Weekendkrant-state;
+geen referenties bezoeken of externe publicatie). Elke hint is exact getest.
+
+`record_sherlock_source` en `submit_weekendkrant_fiche` accepteren aanvullend een
+strikt claimobject `{job_id,attempt_id,token}`. Voor job-backed runs is dit verplicht;
+de backend controleert actuele lease en binding binnen de write-transactie.
+Bestaande legacy-payloads en de vier generieke fase-4-tools blijven beschikbaar.
+Bronregistratie blijft een auditinsert (readOnly=false, destructive=false,
+idempotent=true, openWorld=false), fichepublicatie blijft append-only en
+niet-idempotent (false/false/false/false). Legacy-finish kan geen jobrun sluiten.
+Generieke finish sluit gekoppelde run en attempt samen; de bestaande destructive
+metadata dekt die terminale mutatie. Tokens zijn uitsluitend transportgegevens.
+
+Zie [fase-5-protocol en deploymentgrenzen](../../docs/sherlock-executor.md).
+Backend/schema 9 vóór pluginimport/publicatie; de actieve scheduler blijft uit.

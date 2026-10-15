@@ -5,7 +5,7 @@ from pathlib import Path
 import re
 import sqlite3
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 MIGRATIONS = Path(__file__).resolve().parent / 'migrations'
 
 

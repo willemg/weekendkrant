@@ -138,9 +138,14 @@ token- of allowancemeting; die roadmapcheckbox blijft open.
 
 ## Intelligente backlog: nog geen werkregistratie
 
+Status na fase 5: generieke jobs en de eerste Sherlock-adapter bestaan nu wel.
+Deze telemetrysectie is nog niet op jobstate aangesloten; de nulls blijven daarom
+onbekende metingen. De audit hieronder beschrijft het onderzochte contract van
+13 oktober, geen ontkenning van de later toegevoegde tabellen.
+
 `intelligent_backlog` toont `status: not_implemented`, `ready_items: null` en
-`oldest_ready_at: null` met een reden. De huidige runtime heeft geen persistente
-registratie van werk dat daadwerkelijk klaarstaat voor intelligente uitvoering.
+`oldest_ready_at: null` met een reden. De CLI heeft nog geen geïmplementeerde
+meting van klaarstaande generieke jobs.
 Dit is geen gemeten nul en ook geen schatting. `source: current_runtime_contract`
 beschrijft het onderzochte huidige contract, onafhankelijk van `--hours`; de CLI
 raadpleegt geen scheduler of nieuwe externe bron en blijft read-only.
@@ -164,12 +169,12 @@ de backlogmetingen onbekend. Scheduled activaties zijn geen persistente werkitem
 
 Deze stap maakt uitsluitend die ontbrekende beschikbaarheid expliciet. Hij bouwt
 geen jobmodel, consumer, dispatcher, seeds/dossiers of nieuwe planning. Werkelijke
-intelligente backlogmetingen blijven open totdat de runtime zo'n werkregistratie
-en lifecycle werkelijk heeft.
+intelligente backlogmetingen blijven open totdat de CLI op de nieuwe generieke
+werkregistratie en lifecycle is aangesloten.
 
 ## Grenzen van de baseline
 
-Schema 6 bevat expliciete materialisatietijden voor nieuwe verwerking en een
+De oorspronkelijke schema-6-baseline bevat expliciete materialisatietijden voor nieuwe verwerking en een
 fiche→Sherlock-run-koppeling, maar geen generieke jobkoppeling/-backlog of werkelijk
 modelgebruik. Historische materialisatiegroei zonder tijdprovenance en
 allowancegebruik blijven onbekend.

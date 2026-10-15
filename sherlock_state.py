@@ -97,6 +97,8 @@ class SherlockState:
         """Start one run and return its increasing integer ID."""
         _topic(topic)
         with self._write():
+            if self.db.execute("SELECT 1 FROM sherlock_assignments").fetchone():
+                raise ValueError('Sherlock job lane is active')
             cursor = self.db.execute('INSERT INTO sherlock_runs(topic,started_at) VALUES (?,?)',
                                      (topic, _now()))
             identity = cursor.lastrowid
@@ -105,6 +107,8 @@ class SherlockState:
     def start_next_run(self):
         """Atomically rotate topics based on the latest created run."""
         with self._write():
+            if self.db.execute("SELECT 1 FROM sherlock_assignments").fetchone():
+                raise ValueError('Sherlock job lane is active')
             previous = self.db.execute(
                 'SELECT topic FROM sherlock_runs ORDER BY id DESC LIMIT 1'
             ).fetchone()
@@ -121,6 +125,8 @@ class SherlockState:
         if status not in ('completed', 'failed'):
             raise ValueError('Eindstatus moet completed of failed zijn')
         with self._write():
+            from sherlock_executor import require_run_authority
+            require_run_authority(self.db, run_id)
             cursor = self.db.execute('''UPDATE sherlock_runs SET status=?,finished_at=?
                 WHERE id=? AND status='running' ''', (status, _now(), run_id))
             if cursor.rowcount != 1:
@@ -152,7 +158,7 @@ class SherlockState:
         return [original for canonical, original in canonical_to_original.items()
                 if canonical not in reviewed]
 
-    def record_reviewed_source(self, run_id, topic, url, outcome, rationale, title=None):
+    def record_reviewed_source(self, run_id, topic, url, outcome, rationale, title=None, claim=None):
         """Record an actually reviewed page and return its canonical URL.
 
         Call only after substantive review, never for a search hit or snippet.
@@ -167,6 +173,8 @@ class SherlockState:
         if any(not isinstance(text, str) or not text.strip() for text in (outcome, rationale)):
             raise ValueError('Outcome en rationale moeten niet-lege tekst zijn')
         with self._write():
+            from sherlock_executor import require_run_authority
+            require_run_authority(self.db, run_id, claim)
             run = self.db.execute('SELECT topic,status FROM sherlock_runs WHERE id=?',
                                   (run_id,)).fetchone()
             if run is None or run[0] != topic or run[1] != 'running':

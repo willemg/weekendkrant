@@ -193,7 +193,8 @@ JobControl(db).execute('claim', dict(job_id=int(sys.argv[2]), operation_id=sys.a
                     database.migrate(db)
             self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0], 7)
             self.assertIsNone(db.execute("SELECT 1 FROM sqlite_master WHERE name='job_operations'").fetchone())
-            JobControl(db)
+            with patch.object(database, 'SCHEMA_VERSION', 8):
+                JobControl(db)
             self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0], 8)
             self.assertEqual(JobStore(db).attempts(job)[0]['token'], claim['token'])
             database.migrate(db)
