@@ -182,9 +182,15 @@ de tolerantie. De marge is een voorlopige operationele parameter.
 
 Dubbele starts binnen hetzelfde slot gebruiken identieke startargumenten.
 Transportretry bewaart die argumenten ook voorbij het venster of de uurovergang.
-Binnen de tolerantie volgt altijd de startcall. Buiten de tolerantie wordt een
-afwijkende activatietijd expliciet gemeld; hervatting zonder bewaarde identiteit
-stopt zonder nieuwe admission. Een toegelaten volgend uur krijgt een andere identiteit.
+Binnen de tolerantie volgt altijd de startcall. Buiten de tolerantie volgt geen
+backendcall, maar verplicht een expliciete eindrapportage in de eigen
+scheduled-run-output: verse geobserveerde tijd, timezone/UTC-normalisatie,
+afwijzing buiten scheduler-admission en dat daarom geen backendcall is uitgevoerd.
+Ook zonder betrouwbare timezone-aware klok of bij hervatting zonder bewaarde
+identiteit volgt geen backendcall, maar een eindrapportage met de reden waarom
+uitvoering onmogelijk was (geen verzonnen tijd of normalisatie). Iedere activatie
+eindigt observeerbaar via minstens de eerste backendcall of deze eigen run-output;
+er bestaat geen silent no-op. Een toegelaten volgend uur krijgt een andere identiteit.
 UTC-normalisatie voorkomt ambiguïteit rond Belgische DST-overgangen.
 
 Dit model voldoet aan maximaal één backendjob/attempt per logisch slot; het

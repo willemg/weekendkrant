@@ -393,7 +393,14 @@ bindt caller-supplied occurrencecontext persistent; native platforminjectie is
 niet vereist. De executor gebruikt de eigen logische UTC-slots met admission
 een inclusieve tolerantie van ±15 minuten rond het dichtstbijzijnde UTC-uur
 (halfuurtie naar het volgende uur). Binnen tolerantie volgt altijd de startcall;
-buiten tolerantie meldt hij expliciet een afwijking. Zonder betrouwbare klok stopt hij.
+buiten tolerantie volgt geen backendcall, maar verplicht een expliciete
+eindrapportage in de eigen scheduled-run-output met verse geobserveerde tijd,
+timezone/UTC-normalisatie, afwijzing buiten scheduler-admission en dat daarom geen
+backendcall is uitgevoerd. Zonder betrouwbare timezone-aware klok volgt evenmin
+een backendcall: de eigen run-output vermeldt waarom uitvoering onmogelijk was,
+zonder tijd of normalisatie te verzinnen. Iedere scheduleractivatie eindigt
+observeerbaar via minstens de eerste backendcall of expliciete eigen run-output;
+er bestaat geen silent no-op.
 Eén running/blocked Sherlock-job blokkeert verdere productie, ook over
 verschillende activaties heen. Een lege activatie blijft leeg. Expliciet herstelde
 jobs behouden topic/opdracht en krijgen een nieuwe attempt en run.
