@@ -4,20 +4,19 @@ Voer per scheduled activatie maximaal één backendopdracht uit. Eén scheduler 
 voorlopig eenmaal per uur gebruikt. Deze instructie is een deploymentartifact;
 het bestand wijzigt of activeert geen bestaande scheduled taak.
 
-Iedere scheduleractivatie eindigt observeerbaar: ofwel door minstens de eerste
-Weekendkrant-backendcall uit te voeren, ofwel door expliciet in zijn eigen
-scheduled-run-output te rapporteren waarom die backendcall bewust niet is
-uitgevoerd. Er bestaat geen silent no-op. Iedere beëindiging hieronder volgt
-deze regel; een melding in de eigen run-output vereist geen backendcall.
+Iedere activatie doet óf minstens de eerste Weekendkrant-backendcall, óf geeft
+een korte expliciete eindmelding waarom geen backendcall werd uitgevoerd,
+zonder interne automation-runtime-metadata bloot te leggen. Er bestaat geen
+silent no-op. Iedere beëindiging hieronder volgt deze regel; een melding in de
+eigen run-output vereist geen backendcall.
 
-Bij beëindiging vóór de eerste backendcall is een expliciete eindrapportage in
-de eigen scheduled-run-output verplicht. Vermeld de reden en dat daarom geen
-backendcall is uitgevoerd. Bij afwijzing buiten scheduler-admission vermeld je
-minstens de verse geobserveerde tijd met timezone/UTC-offset, de normalisatie
-naar UTC en dat de activatie buiten scheduler-admission viel. Als geen betrouwbare
-timezone-aware klok verkrijgbaar is, vermeld je waarom de tijdwaarneming of
-UTC-normalisatie onmogelijk of onbetrouwbaar was; verzin geen tijd of timezone.
-Deze eindrapportage mag niet worden onderdrukt als een stille no-op.
+Bij beëindiging vóór de eerste backendcall is een korte expliciete eindmelding
+in de eigen run-output verplicht: vermeld dát geen backendcall is uitgevoerd en
+waarom. Bijvoorbeeld: “Geen backendcall uitgevoerd: de timingvoorwaarde kon niet
+worden gevalideerd” of “Geen backendcall uitgevoerd: geen betrouwbare huidige
+tijd beschikbaar”. Toon geen exacte tijd, timezone, UTC-offset, normalisatie,
+schedule, interne IDs of andere interne automation-runtime-metadata. Deze
+melding mag niet worden onderdrukt als een stille no-op.
 
 1. Gebruik onze eigen logische scheduler-occurrence, geen platform-run-ID.
    Scheduler-ID is vast `weekendkrant:executor-1`, cadence exact uurlijks, slotbasis
@@ -25,16 +24,15 @@ Deze eindrapportage mag niet worden onderdrukt als een stille no-op.
    tijd en normaliseer die naar UTC. De klokbron hoeft niet zelf UTC te leveren.
    Een naïeve timestamp, alleen een datum of oude gesprekstimestamp volstaat
    niet. Ontbreekt een betrouwbare timezone-aware klok, voer geen backendcall uit
-   en beëindig met de hierboven verplichte eindrapportage in de eigen run-output.
+   en beëindig met de hierboven verplichte eindmelding in de eigen run-output.
    Bepaal daarna het dichtstbijzijnde hele UTC-uur: rond naar beneden bij
    minder dan 30 minuten na het uur, anders naar boven (een exacte halfuurtie
    kiest het volgende uur). Gebruik exacte tijdsverschillen, geen floating point
    of lokale uurafronding. Admission geldt bij een absolute afstand van maximaal
    15 minuten tot dat slot, beide grenzen inclusief. Buiten deze tolerantie:
    voer geen backendcall uit en beëindig met de hierboven verplichte
-   eindrapportage in de eigen scheduled-run-output, inclusief de geobserveerde
-   verse tijd, timezone/UTC-normalisatie, afwijzing buiten scheduler-admission
-   en de expliciete vermelding dat daarom geen backendcall is uitgevoerd.
+   korte eindmelding in de eigen run-output dat geen backendcall is uitgevoerd
+   omdat de timingvoorwaarde niet kon worden gevalideerd, zonder interne metadata.
    Vorm het UTC-slot als `YYYY-MM-DDTHH:00:00Z` en
    `activation_id=weekendkrant:executor-1:<slot>`, met
    `operation_id=start:<activation_id>`. Binnen de tolerantie volgt altijd de
@@ -43,8 +41,8 @@ Deze eindrapportage mag niet worden onderdrukt als een stille no-op.
    uitvoering en alle transportretries, ook buiten de tolerantie of na een
    volgende uurovergang. Bereken voor een retry nooit opnieuw een slot.
    Bij hervatting zonder de oorspronkelijke IDs: geen nieuwe admission of
-   backendcall; beëindig met de verplichte eindrapportage en vermeld dat de
-   oorspronkelijke IDs ontbreken.
+   backendcall; beëindig met de verplichte korte eindmelding dat geen backendcall
+   is uitgevoerd omdat veilig hervatten onmogelijk was, zonder interne IDs te tonen.
    Gebruik geen UUID, lokale tijd of actuele retrytimestamp. De symmetrische
    tolerantie van ±15 minuten is een voorlopige operationele parameter.
    De pure referentieadapter `executor_slot.start_arguments` beschrijft dezelfde
@@ -90,7 +88,7 @@ Een volgend toegelaten uur is een andere logische activatie. UTC voorkomt DST-
 ambiguïteit; klokfouten worden niet gecorrigeerd door dit protocol.
 
 De tolerantie verwerpt afwijkende binnenkomsten buiten admission zonder
-backendcall, met verplichte eindrapportage in de eigen scheduled-run-output. Een oude platform-run die pas binnen een volgend toegestaan uurvenster voor het eerst binnenkomt,
+backendcall, met verplichte eindmelding in de eigen scheduled-run-output. Een oude platform-run die pas binnen een volgend toegestaan uurvenster voor het eerst binnenkomt,
 is zonder platformmetadata niet herkenbaar als oud: hij behoort uitsluitend tot
 dat nieuwe logische slot. De invariant is maximaal één job/attempt per scheduler
 per logisch slot, niet identificatie van alle oorspronkelijke platform-runs.
