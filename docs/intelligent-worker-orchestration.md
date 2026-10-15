@@ -399,6 +399,14 @@ Fase 4 blijft de generieke expliciet-job-ID-control-plane. Fase 5 voegt daarnaas
 één specifieke startadapter toe en wacht niet op de algemene dispatcher van
 fase 7. Andere rollen volgen pas nadat dit pad operationeel bewezen stabiel is.
 
+Operationele controle op 15 oktober 2026: dezelfde bestaande taak is hernoemd
+naar `Weekendkrant Executor 1`, met de volledige generieke executorinstructie
+en behoud van de pauze. Backend/schema 9 en Sites-publicatie zijn door de
+operator bevestigd. Een stabiele occurrence-identiteit in echte uitvoeringscontext
+en de begeleide job/persistente deployment-smoke zijn nog niet bewezen; beide
+operationele checkboxes blijven open. Zie het
+[concrete bewijs en de adaptervoorwaarde](sherlock-executor.md#operationele-controle-van-15-oktober-2026).
+
 ### Fase 6 — Ariadne frequenter materialiseren
 
 - [x] Bestaande queue→parts-verwerking voor herhaalde kwartierstarts valideren, inclusief lege runs en echte procesoverlap zonder dubbel materiaal.
