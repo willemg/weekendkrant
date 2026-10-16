@@ -1,5 +1,13 @@
 # Weekendkrant Ingress
 
+Fase 7: de startketen gebruikt nu de [algemene dispatcher](../../docs/dispatcher.md), met ready-first
+selectie, persistente pause en globale/rolconcurrency. `start_weekendkrant_executor`
+blijft het enige startpunt; `/executor/start` is canoniek en de oude
+`/executor/sherlock/start`-route blijft alias. Schema 10 bewaart generieke immutable
+activationreceipts en behoudt alle schema-9-audit. Alleen Sherlock is geregistreerd;
+geen Leonardo-jobs of verwerking van offers. Deze bronwijziging is geen deployment.
+De onderstaande fase-5-beschrijving blijft van toepassing op Sherlock-opdrachten.
+
 Ontwikkeling en tests gebeuren uitsluitend bij de canonieke GitHub-bron in
 `willemg/weekendkrant`. ChatGPT Sites is runtime/deployment, geen ontwikkelbron.
 Deployment bestaat uit synchronisatie van één gemergede commit, gevolgd door

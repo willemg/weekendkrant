@@ -13,10 +13,11 @@ import sqlite3
 from ingress_queue import IngressQueue, FicheRunConflict
 from sherlock_state import SherlockState
 from job_control import JobControl, ControlConflict
-from sherlock_executor import SherlockExecutor
+from dispatcher import Dispatcher
 
 
 TOOL_ROUTES = {
+    '/executor/start': 'start_weekendkrant_executor',
     '/executor/sherlock/start': 'start_weekendkrant_executor',
     '/jobs/claim': 'claim_weekendkrant_job',
     '/jobs/validate': 'validate_weekendkrant_claim',
@@ -168,9 +169,9 @@ def create_server(config):
                 return
 
             try:
-                if self.path == '/executor/sherlock/start':
+                if self.path in ('/executor/start', '/executor/sherlock/start'):
                     with closing(sqlite3.connect(config.db_path, timeout=5)) as db:
-                        self.reply(200, SherlockExecutor(db).start(payload))
+                        self.reply(200, Dispatcher(db).start(payload))
                 elif self.path.startswith('/jobs/'):
                     self.handle_job(payload)
                 else:

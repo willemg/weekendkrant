@@ -55,7 +55,7 @@ class ExecutorTests(unittest.TestCase):
         self.finish(third)
         self.assertEqual(self.start('four')['input']['topic'], 1)
         self.assertEqual(self.db.execute('SELECT count(*) FROM jobs').fetchone()[0], 4)
-        self.assertNotIn(first['token'], repr(self.db.execute('SELECT * FROM sherlock_activations').fetchall()))
+        self.assertNotIn(first['token'], repr(self.db.execute('SELECT * FROM executor_activations').fetchall()))
 
     def test_busy_receipt_stays_empty_and_legacy_writes_cannot_bypass_claim(self):
         answer = self.start()
@@ -230,7 +230,7 @@ class ExecutorTests(unittest.TestCase):
         self.assertEqual(sum('job_id' in r for r in results), 1)
 
     def test_receipt_failure_rolls_back_production_run_and_claim(self):
-        self.db.execute("""CREATE TRIGGER fail_start BEFORE INSERT ON sherlock_activations
+        self.db.execute("""CREATE TRIGGER fail_start BEFORE INSERT ON executor_activations
             BEGIN SELECT RAISE(ABORT,'injected'); END""")
         self.db.commit()
         with self.assertRaises(sqlite3.IntegrityError):
@@ -253,7 +253,7 @@ import os, sqlite3, sys
 from sherlock_executor import SherlockExecutor
 class CrashDB(sqlite3.Connection):
     def commit(self):
-        if self.in_transaction and self.execute('SELECT count(*) FROM sherlock_activations').fetchone()[0]:
+        if self.in_transaction and self.execute('SELECT count(*) FROM executor_activations').fetchone()[0]:
             if sys.argv[2] == 'before': os._exit(19)
             super().commit()
             os._exit(19)
@@ -267,7 +267,7 @@ SherlockExecutor(db).start(dict(operation_id='start:one',activation_id='schedule
                 self.assertEqual(db.execute('SELECT count(*) FROM jobs').fetchone()[0], int(boundary == 'after'))
                 answer = self.start(executor=SherlockExecutor(db))
                 self.assertEqual(self.start(executor=SherlockExecutor(db)), answer)
-                for table in ('jobs', 'job_attempts', 'sherlock_runs', 'sherlock_assignments', 'sherlock_activations'):
+                for table in ('jobs', 'job_attempts', 'sherlock_runs', 'sherlock_assignments', 'executor_activations'):
                     self.assertEqual(db.execute('SELECT count(*) FROM '+table).fetchone()[0], 1)
 
     def test_schema_nine_upgrade_rollback_and_immutable_snapshots(self):
@@ -286,7 +286,7 @@ SherlockExecutor(db).start(dict(operation_id='start:one',activation_id='schedule
                     database.migrate(db)
             self.assertEqual(list(db.iterdump()), before)
             executor = SherlockExecutor(db)
-            self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0], 9)
+            self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0], 10)
             # A running legacy producer must be stopped explicitly, not silently adopted.
             self.assertEqual(self.start(executor=executor), {'claim': None})
             SherlockState(db).finish_run(legacy, 'completed')
@@ -295,15 +295,15 @@ SherlockExecutor(db).start(dict(operation_id='start:one',activation_id='schedule
             for ref in answer['input_refs']+[answer['output_contract_ref']]:
                 content = db.execute('SELECT content FROM sherlock_contracts WHERE ref=?', (ref,)).fetchone()[0]
                 self.assertEqual(ref, 'sha256:'+hashlib.sha256(content.encode()).hexdigest())
-            for table in ('sherlock_contracts','sherlock_assignments','sherlock_job_runs','sherlock_activations'):
+            for table in ('sherlock_contracts','sherlock_assignments','sherlock_job_runs','executor_activations'):
                 for sql in ('DELETE FROM '+table, 'UPDATE '+table+' SET rowid=rowid', 'INSERT OR REPLACE INTO '+table+' SELECT * FROM '+table):
                     with self.assertRaises(sqlite3.IntegrityError):
                         db.execute(sql)
                     db.rollback()
             with self.assertRaises(sqlite3.IntegrityError):
-                db.execute('''INSERT OR REPLACE INTO sherlock_activations
+                db.execute('''INSERT OR REPLACE INTO executor_activations
                     SELECT 'new-operation',activation_id,job_id,attempt_id,response,confirmed_at
-                    FROM sherlock_activations WHERE attempt_id IS NOT NULL''')
+                    FROM executor_activations WHERE attempt_id IS NOT NULL''')
             db.rollback()
             with self.assertRaises(sqlite3.IntegrityError):
                 db.execute('''INSERT OR REPLACE INTO sherlock_job_runs

@@ -93,7 +93,7 @@ class JobControl:
         conflict = None
         with self.store._write() as now:
             self.store._expire(now)
-            if self.db.execute('SELECT 1 FROM sherlock_activations WHERE operation_id=?', (args['operation_id'],)).fetchone():
+            if self.db.execute('SELECT 1 FROM executor_activations WHERE operation_id=?', (args['operation_id'],)).fetchone():
                 conflict = 'Operation identity already used by executor start'
             prior = self.store._row('SELECT * FROM job_operations WHERE operation_id=?',
                                     (args['operation_id'],))
@@ -135,8 +135,14 @@ class JobControl:
         if operation == 'claim':
             if self.db.execute('SELECT 1 FROM sherlock_assignments WHERE job_id=?', (args['job_id'],)).fetchone():
                 raise ControlConflict('Sherlock claims require atomic executor start')
-            if self.db.execute('SELECT 1 FROM sherlock_activations WHERE activation_id=?', (args['activation_id'],)).fetchone():
+            if self.db.execute('SELECT 1 FROM executor_activations WHERE activation_id=?', (args['activation_id'],)).fetchone():
                 raise ControlConflict('Activation already used by executor start')
+            from dispatcher import admission
+            job = self.db.execute('SELECT role FROM jobs WHERE id=?', (args['job_id'],)).fetchone()
+            if job is None:
+                raise ControlConflict('Unknown job')
+            if not admission(self.db, job[0]):
+                return {'claim': None}
             claim = self.atomic.claim(args['job_id'], args['activation_id'])
             if claim is None:
                 return {'claim': None}

@@ -101,7 +101,7 @@ console.log(JSON.stringify({job_id,attempt_id:claim.attempt_id,scout_job:scout.j
                     self.assertEqual(attempts[0]['id'], identity['attempt_id'])
                     self.assertEqual(store.attempts(other), [])
                     self.assertEqual(db.execute('SELECT count(*) FROM job_operations').fetchone()[0], 3)
-                    self.assertEqual(db.execute('SELECT count(*) FROM sherlock_activations').fetchone()[0], 1)
+                    self.assertEqual(db.execute('SELECT count(*) FROM executor_activations').fetchone()[0], 1)
                     self.assertEqual(db.execute('''SELECT r.job_id,r.attempt_id,r.run_id,f.queue_item_id
                         FROM sherlock_job_runs r JOIN sherlock_fiches f USING(run_id)''').fetchone(),
                         (identity['scout_job'], identity['scout_attempt'], identity['run_id'], identity['queue_id']))

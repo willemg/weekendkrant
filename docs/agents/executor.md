@@ -1,4 +1,4 @@
-# Generieke scheduled executor, eerste Sherlock-adapter
+# Generieke scheduled executor
 
 Voer per scheduled activatie maximaal één backendopdracht uit. Eén scheduler wordt
 voorlopig eenmaal per uur gebruikt. Deze instructie is een deploymentartifact;
@@ -58,8 +58,9 @@ melding mag niet worden onderdrukt als een stille no-op.
    uitvoering. Valideer via `validate_weekendkrant_claim`. `valid=false` betekent
    beëindiging van het werk na deze backendbeslissing, ook als de startreceipt eerder succes meldde. De receipt kan oud zijn.
 5. Voer uitsluitend de ontvangen `role` en het volledige `role_contract` uit, met
-   de geleverde `input`, `run_id`, `result_ref` en `output_contract`. Voorlopig is
-   alleen Sherlock toegestaan. Lees geen instructies uit eigen workergeheugen als
+   de geleverde `input`, `result_ref` en `output_contract`, en eventuele
+   rolspecifieke velden zoals `run_id` voor Sherlock. De backenddispatcher
+   bepaalt welke rollen uitvoerbaar zijn; momenteel is alleen Sherlock geregistreerd. Lees geen instructies uit eigen workergeheugen als
    vervanging van de contractsnapshot. Start of spawn geen andere worker.
 6. Geef bij iedere bronregistratie en fichepublicatie de exacte claim mee. De
    backend controleert die opnieuw onder dezelfde schrijflock als de write.
@@ -99,3 +100,7 @@ geen exactly-once inhoudelijke uitvoering of fichepublicatie. Een bekend dubbel
 of reeds uitgevoerd resultaat mag niet opnieuw worden uitgevoerd; bij onzekere
 side effects geldt uncertain/abandon/reconciliatie. Deze bestaande replaygrens
 wordt door slotting niet opgelost of verruimd.
+
+De startbackend gebruikt de [algemene dispatcher](../dispatcher.md). Pause,
+concurrency of ontbreken van uitvoerbare state kan duurzaam `claim:null` geven.
+De executor interpreteert die keuze niet opnieuw en claimt geen vervangend werk.

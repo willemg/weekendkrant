@@ -1,9 +1,18 @@
-# Generieke jobs, attempts en control-plane (schema 9)
+# Generieke jobs, attempts en control-plane (schema 10)
+
+Fase 7: de startketen gebruikt nu de [algemene dispatcher](dispatcher.md), met ready-first
+selectie, persistente pause en globale/rolconcurrency. `start_weekendkrant_executor`
+blijft het enige startpunt; `/executor/start` is canoniek en de oude
+`/executor/sherlock/start`-route blijft alias. Schema 10 bewaart generieke immutable
+activationreceipts en behoudt alle schema-9-audit. Alleen Sherlock is geregistreerd;
+geen Leonardo-jobs of verwerking van offers. Deze bronwijziging is geen deployment.
+De onderstaande fase-5-beschrijving blijft van toepassing op Sherlock-opdrachten.
 
 Dit omvat de lokale opslaglaag van fase 3 en de generieke MCP/control-plane
 van fase 4. Fase 5 voegt de [Sherlock-executoradapter](sherlock-executor.md) toe:
-atomaire productie/start en gefencete bron-/fichewrites. De algemene dispatcher
-en andere rollen bestaan nog niet; operationele invoering volgt afzonderlijk.
+atomaire productie/start en gefencete bron-/fichewrites. Fase 7 voegt de algemene
+dispatcher toe; andere productierollen zijn nog niet geïmplementeerd. Operationele
+invoering van de dispatcher volgt afzonderlijk.
 Ariadnes consumentencontract blijft behouden. `attempts` blijft Ariadnes foutaudit;
 `job_attempts` is uitsluitend de nieuwe generieke uitvoeringsaudit.
 
@@ -151,7 +160,8 @@ op bibib betreft de voorafgaande fase-2.5-runtime.
 
 `job_control.JobControl` bouwt op de bestaande lifecycle. Het claimt uitsluitend
 het expliciete `job_id`: jobs worden lokaal voorbereid met `JobStore.create`.
-Er is geen MCP-create, werkselectie, dispatcher of schedulerintegratie.
+Deze expliciete control-plane selecteert zelf geen werk en heeft geen MCP-create.
+De fase-7-dispatcher selecteert apart en deelt de claim-/receiptinvarianten.
 De claim/start is één atomaire operatie, geen aparte tweede startcall.
 Het antwoord bevat `job_id`, `attempt_id` (fencing-generatie), geheime `token`,
 `lease_until`, `role`, `input_refs` en `output_contract_ref`. Een onbeschikbare job
