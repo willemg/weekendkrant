@@ -9,9 +9,12 @@ from unittest.mock import patch
 import ariadne
 import daily
 from ingress_queue import IngressQueue
+from test_parts import PartFixture
 
 
 class BacklogTests(unittest.TestCase):
+    revision_bytes = PartFixture.revision_bytes
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
@@ -54,10 +57,10 @@ class BacklogTests(unittest.TestCase):
         self.add()
         self.run_day(5)
         original = next(self.output.rglob('*.txt'))
-        data = original.read_bytes()
+        data = self.revision_bytes(original)
         self.add(content='late')
         self.run_day()
-        self.assertEqual(original.read_bytes(), data)
+        self.assertEqual(self.revision_bytes(original), data)
         self.assertIn('late', original.with_name('rev_0002.txt').read_text())
         self.assertEqual(self.rows('SELECT revision FROM part_revisions ORDER BY revision'), [(1,), (2,)])
 
@@ -158,10 +161,12 @@ class BacklogTests(unittest.TestCase):
         self.assertEqual(self.rows('SELECT part FROM parts ORDER BY part'), [(1,), (2,)])
         before = {p: p.read_bytes() for p in self.output.rglob('*.txt')}
         self.add(content='late')
-        self.run_day()
+        with patch.object(daily, 'token_count', side_effect=len):
+            self.run_day()
         self.assertEqual(self.rows('SELECT part,active_revision FROM parts ORDER BY part'), [(1, 1), (2, 2)])
-        for path, data in before.items():
-            self.assertEqual(path.read_bytes(), data)
+        with patch.object(daily, 'token_count', side_effect=len):
+            for path, data in before.items():
+                self.assertEqual(self.revision_bytes(path), data)
 
     def test_old_data_is_preserved_and_no_vacuum_occurs(self):
         self.add('2026-01-01')
@@ -216,14 +221,14 @@ class BacklogTests(unittest.TestCase):
         self.add(content='nieuwe fiche')
         self.run_day(5)
         original = next(self.output.rglob('*.txt'))
-        original_bytes = original.read_bytes()
+        original_bytes = self.revision_bytes(original)
         identity = self.add(content='late queuefiche')
         self.assertEqual(self.run_day()['threads'], 1)
         self.assertEqual(self.rows(f'SELECT status FROM ingress_queue WHERE id={identity}'), [('processed',)])
         self.assertEqual(self.rows('SELECT revision FROM part_revisions ORDER BY revision'), [(1,), (2,)])
         self.assertEqual(self.rows('SELECT * FROM threads'), [])
         self.assertEqual(self.rows('SELECT * FROM sources'), [])
-        self.assertEqual(original.read_bytes(), original_bytes)
+        self.assertEqual(self.revision_bytes(original), original_bytes)
         self.assertIn('late queuefiche', original.with_name('rev_0002.txt').read_text())
         self.assertEqual(self.rows('SELECT status,commit_sha,manifest_sha256 FROM days'),
                          [('success', legacy_commit, legacy_manifest)])

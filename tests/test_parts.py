@@ -39,6 +39,16 @@ class PartFixture(unittest.TestCase):
     def active(self):
         return self.rows('SELECT week,topic,part,is_open,active_revision FROM parts ORDER BY week,topic,part')
 
+    def revision_bytes(self, path):
+        from revision_storage import reconstruct
+        with sqlite3.connect(self.db) as db:
+            identity, revision = db.execute(
+                'SELECT part_id,revision FROM part_revisions WHERE path=?', (str(path),)).fetchone()
+            data = reconstruct(db, identity, revision)
+        if path.exists():
+            self.assertEqual(path.read_bytes(), data)
+        return data
+
     def members(self, revision):
         return self.rows('SELECT queue_id,position FROM revision_sources WHERE revision=? ORDER BY position', (revision,))
 
@@ -50,13 +60,13 @@ class PartTests(PartFixture):
         b = self.add(content='B')
         self.assertEqual(self.run_day(5)['threads'], 1)
         first = self.output / '2026_W41/topic_2/part_0001/rev_0001.txt'
-        before = first.read_bytes()
+        before = self.revision_bytes(first)
         provenance = self.rows('SELECT * FROM part_revisions')
         membership = self.members(1)
         c = self.add('2026-10-06', content='C')
         self.run_day()
         self.assertEqual(self.active(), [('2026_W41', 2, 1, 1, 2)])
-        self.assertEqual(first.read_bytes(), before)
+        self.assertEqual(self.revision_bytes(first), before)
         self.assertEqual(self.rows('SELECT * FROM part_revisions WHERE revision=1'), provenance)
         self.assertEqual(self.members(1), membership)
         self.assertEqual(self.members(2), [(a, 0), (b, 1), (c, 2)])
@@ -98,7 +108,8 @@ class PartTests(PartFixture):
         self.assertEqual(self.rows('SELECT queue_id FROM revision_sources WHERE part_id=1'), [(a,)])
         self.assertEqual(self.rows('SELECT queue_id FROM revision_sources WHERE part_id=2'), [(b,)])
         self.add(content='tiny')
-        self.run_day(7)
+        with patch.object(daily, 'token_count', side_effect=len):
+            self.run_day(7)
         self.assertEqual(self.active()[-1], ('2026_W41', 2, 3, 1, 2))
 
     def test_topics_weeks_backlog_and_late_old_week(self):
@@ -147,7 +158,7 @@ class PartTests(PartFixture):
         self.add()
         self.run_day(5)
         first = self.output / '2026_W41/topic_2/part_0001/rev_0001.txt'
-        before = first.read_bytes()
+        before = self.revision_bytes(first)
         old = self.rows('SELECT * FROM part_revisions')
         self.add('2026-10-06')
         with sqlite3.connect(self.db) as db:
@@ -163,7 +174,7 @@ class PartTests(PartFixture):
             db.execute('DROP TRIGGER refuse')
         self.run_day(7)
         self.assertEqual(orphan.read_bytes(), planned)
-        self.assertEqual(first.read_bytes(), before)
+        self.assertEqual(self.revision_bytes(first), before)
 
     def test_changed_part_snapshot_is_refused(self):
         self.add()
@@ -223,7 +234,7 @@ class PartTests(PartFixture):
                 WHERE m.part_id=? AND m.revision=? ORDER BY m.position''', (identity, revision))
             sources = [Fiche(f'queue:{i}', topic, content, hash_, day, version) for i, topic, content, hash_, day, version in rows]
             text = render(sources, '2026_W41', 2, 1, revision, reserve)
-            self.assertEqual(text.encode(), Path(path).read_bytes())
+            self.assertEqual(text.encode(), self.revision_bytes(Path(path)))
             self.assertEqual(hashlib.sha256(text.encode()).hexdigest(), digest)
             self.assertEqual(daily.token_count(text), tokens)
             self.assertEqual(tokenizer, 'cl100k_base')
@@ -232,7 +243,7 @@ class PartTests(PartFixture):
         self.add()
         self.run_day(5)
         original = self.output / '2026_W41/topic_2/part_0001/rev_0001.txt'
-        before = original.read_bytes()
+        before = self.revision_bytes(original)
         identity = self.add('2026-10-06', content='B')
         with sqlite3.connect(self.db) as db:
             db.execute(f"CREATE TRIGGER refuse BEFORE UPDATE ON ingress_queue WHEN NEW.id={identity} BEGIN SELECT RAISE(ABORT,'failure'); END")
@@ -242,7 +253,7 @@ class PartTests(PartFixture):
         with sqlite3.connect(self.db) as db:
             db.execute('DROP TRIGGER refuse')
         self.run_day()
-        self.assertEqual(original.read_bytes(), before)
+        self.assertEqual(self.revision_bytes(original), before)
         self.assertIn(b'C', original.with_name('rev_0002.txt').read_bytes())
         self.assertEqual(self.members(2), [(1, 0), (2, 1), (3, 2)])
 

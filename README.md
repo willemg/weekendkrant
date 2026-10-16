@@ -58,7 +58,12 @@ groeien. Nieuwe fiches volgen `(payload.date, numerieke queue-ID)`; bestaande
 bronnen blijven in hun opgeslagen volgorde. Overflow sluit de part definitief
 en begint de volgende. Per week/topic is maximaal één part open.
 
-Elke groei schrijft een nieuw immutable revisiebestand. SQLite bewaart het
+Elke groei schrijft eerst een nieuw immutable revisiebestand; na commit mag de
+geverifieerde vorige actieve fysieke kopie vervallen. Alle logische revisies
+blijven exact reconstrueerbaar uit SQLite. Actieve, gesloten en offered inputfiles
+blijven behouden; bestaande historische kopieën krijgen alleen een expliciete
+dry-run/apply-cleanup. Zie [fase 6.5 en opslagbesparing](docs/revision-storage.md).
+SQLite bewaart het
 exacte bronarchief, revisiehashes, tokenmetingen, bronposities en de actieve
 revisie. De korte eindtransactie registreert alles samen met queue-status.
 `database.py` en de genummerde migraties in `migrations/` beheren het volledige

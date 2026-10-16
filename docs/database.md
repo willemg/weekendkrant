@@ -74,7 +74,7 @@ compatibiliteitsexports uit de centrale module; ze beheren geen eigen schema.
 | Tabel | Verantwoordelijkheid |
 | --- | --- |
 | `parts` | Identiteit per week/topic/part, open/gesloten status en actieve revisie |
-| `part_revisions` | Onveranderlijke revisies, bestandspad, hash en tokenbudget |
+| `part_revisions` | Onveranderlijke logische revisies, canoniek renderpad, hash en tokenbudget; historische fysieke kopieën mogen ontbreken, zie [fase 6.5](revision-storage.md) |
 | `source_archive` | Onveranderlijke oorspronkelijke bronbytes en provenance per queue-ID |
 | `revision_sources` | Onveranderlijke, geordende bronlidmaatschappen per revisie |
 | `part_offers` | Eén onveranderlijk aanbod per part van een geregistreerde actieve revisie |

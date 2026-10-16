@@ -491,6 +491,22 @@ operationele controle open.
 Deze fase moet vóór de eerste Sherlock/Leonardo-cyclus operationeel zijn; een
 dagelijkse materialisatie mag geen urenoude oogst achter een klaarstaande job houden.
 
+### Fase 6.5: opslag-efficiëntie en revisieretentie
+
+- [x] Runtime-/testconsumenten van fysieke historische revisiefiles onderzoeken.
+- [x] Alle logische revisies, bronbytes, memberships, hashes en tokenmetingen behouden; exacte reconstructie uit persistente state implementeren.
+- [x] Alleen geverifieerde vorige actieve filekopieën na succesvolle groei laten vervallen; actieve, gesloten en offered input beschermen.
+- [x] Afzonderlijke idempotente cleanup voor bestaande historische kopieën met standaard dry-run en expliciete `--apply` implementeren.
+- [x] Groei, reconstructie, bescherming, crash/retry en schema-9-compatibiliteit testen; lokale besparing meten.
+- [ ] Productie-dry-run en opslagmeting uitvoeren en beoordelen.
+- [ ] Nieuw groeigedrag na deployment operationeel controleren; eventuele bestaande cleanup afzonderlijk uitvoeren en vastleggen.
+
+Zie [opslagcontract, onderzoek en bewaarbeleid](revision-storage.md). Geen schema-
+of auditwijziging: historische `path`-waarden blijven canonieke renderpaden maar
+hoeven geen fysieke kopie meer te hebben. De lokale proef met twintig revisies
+bespaart 90,51% op revisiefiles; dit is geen productiemeting of totale disksparing.
+Deze fase gaat vóór fase 7; geen dispatcher of nieuwe intelligente rol toegevoegd.
+
 ### Fase 7 — algemene/state-driven dispatcher introduceren
 
 - [ ] Voortbouwen op de minimale Sherlock-jobproductie en één scheduler uit fase 5; algemene workselectie over beschikbare jobs/state toevoegen.

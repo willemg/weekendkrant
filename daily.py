@@ -171,6 +171,13 @@ def run_daily(root, db_path=DB_PATH, output=OUTPUT_PATH, now=None, lock_path=LOC
             db.executemany('INSERT INTO source_materializations(queue_id,materialized_at) VALUES (?,?)',
                            [(identity, stamp) for identity, _ in items])
             db.commit()
+            # Only copies superseded by this successful snapshot are retired.
+            # Pre-existing historical files require explicit dry-run/apply cleanup.
+            from revision_storage import retire
+            for state in snapshots.values():
+                for identity, _, _, revision in state:
+                    if revision is not None:
+                        retire(db, identity, revision, output, apply=True)
             offers = store.offer_ready()
             if offers:
                 logger.info('Parts aangeboden: aantal=%s', len(offers))
