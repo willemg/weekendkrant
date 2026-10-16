@@ -1,29 +1,7 @@
-# Regressieset: Leonardo-state/jobs (PR #56) + expliciete fast-trackrunner.
-# Iedere functionele PR beoordeelt/vervangt deze set; zie AGENTS.md en
-# docs/lessons-learned.md. Modules of module.Class.test_method, één per regel.
-
-# Alle nieuwe Leonardo-regressies, inclusief schema 11, HTTP en phantom-outputfix.
-test_leonardo
-# Migratieketen, behoud bestaande data, atomiciteit en schema 11.
-test_database
-# Ready-only Leonardo-adapter naast Sherlock; FIFO, admission en recovery.
-test_dispatcher
-# Gedeelde finish/receipt/fencing-protocollen, oude en nieuwe operation-IDs.
-test_job_control
-# Echte HTTP-control-plane, auth, validate en Sherlock-compatibiliteit.
-test_job_http
-# Bestaande Sherlock-claims, snapshots, recovery en side-effectfencing.
-test_sherlock_executor
-# Echte HTTP -> queue -> Ariadne -> parts/revisions, inclusief Sherlock-jobs.
-test_system_e2e
-# De persistente expliciete runnerlijst en CLI-foutpaden zelf.
-test_test_runner
-
-# Gerichte storage-regressies achter de gedeelde control-plane.
-test_jobs.JobTests.test_identity_attempt_and_exact_retries
-test_jobs.JobTests.test_expiry_blocks_retry_and_fences_late_result
-test_jobs.JobTests.test_finish_failure_rolls_back_attempt_and_job
-# Leonardo-input moet historische bronrevisies exact kunnen reconstrueren.
-test_revision_storage.RevisionStorageTests.test_v1_reconstruction_survives_replaced_current_renderer_and_tokenizer
-# Fase 8 mag bestaande offers niet automatisch als nieuwe jobs consumeren.
+# Phase 9 operator boundary, plus reused phase-8 protection/lifecycle regressions.
+test_leonardo_operator
+test_leonardo.LeonardoTests.test_assignment_dispatch_finish_replay_and_next_snapshot
+test_leonardo.LeonardoTests.test_pending_enqueue_is_serialized_across_connections
+test_leonardo.LeonardoTests.test_expiry_recovery_fences_old_claim_same_snapshot
+test_leonardo.LeonardoTests.test_http_start_finish_state_and_retry
 test_offers.OfferTests.test_existing_offer_never_becomes_a_leonardo_job

@@ -541,12 +541,17 @@ backendmatig geïmplementeerd, nog niet gedeployd.
 
 ### Fase 9 — eerste volledige Sherlock/Leonardo-cyclus
 
-- [ ] Bijvoorbeeld Sherlock topic 1 → topic 2 → topic 3 → Leonardo als experiment uitvoeren.
-- [ ] Verse materialisatie, offers, stateovergang en provenance end-to-end controleren.
-- [ ] Backlog en informatiewinst meten en prioriteiten daarop aanpassen.
+- [x] Eerste experimentele slice: lokale expliciete offer → dossier → job-brug met stabiele operatie-identiteit en bestaande fase-8-validatie.
+- [x] Runbook voor provenance, dispatch, wachttijd/backlog, stateomvang en objectieve state-delta's.
+- [ ] Eén echte gecontroleerde Sherlock → Ariadne → offer → scheduled Leonardo → state-cyclus uitvoeren en bewijs vastleggen.
+- [ ] Inhoudelijke opbrengst inspecteren en daarna pas een automatische policy overwegen.
 
-De voorbeeldcyclus is geen permanente hardcoded policy. Later kunnen expliciete
-missies, verificatie of beschikbare input een andere volgorde rechtvaardigen.
+Zie [het fase-9-proefrunbook](phase-9-trial.md). De lokale regressies bewijzen de
+operatorbrug en bestaande statefinish, geen productie-uitvoering. Vóór de echte
+proef moet de gepubliceerde MCP-bridge aantoonbaar `leonardo_state` exposen.
+Geen automatische semantische dossierselectie, algemene offerconsumptie of
+hardcoded permanente topicvolgorde. Een topic is geen dossier. Deze slice voert
+geen productiedeployment uit.
 
 ### Fase 10 — Kuifje
 

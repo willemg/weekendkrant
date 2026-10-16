@@ -100,3 +100,9 @@ semantische dossierkeuze uit in Ariadne en consumeert bestaande offers niet.
 Deployment vraagt schema 11, backendherstart, synchronisatie/publicatie van de
 MCP-bridge en synchronisatie van `docs/agents/executor.md`; deze PR doet geen
 productiedeployment of wijziging van de actieve scheduled task.
+
+## Eerste fase-9-experiment
+
+De [lokale operatorbrug en proefprocedure](phase-9-trial.md) selecteren expliciet
+bestaande sealed offers en gebruiken bovenstaande enqueue- en finishprimitieven.
+Dit voegt geen automatische routing of consumptiepolicy toe.
