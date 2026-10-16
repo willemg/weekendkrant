@@ -77,7 +77,7 @@ automatische `VACUUM`. Het lokale offer/seal-mechanisme is geïmplementeerd:
 `PartStore.offer(part_id, revision)` registreert exact de actieve revisie en sluit
 de part atomisch; een identieke retry retourneert hetzelfde immutable offer.
 Ook overflow-gesloten parts zijn offerbaar. `daily` biedt ze automatisch aan;
-open parts volgen na 30 minuten rust zonder pending week/topic-input of running
+open parts volgen na 25 minuten rust zonder pending week/topic-input of running
 Sherlock-run, met volledige tijdprovenance. Zie het
 [aanbiedcontract](docs/daily-runtime.md#automatisch-lokaal-aanbiedmoment-fase-6). Dit bewijst geen ontvangst door een
 model. Nieuwe fiches gaan naar de volgende part. Dossiers, rolling state, Kuifje, modelcalls,

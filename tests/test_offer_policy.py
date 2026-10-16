@@ -164,3 +164,24 @@ class OfferPolicyTests(PartFixture):
         finally:
             db.close()
             other.close()
+
+    def test_hourly_input_with_runtime_jitter_is_offered_each_half_hour(self):
+        # Each hourly batch commits seconds after :15. The following :45 check
+        # occurs just UNDER 30 minutes later, before the next hourly batch.
+        base = datetime(2026, 10, 16, 8, tzinfo=timezone.utc)
+        for hour in range(4):
+            materialized = base + timedelta(hours=hour, minutes=15, seconds=3)
+            checked = base + timedelta(hours=hour, minutes=45)
+            self.add(content='hourly batch %s' % hour)
+            with patch.object(daily, 'materialization_timestamp', return_value=materialized.isoformat()), \
+                    patch('parts.datetime', wraps=datetime) as clock:
+                clock.now.return_value = materialized + timedelta(seconds=1)
+                self.run_day()
+            self.assertEqual(len(self.rows('SELECT * FROM part_offers')), hour)
+            with patch('parts.datetime', wraps=datetime) as clock:
+                clock.now.return_value = checked
+                self.assertEqual(self.run_day()['threads'], 0)
+            self.assertEqual(self.rows('SELECT part,is_open,active_revision FROM parts ORDER BY part'),
+                             [(part, 0, 1) for part in range(1, hour + 2)])
+            self.assertEqual(len(self.rows('SELECT * FROM part_offers')), hour + 1)
+        self.assertEqual(len(self.rows('SELECT * FROM source_materializations')), 4)

@@ -479,7 +479,7 @@ kleiner dan 30 minuten; dit is geen garantie voor totale materialisatielatency.
 De nieuwe halfuurcadans is nog niet over voldoende productiegegevens geëvalueerd.
 
 Het onafhankelijke lokale aanbiedbeleid is geïmplementeerd, zonder dispatcher,
-Leonardo-job, modelcall of nieuwe rol. Open parts worden na minstens 30 minuten
+Leonardo-job, modelcall of nieuwe rol. Open parts worden na minstens 25 minuten
 rust aangeboden, mits alle materialisatietijden bekend zijn, geen pending fiche
 voor dezelfde week/topic bestaat en geen Sherlock-run voor het topic running is.
 Overflow-gesloten parts worden bij de volgende dagelijkse verwerking aangeboden.
@@ -568,7 +568,7 @@ Geen aparte permanente agents nodig; deadlinebeleid blijft een expliciete regel.
 - Blijft de voorlopige 15-minutencadence passend volgens de werkelijke materialisatietijden en ingest?
 - Hoe wordt het gekozen conservatieve lease-/fencing- en reconciliatiecontract
   door latere publicatieadapters voor externe effecten afgedwongen?
-- Blijft de voorlopige rustperiode van 30 minuten voor lokale offers passend?
+- Blijft de voorlopige rustperiode van 25 minuten voor lokale offers passend?
 - Wanneer heeft een Leonardo-job voldoende nieuwe input en welke state krijgt hij?
 - Hoe verhoudt een eerste vaste proefcyclus zich tot volledig state-driven dispatch?
 - Welke leaseduur binnen het fase-3-bereik past per rol, en hoe wordt een executor

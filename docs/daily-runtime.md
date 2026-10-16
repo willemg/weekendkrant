@@ -174,12 +174,18 @@ alle nog niet aangeboden parts met een geregistreerde actieve revisie.
 Overflow-gesloten parts zijn direct klaar. Een open part is klaar als:
 
 - alle bronnen in de actieve revisie een geldige timezone-aware `source_materializations`-tijd hebben;
-- de jongste materialisatie minstens 30 minuten oud is volgens de actuele UTC-hostklok;
+- de jongste materialisatie minstens 25 minuten oud is volgens de actuele UTC-hostklok;
 - geen pending fiche voor dezelfde ISO-week/topic bestaat (ook toekomstige fiches houden die combinatie open);
 - geen Sherlock-run voor hetzelfde topic `running` is, ook geen legacy-run.
 
-De rustperiode is een voorlopige expliciete lokale policy, onafhankelijk van de
-cronfrequentie en niet empirisch als optimum bewezen. Zij bundelt normaal één
+De rustperiode van 25 minuten is een voorlopige expliciete lokale policy, geen
+empirisch bewezen optimum. Zij ligt bewust vijf minuten onder de halfuurcadans:
+materialisatie om 08:15:03 kan bij de check rond 08:45:00 worden aangeboden,
+voordat nieuwe uurlijkse input rond 09:15 de bronleeftijd opnieuw doet beginnen.
+Zo veroorzaakt normale runtimejitter geen starvation door een exacte
+30-minutengrens. De marge dekt tot vijf minuten verschil tussen materialisatie-
+en volgende startvertraging; grotere vertragingen of aanhoudende pending/running
+input kunnen aanbieding nog uitstellen. Zij bundelt normaal één
 schrijfronde, zonder een langzame nog lopende run door tijd alleen af te snijden.
 Een achtergelaten running run houdt aanbieding conservatief tegen totdat de
 bestaande recovery die oplost. Onbekende, ongeldige of timezone-loze historische

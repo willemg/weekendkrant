@@ -8,7 +8,9 @@ import sqlite3
 from database import SCHEMA_VERSION, migrate  # Public compatibility exports.
 
 TOKENIZER = 'cl100k_base'
-OFFER_QUIET_PERIOD = timedelta(minutes=30)
+# Keep five minutes of slack below the :15/:45 cadence: commit/start jitter
+# must not postpone an offer until the next hourly source batch resets its age.
+OFFER_QUIET_PERIOD = timedelta(minutes=25)
 
 
 @dataclass(frozen=True)
