@@ -322,11 +322,13 @@ backend/schema-9-upgrade en tests, daarna pluginimport/publicatie en afzonderlij
 instructiesync. De repository wijzigt geen actieve taak of productieconfiguratie.
 
 
-## Sherlock-executorstart (fase 5)
+## Server-owned executorstart (fase 9.5)
 
-`POST /executor/sherlock/start` bindt één aangeleverde activation_id en operation_id
-atomair aan Sherlock-jobproductie, topic, contractsnapshot, claim en run, of een
-persistente lege beslissing. Auth, strikte JSON, bodylimiet en requestlogging
+`POST /executor/start` en de alias `/executor/sherlock/start` accepteren uitsluitend
+een leeg object. Bibib bepaalt zelf tijd, occurrence en interne operatie-identiteit
+en bindt atomair één job of een persistente lege beslissing. De publieke response
+bevat alleen executor_id of null. `POST /executor/job` haalt vervolgens uitsluitend
+de reeds gebonden immutable opdracht en claim uit receipt/attemptstate op. Auth, strikte JSON, bodylimiet en requestlogging
 blijven gelijk. Bronregistratie en fiche-ingress accepteren aanvullend claim;
 job-backed runs vereisen actuele execution authority onder dezelfde schrijflock
 als de write. Geen claimgegevens in de consumentenpayload of requestlogs.

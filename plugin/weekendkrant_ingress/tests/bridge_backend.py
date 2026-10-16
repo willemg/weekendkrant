@@ -20,9 +20,22 @@ sys.path.insert(0, str(REPO))
 
 from ingress_api import Config, create_server
 from jobs import JobStore
+from dispatcher import Dispatcher
+from datetime import datetime, timezone
+from unittest.mock import patch
+
+# Admission uses an injected backend clock; no clock data enters MCP requests.
+def backend_dispatcher(db):
+    return Dispatcher(db, lambda: datetime.now(timezone.utc).replace(minute=0,second=0,microsecond=0))
+
 
 
 class GenericSystemTests(unittest.TestCase):
+    def setUp(self):
+        patcher = patch('ingress_api.Dispatcher', side_effect=backend_dispatcher)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_bridge_control_and_sherlock_executor_with_lost_committed_answers(self):
         node = shutil.which('node')
         self.assertIsNotNone(node, 'Node.js >=18.3.0 is required for the plugin-development integration test')
@@ -66,10 +79,14 @@ assert.equal((await callTool('finish_weekendkrant_job',finish,env,bridge)).code,
 assert.equal((await callTool('finish_weekendkrant_job',finish,env,bridge)).job_status,'succeeded');
 assert.equal((await callTool('validate_weekendkrant_claim',authority,env,bridge)).valid,false);
 assert.equal((await callTool('claim_weekendkrant_job',{...args,operation_id:'system:second',job_id:Number(process.argv[3])},env,bridge)).code,'conflict');
-const startArgs={operation_id:'start:phase5',activation_id:'system:phase5'};
+const startArgs={};
 lose=true;
 assert.equal((await callTool('start_weekendkrant_executor',startArgs,env,bridge)).code,'backend_unreachable');
-const scout=await callTool('start_weekendkrant_executor',startArgs,env,bridge);
+const bootstrap=await callTool('start_weekendkrant_executor',startArgs,env,bridge);
+assert.deepEqual(Object.keys(bootstrap).sort(),['executor_id']);
+const packet=await callTool('get_weekendkrant_job',{executor_id:bootstrap.executor_id},env,bridge);
+assert.deepEqual(await callTool('get_weekendkrant_job',{executor_id:bootstrap.executor_id},env,bridge),packet);
+const scout={...packet,...packet.claim};
 assert.equal(scout.status,'success');assert.equal(scout.role,'Sherlock');
 const scoutClaim={job_id:scout.job_id,attempt_id:scout.attempt_id,token:scout.token};
 assert.equal((await callTool('validate_weekendkrant_claim',scoutClaim,env,bridge)).valid,true);
@@ -78,11 +95,11 @@ assert.equal((await callTool('record_sherlock_source',{run_id:scout.run_id,topic
 const fiche=await callTool('submit_weekendkrant_fiche',{run_id:scout.run_id,topic:scout.input.topic,
  schema_version:1,date:scout.input.date,content:'isolated bridge fixture',claim:scoutClaim},env,bridge);
 assert.equal(fiche.status,'success');
-const scoutFinish={...scoutClaim,operation_id:'finish:phase5',status:'succeeded',output_refs:[scout.result_ref]};
+const scoutFinish={...scoutClaim,status:'succeeded',output_refs:[scout.result_ref]};
 lose=true;
 assert.equal((await callTool('finish_weekendkrant_job',scoutFinish,env,bridge)).code,'backend_unreachable');
 assert.equal((await callTool('finish_weekendkrant_job',scoutFinish,env,bridge)).job_status,'succeeded');
-assert.deepEqual(await callTool('start_weekendkrant_executor',startArgs,env,bridge),scout);
+assert.deepEqual(await callTool('start_weekendkrant_executor',startArgs,env,bridge),bootstrap);
 assert.equal((await callTool('validate_weekendkrant_claim',scoutClaim,env,bridge)).valid,false);
 console.log(JSON.stringify({job_id,attempt_id:claim.attempt_id,scout_job:scout.job_id,
  scout_attempt:scout.attempt_id,run_id:scout.run_id,queue_id:fiche.queue_item_id}));
@@ -120,6 +137,12 @@ from leonardo import LeonardoStore
 
 
 class LeonardoFinishSystemTests(PartFixture):
+    def setUp(self):
+        super().setUp()
+        patcher = patch('ingress_api.Dispatcher', side_effect=backend_dispatcher)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_leonardo_finish_invariants_through_real_mcp_http_and_storage(self):
         self.add()
         self.run_day()
@@ -151,19 +174,21 @@ const bridge=async(url,options)=>url===DISCOVERY
  :fetch(process.argv[1]+new URL(url).pathname,options);
 const mode=process.argv[2],state=JSON.parse(process.argv[3]);
 const call=(tool,args)=>callTool(tool,args,env,bridge);
-const claim=await call('start_weekendkrant_executor',{operation_id:'start',activation_id:'slot'});
+const bootstrap=await call('start_weekendkrant_executor',{});
+const packet=await call('get_weekendkrant_job',{executor_id:bootstrap.executor_id});
+const claim={...packet,...packet.claim};
 assert.equal(claim.status,'success');assert.equal(claim.role,'Leonardo');
 const authority={job_id:claim.job_id,attempt_id:claim.attempt_id,token:claim.token};
 if(mode==='abandon'){
- assert.equal((await call('abandon_weekendkrant_job',{...authority,operation_id:'abandon',error:'Unknown outcome'})).job_status,'blocked');
+ assert.equal((await call('abandon_weekendkrant_job',{...authority,error:'Unknown outcome'})).job_status,'blocked');
 }else{
- const args={...authority,operation_id:'finish:A',status:mode,output_refs:[]};
+ const args={...authority,status:mode,output_refs:[]};
  if(mode==='succeeded'){
   args.leonardo_state=state;args.output_refs=[claim.result_ref];
   assert.equal((await call('finish_weekendkrant_job',args)).job_status,'succeeded');
-  assert.equal((await call('finish_weekendkrant_job',{...args,operation_id:'finish:B'})).job_status,'succeeded');
+  assert.equal((await call('finish_weekendkrant_job',args)).job_status,'succeeded');
   const changed={...state,open_questions:[{id:'q1',text:'Changed question',refs:[]}]};
-  assert.equal((await call('finish_weekendkrant_job',{...args,operation_id:'finish:C',leonardo_state:changed})).code,'conflict');
+  assert.equal((await call('finish_weekendkrant_job',{...args,leonardo_state:changed})).code,'conflict');
  }else{
   for(const invalid of [{output_refs:[claim.result_ref]},{leonardo_state:state},
                         {output_refs:[claim.result_ref],leonardo_state:state}])
@@ -187,9 +212,9 @@ if(mode==='abandon'){
                                              1 if status == 'succeeded' else 0)
                             if status == 'succeeded':
                                 self.assertEqual(db.execute(
-                                    "SELECT count(*) FROM job_operations WHERE operation_id IN ('finish:A','finish:B')").fetchone()[0], 2)
+                                    "SELECT count(*) FROM job_operations WHERE operation_id LIKE 'executor-terminal:%'").fetchone()[0], 1)
                                 self.assertEqual(db.execute(
-                                    "SELECT count(*) FROM job_operations WHERE operation_id='finish:C'").fetchone()[0], 0)
+                                    "SELECT count(*) FROM job_operations").fetchone()[0], 1)
                     finally:
                         server.shutdown()
                         server.server_close()

@@ -31,7 +31,8 @@ def require_run_authority(db, run_id, claim=None):
         if claim is not None:
             raise ValueError('Claim supplied for a legacy run')
         return
-    if (not isinstance(claim, dict) or set(claim) != {'job_id','attempt_id','token'}
+    if (not isinstance(claim, dict) or not {'job_id','attempt_id','token'} <= set(claim)
+            or set(claim) - {'job_id','attempt_id','token','lease_until'}
             or type(claim['job_id']) is not int or type(claim['attempt_id']) is not int
             or (claim['job_id'], claim['attempt_id']) != binding
             or not isinstance(claim['token'], str)):

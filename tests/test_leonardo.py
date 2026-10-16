@@ -187,6 +187,13 @@ class LeonardoTests(PartFixture):
         import threading
         from ingress_api import Config, create_server
 
+        from unittest.mock import patch
+        patcher = patch("ingress_api.Dispatcher", side_effect=lambda db: Dispatcher(db, lambda: self.now))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        terminal_clock = patch("ingress_api.JobControl", side_effect=lambda db: JobControl(db, lambda: self.now))
+        terminal_clock.start()
+        self.addCleanup(terminal_clock.stop)
         server = create_server(Config(token="secret", db_path=self.db, port=0))
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
@@ -209,13 +216,14 @@ class LeonardoTests(PartFixture):
         self.enqueue()
         post = self.http_post()
         code, claim = post(
-            "/executor/start", dict(operation_id="http:start", activation_id="http:slot")
+            "/executor/start", {}
         )
         self.assertEqual(code, 200)
+        code, claim = post("/executor/job", claim)
+        claim.update(claim["claim"])
         self.assertEqual(claim["role"], "Leonardo")
         args = {k: claim[k] for k in ("job_id", "attempt_id", "token")}
         args.update(
-            operation_id="http:finish",
             status="succeeded",
             output_refs=[claim["result_ref"]],
             leonardo_state=self.state(),
@@ -223,11 +231,11 @@ class LeonardoTests(PartFixture):
         self.assertEqual(post("/jobs/finish", args)[0], 200)
         self.assertEqual(post("/jobs/finish", args)[0], 200)
         before = self.conn.execute("SELECT * FROM leonardo_states").fetchall()
-        self.assertEqual(post("/jobs/finish", dict(args, operation_id="http:B"))[0], 200)
+        self.assertEqual(post("/jobs/finish", args)[0], 200)
         changed = self.state()
         changed["hypotheses"] = []
         self.assertEqual(
-            post("/jobs/finish", dict(args, operation_id="http:C", leonardo_state=changed))[0], 409
+            post("/jobs/finish", dict(args, leonardo_state=changed))[0], 409
         )
         self.assertEqual(self.conn.execute("SELECT * FROM leonardo_states").fetchall(), before)
         self.assertEqual(len(before), 1)
@@ -329,13 +337,17 @@ class LeonardoTests(PartFixture):
         self.enqueue()
         if post:
             code, claim = post(
-                "/executor/start", dict(operation_id="http:start", activation_id="http:slot")
+                "/executor/start", {}
             )
             self.assertEqual(code, 200)
+            code, claim = post("/executor/job", claim)
+            claim.update(claim["claim"])
         else:
             claim = self.start()
         authority = {k: claim[k] for k in ("job_id", "attempt_id", "token")}
         args = dict(authority, operation_id="non-success", status=status, output_refs=[])
+        if post:
+            args.pop("operation_id")
         bad_requests = [
             dict(args, output_refs=[claim["result_ref"]]),
             dict(args, leonardo_state=self.state()),
@@ -351,7 +363,7 @@ class LeonardoTests(PartFixture):
             self.assertEqual(
                 self.conn.execute(
                     "SELECT count(*) FROM job_operations WHERE operation_id=?",
-                    (args["operation_id"],),
+                    (args.get("operation_id", "executor-terminal:%s:%s" % (authority["job_id"], authority["attempt_id"])),),
                 ).fetchone()[0],
                 0,
             )

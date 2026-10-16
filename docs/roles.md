@@ -21,7 +21,8 @@ uit de contractsnapshot van de geclaimde job.
 bestanden voor nieuwe jobs zijn [Sherlock](../roles/sherlock.md),
 [Sherlock-output](../roles/sherlock-output.md), [Leonardo](../roles/leonardo.md)
 en [Leonardo-output](../roles/leonardo-output.md). `docs/agents/` bevat de echte
-agent/deploymentinstructie [executor](agents/executor.md).
+runtime-artifact [executor/instructions.md](../executor/instructions.md);
+[executor.md](agents/executor.md) is menselijke documentatie.
 
 Nieuwe Sherlock-productie leest via `SherlockProducer.prepare()` de actuele
 bestanden buiten de schrijflock; Leonardo leest ze bij nieuwe

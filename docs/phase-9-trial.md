@@ -33,7 +33,7 @@ lokale tests bewijzen geen modeluitvoering of productiepublicatie.
 Deze PR deployt niets en voert de productieproef niet uit. De operator heeft na
 fase 8.5 bevestigd: schema 11 is gedeployd, bibib draait fase-8.5-code, de
 gepubliceerde Sites-bridge exposeert `leonardo_state` en de scheduled executor is
-gesynchroniseerd met de rolagnostische `docs/agents/executor.md`. Sherlock- en
+gesynchroniseerd met de rolagnostische `executor/instructions.md`. Sherlock- en
 Leonardo-runtimecontracten leven onder `roles/`. Dit is de aangeleverde actuele
 deploymenttoestand, geen nieuwe productiemeting door deze PR.
 
