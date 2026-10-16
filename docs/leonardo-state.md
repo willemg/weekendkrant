@@ -75,13 +75,19 @@ expliciet nieuw contract/archiveringsbeleid en verwijdert nu niets.
 De bestaande claim-/leasecontrole en stateversie-CAS gebeuren onder dezelfde
 lock als jobfinish, operation receipt en state-insert. Een validatiefout rolt de
 hele mutatie terug; vorige state en running job blijven behouden. De executor
-kan daarna zichtbaar failed/uncertain melden. Failed/abandon maken geen state.
+kan daarna zichtbaar failed/uncertain melden. Failed/uncertain vereisen
+`output_refs=[]` en geen `leonardo_state`; abandon bewaart eveneens lege outputs. Geen van deze uitkomsten maakt state of bewaart
+een toekomstige state-outputref.
 Verlopen attempts blijven geblokkeerd; oude claims mogen niets committen.
 
 Verloren finishantwoord: herhaal dezelfde operation-id met exact dezelfde
 argumenten. De receipt retourneert het bevestigde resultaat zonder nieuwe
-state. Recovery gebruikt het bestaande operatorpad met bewijs van gestopte
-uitvoering en gecontroleerde effecten: retry of failed. Losse recovery naar
+state. Ook een nieuwe operation-id met dezelfde claim/status/output/error en
+exact dezelfde reeds bevestigde dossierstate is een no-op. Dossier, versie,
+predecessor, job/attempt, canonieke content, hash en tokenmeting moeten gelijk
+blijven, ook als inmiddels nieuwere state bestaat. Een inhoudelijke afwijking
+blijft een conflict. Recovery gebruikt het bestaande operatorpad met bewijs
+van gestopte uitvoering en gecontroleerde effecten: retry of failed. Losse recovery naar
 succeeded is voor Leonardo verboden: succes en state moeten samen ontstaan.
 Een retry krijgt dezelfde immutable input en een nieuwe gefencete attempt.
 

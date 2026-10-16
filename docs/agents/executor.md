@@ -70,10 +70,12 @@ melding mag niet worden onderdrukt als een stille no-op.
    effecten stopt het werk en blijft de job via uncertain/abandon geblokkeerd.
 7. Voor finish kies één vaste operation_id, bijvoorbeeld
    `finish:<activation_id>`, en behoud alle argumenten bij transportretry.
-   Gebruik job_id/attempt_id/token, status en `output_refs=[result_ref]` volgens
-   het outputcontract. Voor Leonardo succeeded geef ook de volledige outputstate
-   als `leonardo_state` mee aan `finish_weekendkrant_job`; stuur geen losse
-   verwijzing zonder state. De backend valideert en commit state en finish atomair.
+   Gebruik job_id/attempt_id/token, status en output_refs volgens het outputcontract.
+   Voor Leonardo geldt uitsluitend bij `succeeded`: `output_refs=[result_ref]`
+   en de volledige outputstate als `leonardo_state` bij `finish_weekendkrant_job`.
+   Bij Leonardo `failed` of `uncertain`: `output_refs=[]` en geen `leonardo_state`.
+   De toekomstige result_ref bestaat bij die uitkomsten niet. De backend valideert
+   en commit succesvolle state en finish atomair; abandon bewaart eveneens lege outputs.
    Een bewuste abandon gebruikt `abandon:<activation_id>`,
    dezelfde claim en een compacte foutnotitie. Na onbevestigde finish uitsluitend
    dezelfde finish herhalen, nooit zoeken of publiceren heruitvoeren.

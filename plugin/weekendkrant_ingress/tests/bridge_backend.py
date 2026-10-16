@@ -113,6 +113,88 @@ console.log(JSON.stringify({job_id,attempt_id:claim.attempt_id,scout_job:scout.j
                 server.server_close()
                 thread.join()
 
+# These end-to-end regressions stay in the plugin layer: bibib needs no Node.
+sys.path.insert(0, str(REPO / 'tests'))
+from test_parts import PartFixture
+from leonardo import LeonardoStore
+
+
+class LeonardoFinishSystemTests(PartFixture):
+    def test_leonardo_finish_invariants_through_real_mcp_http_and_storage(self):
+        self.add()
+        self.run_day()
+        node = shutil.which('node')
+        self.assertIsNotNone(node)
+        with sqlite3.connect(self.db) as source:
+            part, revision = source.execute('SELECT id,active_revision FROM parts').fetchone()
+            for status in ('succeeded', 'failed', 'uncertain', 'abandon'):
+                with self.subTest(status=status):
+                    path = self.base / (status + '.sqlite3')
+                    with sqlite3.connect(path) as db:
+                        source.backup(db)
+                        store = LeonardoStore(db)
+                        store.create_dossier('dossier:mcp', 2)
+                        job = store.enqueue('enqueue', 'dossier:mcp', 0, [[part, revision]])
+                    state = dict(schema_version=1, dossier_id='dossier:mcp', version=1,
+                                 previous_version=0, hypotheses=[], claims=[], uncertainties=[],
+                                 open_questions=[], processed_refs=[f'part:{part}:{revision}'])
+                    server = create_server(Config(token='fictional-system-token', db_path=path, port=0))
+                    thread = threading.Thread(target=server.serve_forever, daemon=True)
+                    thread.start()
+                    try:
+                        script = '''
+import assert from 'node:assert/strict';
+import {callTool,DISCOVERY} from './plugin/weekendkrant_ingress/worker/index.js';
+const env={WEEKENDKRANT_INGRESS_TOKEN:'fictional-system-token'};
+const bridge=async(url,options)=>url===DISCOVERY
+ ?Response.json({url:'https://fixture.trycloudflare.com/ingress'})
+ :fetch(process.argv[1]+new URL(url).pathname,options);
+const mode=process.argv[2],state=JSON.parse(process.argv[3]);
+const call=(tool,args)=>callTool(tool,args,env,bridge);
+const claim=await call('start_weekendkrant_executor',{operation_id:'start',activation_id:'slot'});
+assert.equal(claim.status,'success');assert.equal(claim.role,'Leonardo');
+const authority={job_id:claim.job_id,attempt_id:claim.attempt_id,token:claim.token};
+if(mode==='abandon'){
+ assert.equal((await call('abandon_weekendkrant_job',{...authority,operation_id:'abandon',error:'Unknown outcome'})).job_status,'blocked');
+}else{
+ const args={...authority,operation_id:'finish:A',status:mode,output_refs:[]};
+ if(mode==='succeeded'){
+  args.leonardo_state=state;args.output_refs=[claim.result_ref];
+  assert.equal((await call('finish_weekendkrant_job',args)).job_status,'succeeded');
+  assert.equal((await call('finish_weekendkrant_job',{...args,operation_id:'finish:B'})).job_status,'succeeded');
+  const changed={...state,open_questions:[{id:'q1',text:'Changed question',refs:[]}]};
+  assert.equal((await call('finish_weekendkrant_job',{...args,operation_id:'finish:C',leonardo_state:changed})).code,'conflict');
+ }else{
+  for(const invalid of [{output_refs:[claim.result_ref]},{leonardo_state:state},
+                        {output_refs:[claim.result_ref],leonardo_state:state}])
+   assert.equal((await call('finish_weekendkrant_job',{...args,...invalid})).code,'conflict');
+  assert.equal((await call('validate_weekendkrant_claim',authority)).valid,true);
+  assert.equal((await call('finish_weekendkrant_job',args)).job_status,mode==='uncertain'?'blocked':'failed');
+ }
+}
+'''
+                        result = subprocess.run(
+                            [node, '--input-type=module', '-e', script,
+                             'http://%s:%s' % server.server_address, status, json.dumps(state)],
+                            cwd=REPO, capture_output=True, text=True, timeout=20)
+                        self.assertEqual(result.returncode, 0, result.stderr)
+                        with sqlite3.connect(path) as db:
+                            store = JobStore(db)
+                            expected = [f'leonardo-state:dossier:mcp:1'] if status == 'succeeded' else []
+                            self.assertEqual(store.get(job)['output_refs'], expected)
+                            self.assertEqual(store.attempts(job)[0]['output_refs'], expected)
+                            self.assertEqual(db.execute('SELECT count(*) FROM leonardo_states').fetchone()[0],
+                                             1 if status == 'succeeded' else 0)
+                            if status == 'succeeded':
+                                self.assertEqual(db.execute(
+                                    "SELECT count(*) FROM job_operations WHERE operation_id IN ('finish:A','finish:B')").fetchone()[0], 2)
+                                self.assertEqual(db.execute(
+                                    "SELECT count(*) FROM job_operations WHERE operation_id='finish:C'").fetchone()[0], 0)
+                    finally:
+                        server.shutdown()
+                        server.server_close()
+                        thread.join()
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

@@ -182,15 +182,17 @@ class LeonardoTests(PartFixture):
             self.conn.rollback()
         self.assertEqual(self.store.latest("dossier:reproduction"), self.state())
 
-    def test_http_start_finish_state_and_retry(self):
+    def http_post(self):
         import http.client
         import threading
         from ingress_api import Config, create_server
 
-        self.enqueue()
         server = create_server(Config(token="secret", db_path=self.db, port=0))
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
+        self.addCleanup(thread.join)
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
 
         def post(route, args):
             client = http.client.HTTPConnection(*server.server_address, timeout=3)
@@ -201,26 +203,41 @@ class LeonardoTests(PartFixture):
             finally:
                 client.close()
 
-        try:
-            code, claim = post(
-                "/executor/start", dict(operation_id="http:start", activation_id="http:slot")
-            )
-            self.assertEqual(code, 200)
-            self.assertEqual(claim["role"], "Leonardo")
-            args = {k: claim[k] for k in ("job_id", "attempt_id", "token")}
-            args.update(
-                operation_id="http:finish",
-                status="succeeded",
-                output_refs=[claim["result_ref"]],
-                leonardo_state=self.state(),
-            )
-            self.assertEqual(post("/jobs/finish", args)[0], 200)
-            self.assertEqual(post("/jobs/finish", args)[0], 200)
-            self.assertEqual(self.store.latest("dossier:reproduction"), self.state())
-        finally:
-            server.shutdown()
-            server.server_close()
-            thread.join()
+        return post
+
+    def test_http_start_finish_state_and_retry(self):
+        self.enqueue()
+        post = self.http_post()
+        code, claim = post(
+            "/executor/start", dict(operation_id="http:start", activation_id="http:slot")
+        )
+        self.assertEqual(code, 200)
+        self.assertEqual(claim["role"], "Leonardo")
+        args = {k: claim[k] for k in ("job_id", "attempt_id", "token")}
+        args.update(
+            operation_id="http:finish",
+            status="succeeded",
+            output_refs=[claim["result_ref"]],
+            leonardo_state=self.state(),
+        )
+        self.assertEqual(post("/jobs/finish", args)[0], 200)
+        self.assertEqual(post("/jobs/finish", args)[0], 200)
+        before = self.conn.execute("SELECT * FROM leonardo_states").fetchall()
+        self.assertEqual(post("/jobs/finish", dict(args, operation_id="http:B"))[0], 200)
+        changed = self.state()
+        changed["hypotheses"] = []
+        self.assertEqual(
+            post("/jobs/finish", dict(args, operation_id="http:C", leonardo_state=changed))[0], 409
+        )
+        self.assertEqual(self.conn.execute("SELECT * FROM leonardo_states").fetchall(), before)
+        self.assertEqual(len(before), 1)
+        self.assertEqual(self.store.latest("dossier:reproduction"), self.state())
+
+    def test_http_failed_finish_rejects_phantom_output(self):
+        self.check_non_success_finish("failed", self.http_post())
+
+    def test_http_uncertain_finish_rejects_phantom_output(self):
+        self.check_non_success_finish("uncertain", self.http_post())
 
     def test_input_budget_and_failed_output_leave_no_state(self):
         from unittest.mock import patch
@@ -296,3 +313,95 @@ class LeonardoTests(PartFixture):
         self.assertEqual(
             self.conn.execute("SELECT count(*) FROM leonardo_assignments").fetchone()[0], 1
         )
+
+    def assert_no_outputs(self, claim, status):
+        job = self.conn.execute(
+            "SELECT status,output_refs FROM jobs WHERE id=?", (claim["job_id"],)
+        ).fetchone()
+        attempt = self.conn.execute(
+            "SELECT status,output_refs FROM job_attempts WHERE id=?", (claim["attempt_id"],)
+        ).fetchone()
+        self.assertEqual(job, ("blocked" if status == "uncertain" else status, "[]"))
+        self.assertEqual(attempt, (status, "[]"))
+        self.assertIsNone(self.store.latest("dossier:reproduction"))
+
+    def check_non_success_finish(self, status, post=None):
+        self.enqueue()
+        if post:
+            code, claim = post(
+                "/executor/start", dict(operation_id="http:start", activation_id="http:slot")
+            )
+            self.assertEqual(code, 200)
+        else:
+            claim = self.start()
+        authority = {k: claim[k] for k in ("job_id", "attempt_id", "token")}
+        args = dict(authority, operation_id="non-success", status=status, output_refs=[])
+        bad_requests = [
+            dict(args, output_refs=[claim["result_ref"]]),
+            dict(args, leonardo_state=self.state()),
+            dict(args, output_refs=[claim["result_ref"]], leonardo_state=self.state()),
+        ]
+        for invalid in bad_requests:
+            if post:
+                self.assertEqual(post("/jobs/finish", invalid)[0], 409)
+            else:
+                with self.assertRaises(ValueError):
+                    JobControl(self.conn, lambda: self.now).execute("finish", invalid)
+            self.assert_no_outputs(claim, "running")
+            self.assertEqual(
+                self.conn.execute(
+                    "SELECT count(*) FROM job_operations WHERE operation_id=?",
+                    (args["operation_id"],),
+                ).fetchone()[0],
+                0,
+            )
+        if post:
+            self.assertEqual(post("/jobs/finish", args)[0], 200)
+        else:
+            JobControl(self.conn, lambda: self.now).execute("finish", args)
+        self.assert_no_outputs(claim, status)
+
+    def test_failed_finish_rejects_phantom_output(self):
+        self.check_non_success_finish("failed")
+
+    def test_uncertain_finish_rejects_phantom_output(self):
+        self.check_non_success_finish("uncertain")
+
+    def test_abandon_has_no_state_or_outputs(self):
+        self.enqueue()
+        claim = self.start()
+        args = {k: claim[k] for k in ("job_id", "attempt_id", "token")}
+        JobControl(self.conn, lambda: self.now).execute(
+            "abandon", dict(args, operation_id="abandon", error="Unknown outcome")
+        )
+        self.assert_no_outputs(claim, "uncertain")
+
+    def test_success_finish_new_operation_is_exact_state_noop(self):
+        self.enqueue()
+        claim = self.start()
+        first = self.finish(claim, operation="finish:A")
+        before = self.conn.execute("SELECT * FROM leonardo_states").fetchall()
+        self.assertEqual(self.finish(claim, operation="finish:B"), first)
+        changed = self.state()
+        changed["hypotheses"] = []
+        with self.assertRaises(ValueError):
+            self.finish(claim, changed, operation="finish:C")
+        self.assertEqual(self.conn.execute("SELECT * FROM leonardo_states").fetchall(), before)
+        self.assertEqual(len(before), 1)
+        self.assertEqual(
+            self.conn.execute(
+                "SELECT count(*) FROM job_operations WHERE operation_id IN ('finish:A','finish:B')"
+            ).fetchone()[0],
+            2,
+        )
+        self.assertEqual(
+            self.conn.execute(
+                "SELECT count(*) FROM job_operations WHERE operation_id='finish:C'"
+            ).fetchone()[0],
+            0,
+        )
+        # Exact old completion remains a no-op after a later state has committed.
+        self.store.enqueue("prepare:next", "dossier:reproduction", 1, [list(self.part)])
+        self.finish(self.start("slot:next"), self.state(2), "finish:next")
+        self.assertEqual(self.finish(claim, operation="finish:D"), first)
+        self.assertEqual(self.store.latest("dossier:reproduction")["version"], 2)

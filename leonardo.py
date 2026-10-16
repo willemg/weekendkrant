@@ -246,25 +246,55 @@ def commit_state(control, args, encoded):
     if args["status"] != "succeeded":
         if encoded is not None:
             raise ValueError("State requires succeeded finish")
+        if args["output_refs"] != []:
+            raise ValueError("Leonardo failed/uncertain finish requires empty outputs")
         return
     if encoded is None:
         raise ValueError("Leonardo success requires output state")
     content, digest, tokens = encoded
     state = json.loads(content)
     dossier, base, snapshot = row
+    if (
+        state["dossier_id"] != dossier
+        or state["previous_version"] != base
+        or state["version"] != base + 1
+    ):
+        raise ValueError("Stale or foreign output state")
+    result = f"leonardo-state:{dossier}:{base+1}"
+    if args["output_refs"] != [result]:
+        raise ValueError("Leonardo requires its concrete state result")
+    # JobStore.finish has already fenced this claim and checked the exact
+    # terminal status/output/error. A new operation ID may confirm that same
+    # finish without reapplying its state transition, even after newer states.
+    existing = db.execute(
+        """SELECT dossier_id,version,previous_version,job_id,attempt_id,content,sha256,tokens
+           FROM leonardo_states WHERE job_id=? OR attempt_id=?""",
+        (args["job_id"], args["attempt_id"]),
+    ).fetchone()
+    expected = (
+        dossier,
+        base + 1,
+        base or None,
+        args["job_id"],
+        args["attempt_id"],
+        content,
+        digest,
+        tokens,
+    )
+    if existing is not None:
+        if existing != expected:
+            raise ValueError("Conflicting confirmed Leonardo state")
+        return
     current = db.execute(
         "SELECT COALESCE(max(version),0) FROM leonardo_states WHERE dossier_id=?", (dossier,)
     ).fetchone()[0]
-    if state["dossier_id"] != dossier or state["previous_version"] != base or current != base:
+    if current != base:
         raise ValueError("Stale or foreign output state")
     input_state = json.loads(snapshot)
     old_refs = set(input_state["state"]["processed_refs"]) if input_state["state"] else set()
     required = old_refs | {p["ref"] for p in input_state["parts"]}
     if set(state["processed_refs"]) != required:
         raise ValueError("Output must preserve exact processed provenance")
-    result = f"leonardo-state:{dossier}:{base+1}"
-    if args["output_refs"] != [result]:
-        raise ValueError("Leonardo requires its concrete state result")
     db.execute(
         "INSERT INTO leonardo_states VALUES (?,?,?,?,?,?,?,?,?)",
         (
