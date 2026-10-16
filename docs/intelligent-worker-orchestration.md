@@ -26,7 +26,8 @@ zonder een langlevend modelproces nodig te hebben.
 | Geïmplementeerde fase-5-adapter | Minimale Sherlock-jobproductie/topicrotatie, atomaire executorstart, contractsnapshots en gefencete bron-/fichewrites (schema 9); lokaal gevalideerd; backend/schema 9 en Sites-plugin op 15 oktober 2026 in productie ingevoerd/gepubliceerd. Actieve generieke instructies, UTC-slotadmission en een lege throttlebeslissing zijn bewezen; de eerste inhoudelijke job via de volledige keten blijft open. |
 | Geïmplementeerde fase-7-dispatcher | Ready-first selectie, Sherlock als concrete producer, generieke activationreceipts (schema 10), persistente pause en globale/rolconcurrency; lokaal getest, niet gedeployd. |
 | Geïmplementeerde fase 8 en 8.5 | Expliciete Leonardo-dossiers/state/jobs (schema 11); Sherlock- en Leonardo-contracten onder `roles/`, immutable snapshots bij nieuwe jobs, geen automatische Leonardo-productie. |
-| Nog niet geïmplementeerd | Missies, drafts, verificatie- en correctiejobs, capaciteitsbeleid en automatische eindredactie. |
+| Eerste fase-9-productieproef | Op 16 oktober 2026 is de eerste echte scheduled Leonardo-job succesvol afgerond: één eerdere attempt expireerde, attempt 2 schreef dossierstate v1. De immutable assignment mat lokaal 23.665 `cl100k_base`-inputtokens; de opgeslagen state 1.844 tokens. De proef bevestigde rolling state, maar maakte historische bronherlezing als ontbrekende runtimefunctie zichtbaar. |
+| Nog niet geïmplementeerd | Leonardo historical recall en recalltelemetrie; Kuifje-missies en -jobs; providerusage/kostenboekhouding; drafts, verificatie- en correctiejobs, capaciteitsbeleid en automatische eindredactie. |
 
 Fase 3 voegt uitsluitend lokale jobopslag en schema 7 toe, zonder plugin, actieve
 taakinstructies, cron, systemd of deployment te wijzigen. De bestaande runtimecontracten
@@ -108,7 +109,13 @@ Daarbij gelden de volgende doelinvarianten:
 - Workers spawnen geen workers en geven andere executors niet rechtstreeks werk.
   Een inhoudelijk missievoorstel wordt opgeslagen en door de backend gevalideerd.
 - Continuïteit zit in persistente state en expliciet meegegeven bronnen.
-  Een modelsamenvatting wordt nooit vanzelf een primaire bron.
+  Een modelsamenvatting wordt nooit vanzelf een primaire bron. Leonardo-state is
+  bewust verliesgevende werkcompressie: oudere state-items mogen worden
+  samengevoegd, herschreven of weggelaten zonder dat het onderliggende
+  bronmateriaal verdwijnt. Eerder verwerkt materiaal blijft via stabiele
+  revisiereferenties lossless adresseerbaar en moet later gericht opnieuw kunnen
+  worden opgehaald. Historical recall is een read van bestaande provenance, geen
+  nieuwe onderzoeksjob.
 - Input, output, duur en toegestane acties zijn begrensd. Jobopslag en control-plane leggen referentie-, lease- en herstelgrenzen vast;
   inhoudelijke rol-/contextgrenzen volgen bij workerintegratie.
 - Resultaten worden gekoppeld aan job, attempt en gebruikte inputversies.
@@ -203,7 +210,7 @@ ander werk volgt in een latere beschikbare activatie.
 
 | Budget | Betekenis en beleid |
 | --- | --- |
-| Context/tokenbudget per job | Begrensde volledige input en afzonderlijke outputgrens. De bestaande 35K-inputgrens blijft relevant als context-/kwaliteitsgrens voor Leonardo; 30K bronpart plus 5K overige input is geen garantie dat iedere samengestelde request past. Meet het geheel volgens het gekozen uitvoeringscontract. |
+| Context/tokenbudget per job | De huidige schema-11/backendgrens van 35K Leonardo-inputtokens is een geïmplementeerde veiligheidsgrens, geen bewezen kwaliteits- of kostenoptimum. De eerste echte run mat 23.665 lokale inputtokens vóór toekomstige recall. In de eerstvolgende karakteriseringsfase wordt deze projectgrens bewust verruimd of verwijderd ten gunste van een ruime technische fail-safe/contextgrens, zodat gemeten kan worden hoeveel nieuwe en historisch teruggehaalde context Leonardo zelf zinvol gebruikt. De compacte state-outputgrens blijft afzonderlijk. |
 | Intelligente jobstarts | Configureerbaar aantal beschikbare activaties; alleen gebruiken voor nuttig werk. Een retry/attempt en verloren activatie moeten zichtbaar meetellen volgens later gekozen beleid. |
 | Gedeelde productallowance | Weekendkrant deelt beschikbare productcapaciteit met handmatige/persoonlijke intelligente arbeid. Concrete reservering, prioriteit en terugschakeling blijven open. |
 | Lokale deterministische verwerking | Verbruikt geen intelligent slot; de marginale lokale rekenkost is verwaarloosbaar, maar hosttijd en opslag blijven meetbaar. |
@@ -570,8 +577,8 @@ backendmatig geïmplementeerd, nog niet gedeployd.
 
 - [x] Lokale expliciete operatorbrug uit gesloten PR #58 porten naar fase 8.5: sealed offer → bewuste dossierkeuze → `LeonardoStore.enqueue()` met immutable runtimecontracten.
 - [x] Inspectie van provenance, dispatcher/attempts, backlog, inputomvang en objectieve state-delta's; actueel proefrunbook.
-- [ ] Eén echte gecontroleerde Sherlock → Ariadne → sealed offer → expliciete dossierkeuze → Leonardo-job → bestaande scheduled executor → Leonardo-state-cyclus uitvoeren en bewijs bewaren.
-- [ ] Inhoudelijke opbrengst beoordelen en pas daarna bewust eventuele automatische routingpolicy kiezen.
+- [x] Eén echte gecontroleerde Sherlock → Ariadne → sealed offer → expliciete dossierkeuze → Leonardo-job → bestaande scheduled executor → Leonardo-state-cyclus uitvoeren en bewijs bewaren.
+- [x] Inhoudelijke opbrengst beoordelen vóór automatische routingpolicy: de eerste state is bruikbaar als structurele kenniskaart, maar de proef toont dat lossless historical recall eerst nodig is voordat meerdere iteraties veilig kunnen worden gekarakteriseerd.
 
 Zie [het fase-9-proefrunbook](phase-9-trial.md). Schema 11, fase-8.5-backend,
 gepubliceerde `leonardo_state`-bridge en rolagnostische executor zijn volgens de
@@ -586,15 +593,63 @@ Geen één-dossier-per-topic, topic-ID → dossier-ID, first-offer-wins, vaste
 topicvolgorde of semantische interpretatie door Ariadne als vervanging daarvan.
 Deze PR voegt geen automatische dossierselectie of offerconsumptie toe.
 Aantallen, tokenmetingen en itemwijzigingen zijn observaties, geen bewezen
-inhoudelijke vooruitgang of informatiewinstscore.
+inhoudelijke vooruitgang of informatiewinstscore. De eerste succesvolle assignment
+mat lokaal 23.665 inputtokens en state v1 1.844 tokens. Dit zijn vaste lokale
+`cl100k_base`-metingen, geen providerusage of productkost.
+
+### Fase 9.6 — Leonardo historical recall en karakterisering
+
+Deze stap gaat bewust vóór fase 10. Eerst moet Leonardo veilig kunnen vergeten en
+terugvinden voordat hij gericht nieuw onderzoek kan bestellen.
+
+- [ ] Voeg een read-only historical-recallbrug toe waarmee een lopende Leonardo-job
+  eerder verwerkte `part:<id>:<revision>`-referenties gericht kan opvragen. Gebruik
+  de bestaande immutable revisieprovenance en `revision_storage.reconstruct`;
+  preload niet automatisch alle `processed_refs`.
+- [ ] Maak expliciet dat rolling state een compacte, verliesgevende kenniskaart is:
+  Leonardo mag items consolideren, samenvatten, herschrijven of vervangen, terwijl
+  het oorspronkelijke bronmateriaal lossless adresseerbaar blijft voor latere
+  herlezing.
+- [ ] Registreer recalltelemetrie per job/attempt: gevraagde referentie, volgorde,
+  teruggegeven bytes en lokaal gemeten tokens. De inhoudelijke reden voor recall
+  hoeft geen private reasoning te worden; een compacte controleerbare requestreden
+  mag alleen worden toegevoegd als het runtimecontract die nodig heeft.
+- [ ] Behandel de huidige harde 35K Leonardo-inputgrens als tijdelijke
+  implementatiegrens. Verruim of vervang haar voor deze karakteriseringsfase door
+  een ruime technische context/fail-safegrens; behoud de compacte state-outputgrens
+  en meet eerst het feitelijke recallgedrag voordat een economisch of kwaliteits-
+  optimum wordt gekozen.
+- [ ] Houd lokale input-/recalltellingen strikt gescheiden van werkelijke
+  providerusage en productallowance. Kosten/usage worden per attempt geboekt zodra
+  een betrouwbare provider-/platformbron beschikbaar is; een expired of mislukte
+  attempt mag later niet uit de kostadministratie verdwijnen.
+- [ ] Voer meerdere Leonardo-iteraties uit en observeer of nieuwe informatie in
+  bestaande hypotheses/claims wordt geïntegreerd zonder dat relevante oude sporen
+  onherroepelijk uit de bruikbare context verdwijnen.
+
+Historical recall creëert geen nieuwe intelligente job. Het is gecontroleerde
+herlezing binnen de bestaande Leonardo-uitvoering en telt wel mee als aangeboden
+context voor audit en latere budgettering.
 
 ### Fase 10 — Kuifje
 
-- [ ] Missies met `mission_id`, dossier, vraag, context, status en resultaat implementeren.
-- [ ] Open gevalideerde missie beschikbaar maken als begrensde Kuifje-job.
-- [ ] Resultaat mechanisch naar hetzelfde dossier terugrouteren, inclusief lege oogst/fouten.
+- [ ] Laat Leonardo een expliciet missievoorstel kunnen opleveren wanneer bestaande
+  state, nieuwe input en eventuele historical recall een concrete informatielacune
+  laten zien. Dit is semantisch een opdracht van Leonardo, maar geen directe
+  worker-spawn of toolcall naar Kuifje.
+- [ ] Laat Ariadne/backend zo'n voorstel atomair valideren en als duurzame missie
+  opslaan met `mission_id`, dossier, vraag, context/referenties, status en begrensd
+  uitvoeringsbudget.
+- [ ] Maak een open gevalideerde missie beschikbaar als begrensde Kuifje-job via
+  dezelfde generieke dispatcher. De missie ontstaat on demand uit agentwerk; haar
+  uitvoering hoeft niet in dezelfde scheduled activatie plaats te vinden.
+- [ ] Routeer Kuifjes bronvaste resultaat mechanisch naar hetzelfde dossier,
+  inclusief lege oogst/fouten. Kuifje wijzigt de Leonardo-state niet rechtstreeks;
+  een volgende Leonardo-iteratie verwerkt missie + resultaat in een nieuwe state.
 
-Kuifje is een rol, geen aparte scheduler.
+Kuifje is een rol, geen aparte scheduler. Agents geven elkaar inhoudelijk werk via
+persistente Ariadne/backend-state, nooit door rechtstreeks een andere worker te
+starten.
 
 ### Fase 11 — Striktland
 
@@ -639,6 +694,12 @@ Geen aparte permanente agents nodig; deadlinebeleid blijft een expliciete regel.
   door latere publicatieadapters voor externe effecten afgedwongen?
 - Blijft de voorlopige rustperiode van 25 minuten voor lokale offers passend?
 - Wanneer heeft een Leonardo-job voldoende nieuwe input en welke state krijgt hij?
+- Welke historical-recallinterface geeft Leonardo voldoende selectieve toegang tot
+  oude parts/fiches zonder alle oude broncontext standaard opnieuw aan te bieden?
+- Hoe groot wordt Leonardo's feitelijke contextappetijt wanneer recall beschikbaar
+  is, en welke technische fail-safe blijkt na karakterisering nodig?
+- Welke minimale persistente mission-proposal-output is nodig om een door Leonardo
+  ontdekte lacune veilig via Ariadne naar Kuifje te laten gaan?
 - Hoe verhoudt een eerste vaste proefcyclus zich tot volledig state-driven dispatch?
 - Welke leaseduur binnen het fase-3-bereik past per rol, en hoe wordt een executor
   operationeel gestopt voordat recovery veilige heruitvoering kan bevestigen?
