@@ -229,12 +229,15 @@ test('executor start advertises exact annotations and forwards stable occurrence
   output_contract:'output text',result_ref:'sherlock-run:9'};
  assert.deepEqual(await callTool(tool.name,args,env,async(url,options)=>{
   if(!n++)return ok({url:good});
-  assert.equal(new URL(url).pathname,'/executor/sherlock/start');
+  assert.equal(new URL(url).pathname,'/executor/start');
   assert.deepEqual(JSON.parse(options.body),args);return ok(result);
  }),{status:'success',...result});
+ const future={...result,role:'TestRole',input:{state_ref:'state:v1'},result_ref:'result:v1'};
+ delete future.run_id;
+ assert.deepEqual(await invoke(tool.name,args,future),{status:'success',...future});
  for(const bad of [{...args,extra:true},{...args,activation_id:''},{}])
   assert.equal((await callTool(tool.name,bad,env,()=>assert.fail('network'))).code,'invalid_request');
- for(const bad of [{...result,role:'Leonardo'},{...result,input:{topic:4,date:'x'}},{...result,run_id:0},{...result,result_ref:'sherlock-run:8'},{...result,extra:'secret'}])
+ for(const bad of [{...result,role:''},{...result,input:{topic:4,date:'x'}},{...result,run_id:0},{...result,result_ref:'sherlock-run:8'},{...result,extra:'secret'}])
   assert.equal((await invoke(tool.name,args,bad)).code,'response_invalid');
 });
 test('job-backed source and fiche forward exact claim while refusing malformed claims locally',async()=>{

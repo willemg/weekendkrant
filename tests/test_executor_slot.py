@@ -82,7 +82,7 @@ class SlotTests(unittest.TestCase):
                 answers = list(pool.map(start, range(4)))
             self.assertTrue(all(answer == answers[0] for answer in answers))
             with sqlite3.connect(path) as db:
-                for table in ('jobs', 'job_attempts', 'sherlock_runs', 'sherlock_activations'):
+                for table in ('jobs', 'job_attempts', 'sherlock_runs', 'executor_activations'):
                     self.assertEqual(db.execute('SELECT count(*) FROM ' + table).fetchone()[0], 1)
 
     def test_dst_and_timezone_normalization(self):

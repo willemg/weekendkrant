@@ -1,5 +1,9 @@
 # SQLite-database
 
+Schema 10 voegt `executor_activations` en `dispatcher_policy` toe. Bestaande
+schema-9-startreceipts worden met hun immutable contractteksten gekopieerd;
+oude audit blijft behouden. Zie [migratie en policy](dispatcher.md).
+
 De database bewaart operationele state van Weekendkrant: ontvangst en verwerking
 van ingress, dagpogingen, de onveranderlijke provenance van parts en offers,
 en Sherlock-runs met daadwerkelijk gereviewde bronpagina's.

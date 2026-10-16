@@ -1,4 +1,4 @@
-"""Single-scheduler Sherlock production and atomic activation/claim/run binding.
+"""Sherlock work production, immutable assignments and claim/run binding.
 
 No network, model or scheduling calls. Empty activations are durable decisions.
 Role/output contracts are immutable content-addressed snapshots in SQLite.
@@ -9,7 +9,6 @@ import json
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from job_control import JobControl, ControlConflict
 from jobs import _stamp, _text
 
 # Temporary development policy, not a schema or dispatcher invariant.
@@ -45,104 +44,51 @@ def require_run_authority(db, run_id, claim=None):
         raise ValueError('No current Sherlock execution authority')
 
 
-class SherlockExecutor:
-    def __init__(self, db, clock=None):
-        self.control = JobControl(db, clock)
-        self.store = self.control.store
-        self.db = db
+class SherlockProducer:
+    role = 'Sherlock'
 
-    def start(self, args):
-        """One stable logical activation ID, one atomic durable decision.
+    def __init__(self, dispatcher):
+        self.db = dispatcher.db
+        self.control = dispatcher.control
 
-        Identity is supplied by the single scheduler adapter, never generated
-        in the bridge. Changed operation identity for a used activation conflicts.
-        Replayed receipts do not grant fresh execution authority.
-        """
-        JobControl._schema(args, {'operation_id', 'activation_id'})
-        for value in args.values():
-            _text(value, 128)
-        self.store._idle()
-        # A durable receipt must survive later edits/removal of deployment files.
-        known = self.db.execute('SELECT 1 FROM sherlock_activations WHERE operation_id=? OR activation_id=?',
-            (args['operation_id'], args['activation_id'])).fetchone()
-        # File IO happens before BEGIN IMMEDIATE, never during the transaction.
-        contents = [] if known else [p.read_text(encoding='utf-8') for p in
+    def prepare(self):
+        contents = [p.read_text(encoding='utf-8') for p in
                     (ROOT / 'docs/agents/sherlock.md', ROOT / 'docs/agents/sherlock-output.md')]
         for content in contents:
             _text(content, 65536)
-        contracts = [('sha256:' + hashlib.sha256(c.encode('utf-8')).hexdigest(), c) for c in contents]
-        conflict = None
-        with self.store._write() as now:
-            self.store._expire(now)
-            prior = self.store._row('SELECT * FROM sherlock_activations WHERE operation_id=? OR activation_id=?',
-                (args['operation_id'], args['activation_id']))
-            if self.db.execute('SELECT 1 FROM job_operations WHERE operation_id=?',
-                               (args['operation_id'],)).fetchone():
-                conflict = 'Operation identity already used'
-            elif prior:
-                if (prior['operation_id'], prior['activation_id']) != (args['operation_id'], args['activation_id']):
-                    conflict = 'Activation/operation identity reused'
-                else:
-                    result = json.loads(prior['response'])
-                    if prior['attempt_id'] is not None:
-                        result['token'] = self.db.execute('SELECT token FROM job_attempts WHERE id=?',
-                            (prior['attempt_id'],)).fetchone()[0]
-                        for field in ('role_contract', 'output_contract'):
-                            result[field] = self.db.execute('SELECT content FROM sherlock_contracts WHERE ref=?',
-                                (result[field+'_ref'],)).fetchone()[0]
-            elif self.db.execute('SELECT 1 FROM job_attempts WHERE activation_id=?',
-                                 (args['activation_id'],)).fetchone():
-                conflict = 'Activation already used'
-            else:
-                result = self._produce(args, now, contracts)
-                audit = dict(result)
-                for field in ('token', 'role_contract', 'output_contract'):
-                    audit.pop(field, None)
-                self.db.execute('''INSERT INTO sherlock_activations
-                    (operation_id,activation_id,job_id,attempt_id,response,confirmed_at)
-                    VALUES (?,?,?,?,?,?)''', (args['operation_id'], args['activation_id'],
-                    result.get('job_id'), result.get('attempt_id'),
-                    json.dumps(audit, ensure_ascii=False, separators=(',', ':')), _stamp(now)))
-        if conflict:
-            raise ControlConflict(conflict)
-        return result
+        return [('sha256:' + hashlib.sha256(c.encode('utf-8')).hexdigest(), c) for c in contents]
 
-    def _produce(self, args, now, contracts):
-        # Conservative serial lane, including quarantined work and legacy runs.
-        if (self.db.execute("SELECT 1 FROM jobs WHERE role='Sherlock' AND status IN ('running','blocked')").fetchone()
-                or self.db.execute("SELECT 1 FROM sherlock_runs WHERE status='running' AND id NOT IN (SELECT run_id FROM sherlock_job_runs)").fetchone()):
-            return {'claim': None}
-        self.control.atomic.transaction_now = now
+    def ready(self, job_id):
+        return self.db.execute('SELECT 1 FROM sherlock_assignments WHERE job_id=?', (job_id,)).fetchone() is not None
+
+    def produce(self, now, contracts):
         atomic = self.control.atomic
-        ready = self.db.execute('''SELECT j.id FROM jobs j JOIN sherlock_assignments s ON s.job_id=j.id
-            WHERE j.status='ready' ORDER BY j.id LIMIT 1''').fetchone()
-        if ready:
-            job_id = ready[0]
-        else:
-            # Only new production is throttled. Explicit ready recovery above
-            # retains its original job/topic and starts a new real run.
-            latest = self.db.execute(
-                'SELECT started_at FROM sherlock_runs ORDER BY julianday(started_at) DESC LIMIT 1').fetchone()
-            if latest is not None:
-                started = datetime.fromisoformat(latest[0])
-                if started.utcoffset() is None:
-                    raise ValueError('Sherlock runstart must be timezone-aware')
-                if now - started < SHERLOCK_NEW_JOB_COOLDOWN:
-                    return {'claim': None}
-            previous = self.db.execute('SELECT topic FROM sherlock_runs ORDER BY id DESC LIMIT 1').fetchone()
-            topic = 1 if previous is None else previous[0] % 3 + 1
-            for ref, content in contracts:
-                if not self.db.execute('SELECT 1 FROM sherlock_contracts WHERE ref=?', (ref,)).fetchone():
-                    self.db.execute('INSERT INTO sherlock_contracts VALUES (?,?)', (ref, content))
-            date = now.astimezone(ZoneInfo('Europe/Brussels')).date().isoformat()
-            context = json.dumps({'topic': topic, 'date': date}, sort_keys=True, separators=(',', ':'))
-            input_ref = 'sha256:' + hashlib.sha256(context.encode('utf-8')).hexdigest()
-            if not self.db.execute('SELECT 1 FROM sherlock_contracts WHERE ref=?', (input_ref,)).fetchone():
-                self.db.execute('INSERT INTO sherlock_contracts VALUES (?,?)', (input_ref, context))
-            job_id = atomic.create('Sherlock', [input_ref, contracts[0][0]], contracts[1][0])
-            self.db.execute('INSERT INTO sherlock_assignments VALUES (?,?,?,?,?)',
-                (job_id, topic, date, contracts[0][0], contracts[1][0]))
-        claim = atomic.claim(job_id, args['activation_id'])
+        # Only new production is throttled. Explicit ready recovery above
+        # retains its original job/topic and starts a new real run.
+        latest = self.db.execute(
+            'SELECT started_at FROM sherlock_runs ORDER BY julianday(started_at) DESC LIMIT 1').fetchone()
+        if latest is not None:
+            started = datetime.fromisoformat(latest[0])
+            if started.utcoffset() is None:
+                raise ValueError('Sherlock runstart must be timezone-aware')
+            if now - started < SHERLOCK_NEW_JOB_COOLDOWN:
+                return None
+        previous = self.db.execute('SELECT topic FROM sherlock_runs ORDER BY id DESC LIMIT 1').fetchone()
+        topic = 1 if previous is None else previous[0] % 3 + 1
+        for ref, content in contracts:
+            if not self.db.execute('SELECT 1 FROM sherlock_contracts WHERE ref=?', (ref,)).fetchone():
+                self.db.execute('INSERT INTO sherlock_contracts VALUES (?,?)', (ref, content))
+        date = now.astimezone(ZoneInfo('Europe/Brussels')).date().isoformat()
+        context = json.dumps({'topic': topic, 'date': date}, sort_keys=True, separators=(',', ':'))
+        input_ref = 'sha256:' + hashlib.sha256(context.encode('utf-8')).hexdigest()
+        if not self.db.execute('SELECT 1 FROM sherlock_contracts WHERE ref=?', (input_ref,)).fetchone():
+            self.db.execute('INSERT INTO sherlock_contracts VALUES (?,?)', (input_ref, context))
+        job_id = atomic.create('Sherlock', [input_ref, contracts[0][0]], contracts[1][0])
+        self.db.execute('INSERT INTO sherlock_assignments VALUES (?,?,?,?,?)',
+            (job_id, topic, date, contracts[0][0], contracts[1][0]))
+        return job_id
+
+    def bind(self, job_id, claim, now):
         assignment = self.db.execute('SELECT topic,date,role_contract_ref,output_contract_ref FROM sherlock_assignments WHERE job_id=?', (job_id,)).fetchone()
         # Old expired runs are closed only after explicit recovery has made the job ready.
         self.db.execute("""UPDATE sherlock_runs SET status='failed',finished_at=?
@@ -158,3 +104,10 @@ class SherlockExecutor:
             role_contract_ref=assignment[2], role_contract=role,
             output_contract_ref=assignment[3], output_contract=output,
             result_ref='sherlock-run:'+str(run_id))
+
+
+class SherlockExecutor:
+    """Compatibility import for callers predating the generic dispatcher."""
+    def __new__(cls, db, clock=None):
+        from dispatcher import Dispatcher
+        return Dispatcher(db, clock)

@@ -170,6 +170,7 @@ JobControl(db).execute('claim', dict(job_id=int(sys.argv[2]), operation_id=sys.a
                 if boundary == 'after':
                     self.assertEqual(answer['attempt_id'], attempts[0]['id'])
                     self.assertEqual(answer['token'], attempts[0]['token'])
+                self.finish(answer, operation='finish:'+boundary)
 
     def test_activation_cannot_move_to_second_job_after_completion(self):
         claim = self.claim()

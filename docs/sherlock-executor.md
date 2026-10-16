@@ -1,17 +1,25 @@
 # Fase 5: Sherlock via een generieke executor
 
+Fase 7: de startketen gebruikt nu de [algemene dispatcher](dispatcher.md), met ready-first
+selectie, persistente pause en globale/rolconcurrency. `start_weekendkrant_executor`
+blijft het enige startpunt; `/executor/start` is canoniek en de oude
+`/executor/sherlock/start`-route blijft alias. Schema 10 bewaart generieke immutable
+activationreceipts en behoudt alle schema-9-audit. Alleen Sherlock is geregistreerd;
+geen Leonardo-jobs of verwerking van offers. Deze bronwijziging is geen deployment.
+De onderstaande fase-5-beschrijving blijft van toepassing op Sherlock-opdrachten.
+
 ## Status en scope
 
 De repository implementeert de eerste Sherlock-jobproducent en de generieke
 executorinstructie voor één uurlijkse scheduler. De eigen logische UTC-slotidentiteit is geïmplementeerd als pure referentieadapter;
 instructiesync en een begeleide job/deployment-smoke blijven operationele stappen.
-Sherlock blijft gepauzeerd zolang de operator hem niet bewust opnieuw activeert.
-Er is geen algemene dispatcher, andere rol, extra scheduler of modelcall op bibib.
+De algemene dispatcher uit fase 7 gebruikt deze Sherlock-producer en runbinding.
+Andere productierollen, extra schedulers en modelcalls op bibib zijn niet toegevoegd.
 
 ## Eén atomaire start
 
 `start_weekendkrant_executor({operation_id, activation_id})` gebruikt
-`POST /executor/sherlock/start`. Beide IDs zijn niet-lege tekst, maximaal 128
+`POST /executor/start` (oude route `/executor/sherlock/start` blijft alias). Beide IDs zijn niet-lege tekst, maximaal 128
 tekens. De bridge verzint geen identiteit. De [executorinstructie](agents/executor.md)
 legt de concrete occurrencebinding en het gedrag bij ontbrekende context vast.
 De MCP-caller is geauthenticeerd, maar zijn occurrence-ID is geen platformattest.

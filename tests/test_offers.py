@@ -31,6 +31,22 @@ class OfferTests(PartFixture):
     def snapshot(self):
         return {t: self.rows('SELECT * FROM ' + t + ' ORDER BY 1,2') for t in TABLES}
 
+    def test_existing_offer_never_becomes_a_leonardo_job(self):
+        from datetime import datetime, timezone
+        from dispatcher import Dispatcher
+        identity = self.prepare()
+        self.offer(identity, 1)
+        before = self.snapshot()
+        with sqlite3.connect(self.db) as db:
+            # A recent completed run suppresses new Sherlock production.
+            db.execute("INSERT INTO sherlock_runs(topic,started_at,status,finished_at) VALUES (1,?,'completed',?)",
+                       (datetime.now(timezone.utc).isoformat(), datetime.now(timezone.utc).isoformat()))
+            db.commit()
+            result = Dispatcher(db).start(dict(operation_id='offer:start', activation_id='offer:slot'))
+            self.assertEqual(result, {'claim': None})
+            self.assertEqual(db.execute('SELECT count(*) FROM jobs').fetchone()[0], 0)
+        self.assertEqual(self.snapshot(), before)
+
     def test_open_offer_seals_exact_revision_and_next_daily_starts_next_part(self):
         identity = self.prepare(3)
         before = self.snapshot()

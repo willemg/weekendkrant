@@ -16,7 +16,8 @@ zonder een langlevend modelproces nodig te hebben.
 | Gekozen doelrichting | Generieke scheduled executors krijgen per activatie maximaal één begrensde job met een door de backend gekozen rol. Persistente state draagt de redactionele continuïteit. Lokale Ariadne-materialisatie moet minstens uurlijk, mogelijk sneller, kunnen draaien. |
 | Geïmplementeerde fase-4-control-plane | Expliciete generieke claim/finish/abandon/validate-tools, persistente operatiebevestigingen (schema 8), aparte operatorrecovery; lokaal getest; productie-invoering en geslaagde deployment-smoke op 14 oktober 2026 door de operator bevestigd. |
 | Geïmplementeerde fase-5-adapter | Minimale Sherlock-jobproductie/topicrotatie, atomaire executorstart, contractsnapshots en gefencete bron-/fichewrites (schema 9); lokaal gevalideerd; backend/schema 9 en Sites-plugin op 15 oktober 2026 in productie ingevoerd/gepubliceerd. Actieve generieke instructies, UTC-slotadmission en een lege throttlebeslissing zijn bewezen; de eerste inhoudelijke job via de volledige keten blijft open. |
-| Nog niet geïmplementeerd | Dispatcher, Leonardo-state en -jobs, dossiers, missies, drafts, verificatie- en correctiejobs, capaciteitsbeleid en automatische eindredactie. |
+| Geïmplementeerde fase-7-dispatcher | Ready-first selectie, Sherlock als concrete producer, generieke activationreceipts (schema 10), persistente pause en globale/rolconcurrency; lokaal getest, niet gedeployd. |
+| Nog niet geïmplementeerd | Leonardo-state en -jobs, dossiers, missies, drafts, verificatie- en correctiejobs, capaciteitsbeleid en automatische eindredactie. |
 
 Fase 3 voegt uitsluitend lokale jobopslag en schema 7 toe, zonder plugin, actieve
 taakinstructies, cron, systemd of deployment te wijzigen. De bestaande runtimecontracten
@@ -509,10 +510,13 @@ Deze fase gaat vóór fase 7; geen dispatcher of nieuwe intelligente rol toegevo
 
 ### Fase 7 — algemene/state-driven dispatcher introduceren
 
-- [ ] Voortbouwen op de minimale Sherlock-jobproductie en één scheduler uit fase 5; algemene workselectie over beschikbare jobs/state toevoegen.
-- [ ] Harde start-/concurrencylimieten en pause/kill switch vastleggen.
-- [ ] Bij geen nuttig werk geen intelligente job teruggeven.
-- [ ] State-driven planning op expliciete voorwaarden verfijnen.
+Lokaal geïmplementeerd, nog niet gedeployd. Zie [dispatchercontract](dispatcher.md)
+voor selectie, schema 10, pause, concurrency, compatibiliteit en bewijsgrenzen.
+
+- [x] Voortbouwen op de minimale Sherlock-jobproductie en één scheduler uit fase 5; algemene workselectie over beschikbare jobs/state toevoegen.
+- [x] Harde start-/concurrencylimieten en pause/kill switch vastleggen.
+- [x] Bij geen nuttig werk geen intelligente job teruggeven.
+- [x] State-driven planning op expliciete voorwaarden verfijnen.
 
 Fase 7 generaliseert selectie, concurrency en policy nadat Sherlock zelfstandig
 via fase 5 kan draaien; zij is geen voorwaarde meer voor die eerste migratie.
