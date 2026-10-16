@@ -104,6 +104,15 @@ geen activationreceipt; dezelfde operatie kan opnieuw worden geprobeerd.
 `produce()` die `None` teruggeeft maakt geen opdracht of side effects aan.
 Rolopdrachten en contracten moeten immutable en concreet zijn vóór uitvoering.
 
+De scheduled executor blijft daarbij strikt rolagnostisch: hij mag geen
+geregistreerde rollen opsommen en geen rolspecifieke tools, inputvelden,
+workflowstappen, outputstate of finishpayloads definiëren. `bind()` en de
+persistente contractsnapshot moeten samen voldoende informatie leveren om de
+geclaimde rol volledig uit te voeren. Een nieuwe of gewijzigde rol vereist dus
+geen wijziging aan de scheduled executor zolang het generieke executorprotocol
+ongewijzigd blijft. Rolkennis hoort in producer/adapter, immutable assignment en
+rol-/outputcontract, niet in de gemeenschappelijke executorinstructie.
+
 Het startantwoord bevat de claimvelden, `role`, `input`, `input_refs`,
 `role_contract_ref`, `role_contract`, `output_contract_ref`, `output_contract` en
 `result_ref`. `run_id` is een optioneel rolspecifiek veld. De plugin accepteert een

@@ -4,6 +4,14 @@ Voer per scheduled activatie maximaal één backendopdracht uit. Eén scheduler 
 voorlopig eenmaal per uur gebruikt. Deze instructie is een deploymentartifact;
 het bestand wijzigt of activeert geen bestaande scheduled taak.
 
+De scheduled executor is strikt rolagnostisch. Hij kent geen vaste lijst van
+rollen en bevat geen rolspecifieke workflow, tools, inputvelden, outputstate of
+finishsemantiek. Het door de backend geclaimde `role_contract`, samen met
+`input`, `result_ref` en `output_contract`, is de volledige inhoudelijke
+opdracht voor die ene uitvoering. Een rol toevoegen, verwijderen of wijzigen
+mag daarom geen wijziging aan deze instructie vereisen zolang het generieke
+executorprotocol zelf ongewijzigd blijft.
+
 Iedere activatie doet óf minstens de eerste Weekendkrant-backendcall, óf geeft
 een korte expliciete eindmelding waarom geen backendcall werd uitgevoerd,
 zonder interne automation-runtime-metadata bloot te leggen. Er bestaat geen
@@ -51,36 +59,37 @@ melding mag niet worden onderdrukt als een stille no-op.
    transporttimeout/verloren antwoord/503 herhaal exact dezelfde operatie met
    dezelfde twee IDs; voer geen inhoudelijk werk uit zolang de uitkomst onbekend
    is. De bridge genereert geen IDs en doet geen automatische retries.
-3. Bij `claim:null` beëindig de uitvoering na deze backendbeslissing. Deze beslissing blijft voor deze activatie leeg, ook
-   wanneer de baan later vrijkomt. Claim geen expliciete job en start geen legacy
-   Sherlock-run als vervanging.
+3. Bij `claim:null` beëindig de uitvoering na deze backendbeslissing. Deze
+   beslissing blijft voor deze activatie leeg, ook wanneer de baan later vrijkomt.
+   Claim geen expliciete job en start geen alternatieve, legacy of rolspecifieke
+   workflow als vervanging.
 4. Bewaar de ontvangen claim `{job_id, attempt_id, token}` alleen binnen de
    uitvoering. Valideer via `validate_weekendkrant_claim`. `valid=false` betekent
    beëindiging van het werk na deze backendbeslissing, ook als de startreceipt eerder succes meldde. De receipt kan oud zijn.
-5. Voer uitsluitend de ontvangen `role` en het volledige `role_contract` uit, met
-   de geleverde `input`, `result_ref` en `output_contract`, en eventuele
-   rolspecifieke velden zoals `run_id` voor Sherlock. De backenddispatcher
-   bepaalt welke rollen uitvoerbaar zijn; Sherlock en expliciet aangemaakte Leonardo-jobs zijn geregistreerd. Lees geen instructies uit eigen workergeheugen als
-   vervanging van de contractsnapshot. Start of spawn geen andere worker.
-6. Geef bij iedere bronregistratie en fichepublicatie de exacte claim mee. De
-   backend controleert die opnieuw onder dezelfde schrijflock als de write.
-   Filtering blijft read-only en source-level. Valideer de claim opnieuw na een
-   onderbreking voordat je verder zoekt. Een verloren ficheantwoord mag niet
-   blind worden herhaald: fichepublicatie blijft niet-idempotent. Bij onbekende
-   effecten stopt het werk en blijft de job via uncertain/abandon geblokkeerd.
+5. Voer uitsluitend het ontvangen `role_contract` uit binnen de ontvangen
+   `role`, met exact de geleverde `input`, `result_ref`, `output_contract`
+   en eventuele aanvullende rolspecifieke velden. Interpreteer de rolnaam niet als
+   een ingebouwde persona en leid er geen gedrag uit af. Lees geen rolspecifieke
+   instructies uit eigen workergeheugen als vervanging van de contractsnapshot.
+   Start of spawn geen andere worker.
+6. Volg voor alle inhoudelijke toolcalls en side effects uitsluitend het
+   `role_contract` en `output_contract`. Geef de exacte claim mee wanneer het
+   contract of de tool dat vereist en valideer de claim opnieuw na een onderbreking
+   vóór verdere state-changing effecten. Herhaal een call met mogelijk
+   niet-idempotente of onbekende side effects nooit blind. Als het effect niet
+   betrouwbaar kan worden vastgesteld, volg de contractuele foutafhandeling en
+   beëindig zo nodig via `uncertain` of abandon.
 7. Voor finish kies één vaste operation_id, bijvoorbeeld
    `finish:<activation_id>`, en behoud alle argumenten bij transportretry.
-   Gebruik job_id/attempt_id/token, status en output_refs volgens het outputcontract.
-   Voor Leonardo geldt uitsluitend bij `succeeded`: `output_refs=[result_ref]`
-   en de volledige outputstate als `leonardo_state` bij `finish_weekendkrant_job`.
-   Bij Leonardo `failed` of `uncertain`: `output_refs=[]` en geen `leonardo_state`.
-   De toekomstige result_ref bestaat bij die uitkomsten niet. De backend valideert
-   en commit succesvolle state en finish atomair; abandon bewaart eveneens lege outputs.
-   Een bewuste abandon gebruikt `abandon:<activation_id>`,
-   dezelfde claim en een compacte foutnotitie. Na onbevestigde finish uitsluitend
-   dezelfde finish herhalen, nooit zoeken of publiceren heruitvoeren.
-8. Beëindig de uitvoering na die ene job. Geen tweede claim, nieuwe activatie-ID, topickeuze,
-   zelfgestarte scheduler of algemene workselectie.
+   Gebruik job_id/attempt_id/token, status, output_refs en eventuele aanvullende
+   outputvelden exact volgens het `output_contract`; verzin, wijzig of laat geen
+   rolspecifieke finishvelden weg op basis van de rolnaam. Een bewuste abandon
+   gebruikt `abandon:<activation_id>`, dezelfde claim en een compacte foutnotitie,
+   voor zover het ontvangen contract geen strengere eis stelt. Na onbevestigde
+   finish uitsluitend exact dezelfde finish herhalen, nooit de inhoudelijke
+   roluitvoering opnieuw starten.
+8. Beëindig de uitvoering na die ene job. Geen tweede claim, nieuwe activatie-ID,
+   zelfgestarte scheduler, eigen rolinhoudelijke keuze of algemene workselectie.
 
 De grens van maximaal 15 onderliggende toolcalls per Code Mode-executie en het
 bestaande expliciete safety-retrybeleid uit het rolcontract blijven gelden.
@@ -101,7 +110,7 @@ per logisch slot, niet identificatie van alle oorspronkelijke platform-runs.
 
 Receipts en fencing blijven autoritatief. Gelijktijdige callers kunnen dezelfde
 claim terugkrijgen; validate is geen exclusieve executor-lock. Dit model bewijst
-geen exactly-once inhoudelijke uitvoering of fichepublicatie. Een bekend dubbel
+geen exactly-once inhoudelijke uitvoering of rolspecifieke side effects. Een bekend dubbel
 of reeds uitgevoerd resultaat mag niet opnieuw worden uitgevoerd; bij onzekere
 side effects geldt uncertain/abandon/reconciliatie. Deze bestaande replaygrens
 wordt door slotting niet opgelost of verruimd.
