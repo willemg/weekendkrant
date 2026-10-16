@@ -21,9 +21,13 @@ onderscheid waargenomen gedrag van een nog onbewezen oorzaak.
   - Een PR is niet klaar voor review zolang de fast-trackimpact niet bewust is
     beoordeeld. Beschrijf de selectie en de reden in de PR; leg de selectie zelf
     vast in de repo, niet alleen in het gesprek of de PR-beschrijving.
-  - Gebruik `./start_tests.sh` voor ontwikkeling en normale post-pull/deployment-
-    tests. `--all` blijft beschikbaar voor expliciete volledige regressietests,
-    maar is niet de normale post-pull/deploymenttest.
+  - Gebruik tijdens normale ontwikkeling, TDD en PR-validatie uitsluitend
+    `./start_tests.sh`, evenals voor normale post-pull/deploymenttests.
+  - Draai `./start_tests.sh --all` niet standaard vóór review of merge: de
+    volledige suite is geen normale gate. Alleen een expliciete opdracht of een
+    concrete uitzonderlijke technische reden rechtvaardigt die run. Vermeld bij
+    zo'n uitzondering waarom je toch `--all` uitvoert. De beschikbaarheid van
+    `--all` verplicht niet iedere PR om de volledige suite te draaien.
 - **Afgedwongen/aangewezen in:** [AGENTS.md](../AGENTS.md) als instapinstructie voor
   nieuwe ontwikkelsessies, [lijst](../tests/fast_track.txt),
   [runner](../test_runner.py), [regressietests](../tests/test_test_runner.py) en

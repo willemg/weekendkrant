@@ -10,6 +10,16 @@ voor zijn eigen impact; het is geen permanent groeiende verzameling smoke-tests.
 De verplichte onderhoudsregel staat in het [technisch leerlog](lessons-learned.md)
 en wordt vóór ontwikkelwerk aangewezen door [AGENTS.md](../AGENTS.md).
 
+## Normale ontwikkel- en PR-validatiecyclus
+
+Gebruik tijdens normale ontwikkeling, TDD en PR-validatie uitsluitend
+`./start_tests.sh`. De fast-track is tevens de normale post-pull/deploymenttest.
+Draai `./start_tests.sh --all` niet standaard vóór review of merge; een volledige
+suite is geen normale PR-gate. Voer hem alleen uit als de opdracht dit expliciet
+vraagt of als er een concrete uitzonderlijke technische reden bestaat. Vermeld
+bij zo'n uitzondering waarom de volledige suite nodig was. De beschikbaarheid
+van `--all` betekent niet dat iedere PR hem moet uitvoeren.
+
 ## Lijstformaat en fouten
 
 Eén unittest-module, klasse of afzonderlijke test per regel, bijvoorbeeld:
@@ -31,8 +41,8 @@ of naar de volledige suite. Onbekende CLI-argumenten falen eveneens.
 
 `./start_tests.sh --all` gebruikt de volledige unittest-discovery in `tests/`,
 onafhankelijk van de fast-tracklijst, en faalt ook als er geen tests bestaan.
-Dit blijft de expliciete volledige regressietest, niet de normale
-post-pull/deploymenttest. Het shellscript werkt vanuit zijn eigen checkout en
+Dit blijft uitsluitend de expliciete of technisch gemotiveerde uitzondering
+op de normale fast-trackcyclus hierboven. Het shellscript werkt vanuit zijn eigen checkout en
 gebruikt de lokale `.venv/bin/python` als die bestaat, anders `python3`.
 
 ## Initiële regressieset van PR #56
