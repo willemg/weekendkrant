@@ -23,8 +23,10 @@ als onbekend (`unavailable`/`null`); lokale deterministische Ariadne is
 `not_applicable`. De onderstaande bundelmetingen, inputgrenzen en oudere
 API-kostenontwerpen zijn geen metingen van verbruik of resterende allowance.
 
-De bundelmeting is geïmplementeerd; Leonardo-calls, statebeheer, Kuifje-missies en
-kostenadministratie zijn doelontwerp. Zie [het ontwerpbesluit van 8 oktober 2026](leonardo-memory-and-orchestration.md).
+De bundelmeting, Leonardo-state/jobs en de eerste echte scheduled Leonardo-
+statecyclus zijn inmiddels geïmplementeerd. Historical recall, Kuifje-missies en
+betrouwbare providerusage-/kostenadministratie zijn nog doelontwerp. Zie
+[het geheugen- en orchestratieontwerp](leonardo-memory-and-orchestration.md).
 De huidige bundels groeien over daggrenzen heen per ISO-week/topic via nieuwe
 immutable revisies, totdat overflow of een expliciet lokaal offer de part sluit.
 Een offer bevriest exact de actieve revisie en verwijst naar bestaande tokenmeting
@@ -56,7 +58,10 @@ Ariadne draait lokaal en doet alleen deterministische verwerking. De marginale r
 
 ### Leonardo
 
-Leonardo is de voornaamste betaalde intelligentielaag.
+Leonardo is de eerste syntheselaag waarvan we nu de werkelijke contextappetijt
+kunnen karakteriseren. De huidige scheduled uitvoeringsroute levert Weekendkrant
+nog geen betrouwbare providerreceipt met model-ID, usage of geldkost; lokale
+tokenmetingen blijven daarom capaciteits- en auditmetingen, geen factuur.
 
 De experimentele basisstrategie wordt na de eerste echte run:
 
