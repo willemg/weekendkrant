@@ -43,7 +43,7 @@ Een korte controleerbare beslisrationale is daarom verplichte experimentele tele
 
 Gebruik bij `record_sherlock_source`:
 - `run_id`: exact het ID uit het ontvangen jobpakket;
-- `claim`: exact `{job_id, attempt_id, token}` uit de executorstart, als verplichte transportmetadata voor deze job-backed run;
+- `claim`: exact `{job_id, attempt_id, token}` uit het ontvangen jobpakket;
 - `topic`: exact het toegewezen topic;
 - `url`: de concrete bronpagina die je daadwerkelijk inhoudelijk hebt bekeken;
 - `outcome`: een korte feitelijke uitkomst, bijvoorbeeld `verhaal ingediend`, `niet structureel genoeg`, `te onzeker`, `routine/hype`, `secundaire bevestiging`, `onbereikbaar/paywall`, of een andere compacte uitkomst;
@@ -127,7 +127,7 @@ Publiceer nieuwe verhalen uitsluitend via `submit_weekendkrant_fiche`.
 
 Gebruik exact:
 - `run_id`: exact het huidige ID uit het ontvangen jobpakket, als transportmetadata voor de producerende run
-- `claim`: exact `{job_id, attempt_id, token}` uit de executorstart
+- `claim`: exact `{job_id, attempt_id, token}` uit het ontvangen jobpakket
 - `schema_version`: integer 1
 - `topic`: exact het toegewezen topic
 - `date`: lokale Europe/Brussels-datum als `YYYY-MM-DD`
