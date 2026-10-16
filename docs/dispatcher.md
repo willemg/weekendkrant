@@ -7,7 +7,8 @@ naar exact dezelfde dispatcher, zonder eigen selectie of activatiestate.
 
 ## Deterministische selectie en uitvoerbaarheid
 
-Eén korte `BEGIN IMMEDIATE`-transactie gebruikt de backendklok na lockverwerving:
+Iedere korte `BEGIN IMMEDIATE`-selectietransactie gebruikt de backendklok na
+lockverwerving:
 
 1. Verlopen attempts worden expired, hun jobs blocked. Geen automatische retry.
 2. Een bestaande activation/operation-receipt wordt exact gereplayed, ook als de
@@ -20,7 +21,13 @@ Eén korte `BEGIN IMMEDIATE`-transactie gebruikt de backendklok na lockverwervin
    en vrije rolcapaciteit is uitvoerbaar. Niet-ondersteunde rollen worden overgeslagen.
    Expliciet herstelde jobs vallen onder dezelfde FIFO-prioriteit, vóór productie.
 5. Alleen als geen bestaande job uitvoerbaar is, mogen geregistreerde producers
-   in expliciete policyvolgorde nieuw werk maken. Momenteel is uitsluitend
+   in expliciete policyvolgorde nieuw werk overwegen. Preparation gebeurt alleen
+   voor de eerstvolgende toegelaten producer die daadwerkelijk wordt overwogen,
+   buiten de write-transactie. Daarna begint selectie opnieuw onder de write-lock:
+   expiry, receipts, admission en bestaand ready werk worden volledig herbeoordeeld.
+   Nieuw ready werk gaat dus vóór productie, en een inmiddels bezette of gepauzeerde
+   lane levert een duurzame lege receipt op. Replay, onmiddellijke admissionweigering
+   en bestaand ready/recovery-werk hebben helemaal geen preparation nodig. Momenteel is uitsluitend
    `SherlockProducer` geregistreerd. Geen rolrotatie in de dispatcher.
 6. De geselecteerde job wordt opnieuw op ready-status, rol en opdracht gecontroleerd,
    atomair geclaimd en aan rolspecifieke execution-state gebonden. De generieke
@@ -82,11 +89,15 @@ De control-plane deelt de operatie- en activatienamespace met deze algemene tabe
 Er verandert niets aan leases, claimtokens, finish/abandon/recovery of fencing.
 
 Een toekomstige rol registreert een adapter bij `Dispatcher`:
-`role`, `prepare()` (begrensde deploymentinput vóór de lock), `ready(job_id)`
+`role`, `prepare()` (begrensde deploymentinput tussen selectietransacties), `ready(job_id)`
 (valide persistente opdracht), `produce(now, prepared)` (job-ID of `None`) en
 `bind(job_id, claim, now)` (volledig begrensd executioncontract). Selectie, claims,
 receipts en activation-ID-logica blijven generiek. Adapterwerk onder de lock is
 uitsluitend lokale state, zonder netwerk, modelwerk of filesystem-I/O.
+Prepared input wordt alleen binnen deze startcall per producer hergebruikt; geen
+claim of productie is vóór preparation gereserveerd. Een preparationfout bevestigt
+geen activationreceipt; dezelfde operatie kan opnieuw worden geprobeerd.
+`produce()` die `None` teruggeeft maakt geen opdracht of side effects aan.
 Rolopdrachten en contracten moeten immutable en concreet zijn vóór uitvoering.
 
 Het startantwoord bevat de claimvelden, `role`, `input`, `input_refs`,
@@ -108,7 +119,12 @@ het algemene contract en de echte developmentbridge met verloren antwoorden.
 Geen van deze tests bewijst productie of Sites-deployment. De nog open fase-5-gate
 voor één echte inhoudelijke Sherlock-productieketen blijft open.
 
-Lokale validatie voor deze implementatie: 291 Python-tests groen op Python 3.12,
+Lokale validatie voor deze implementatie: 296 Python-tests groen op Python 3.12,
 waaronder de 3 systeemtests; 38 JavaScript-pluginchecks groen op Node 24 en de
 aparte bridge/backend-developmenttest groen. Migratie-10-rollback en schema-9-
 receiptreplay zijn onderdeel van de dispatcherchecks. Geen productiesmoke uitgevoerd.
+
+Regressievalidatie van lazy preparation: ready Sherlock-recovery en replay met
+falende producer-preparation, duurzame pause/running/blocked-weigering zonder
+preparation en gelijktijdige statewijzigingen tijdens unlocked preparation
+(ready-first, admission en replay van een inmiddels bevestigde activatie).

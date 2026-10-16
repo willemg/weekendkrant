@@ -10,8 +10,9 @@ De onderstaande fase-5-beschrijving blijft van toepassing op Sherlock-opdrachten
 
 Dit omvat de lokale opslaglaag van fase 3 en de generieke MCP/control-plane
 van fase 4. Fase 5 voegt de [Sherlock-executoradapter](sherlock-executor.md) toe:
-atomaire productie/start en gefencete bron-/fichewrites. De algemene dispatcher
-en andere rollen bestaan nog niet; operationele invoering volgt afzonderlijk.
+atomaire productie/start en gefencete bron-/fichewrites. Fase 7 voegt de algemene
+dispatcher toe; andere productierollen zijn nog niet geïmplementeerd. Operationele
+invoering van de dispatcher volgt afzonderlijk.
 Ariadnes consumentencontract blijft behouden. `attempts` blijft Ariadnes foutaudit;
 `job_attempts` is uitsluitend de nieuwe generieke uitvoeringsaudit.
 

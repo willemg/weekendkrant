@@ -137,6 +137,91 @@ class DispatcherTests(unittest.TestCase):
             results = list(pool.map(start, ['a','b','c','d']))
         self.assertEqual(sum('job_id' in result for result in results), 1)
 
+    def test_sherlock_recovery_and_replay_need_no_producer_preparation(self):
+        from sherlock_executor import SherlockProducer
+        dispatcher = Dispatcher(self.db, lambda: self.now, (SherlockProducer, TestRole))
+        original = self.start(dispatcher=dispatcher)
+        self.finish(original, 'uncertain')
+        JobControl(self.db, lambda: self.now).execute('reconcile', dict(
+            operation_id='recovery', job_id=original['job_id'], attempt_id=original['attempt_id'],
+            decision='retry', evidence_ref='audit:stopped-effects-known'))
+        with patch.object(SherlockProducer, 'prepare', side_effect=OSError('missing contracts')) as sherlock, \
+                patch.object(TestRole, 'prepare', side_effect=OSError('unrelated producer')) as other:
+            recovered = self.start('recovered', dispatcher)
+            self.assertEqual(recovered['job_id'], original['job_id'])
+            self.assertEqual(recovered['input'], original['input'])
+            self.assertNotEqual(recovered['attempt_id'], original['attempt_id'])
+            self.assertEqual(self.start('recovered', dispatcher), recovered)
+            sherlock.assert_not_called()
+            other.assert_not_called()
+
+    def test_immediate_admission_refusal_needs_no_preparation_and_is_durable(self):
+        for mode in ('paused', 'running', 'blocked'):
+            with self.subTest(mode=mode), sqlite3.connect(':memory:') as db:
+                dispatcher = Dispatcher(db, lambda: self.now, (TestRole,))
+                store = JobStore(db, lambda: self.now)
+                if mode == 'paused':
+                    db.execute('UPDATE dispatcher_policy SET paused=1')
+                    db.commit()
+                else:
+                    job = store.create('Other', [], 'output:v1')
+                    claim = store.claim(job, 'other')
+                    if mode == 'blocked':
+                        store.finish(claim, 'uncertain', [])
+                with patch.object(TestRole, 'prepare', side_effect=OSError('unavailable')) as prepare:
+                    self.assertEqual(self.start(dispatcher=dispatcher), {'claim': None})
+                    self.assertEqual(self.start(dispatcher=dispatcher), {'claim': None})
+                    prepare.assert_not_called()
+                self.assertEqual(db.execute('SELECT count(*) FROM executor_activations').fetchone()[0], 1)
+
+    def test_ready_arriving_during_preparation_precedes_new_production(self):
+        produced = []
+        def prepare():
+            self.assertFalse(self.db.in_transaction)
+            with sqlite3.connect(self.path) as db:
+                produced.append(JobStore(db, lambda: self.now).create('TestRole', [], 'test:output:v1'))
+        with patch.object(TestRole, 'prepare', side_effect=prepare) as preparation, \
+                patch.object(TestRole, 'produce', side_effect=AssertionError('ready must win')):
+            result = self.start()
+            preparation.assert_called_once()
+        self.assertEqual(result['job_id'], produced[0])
+        self.assertEqual(self.db.execute('SELECT count(*) FROM job_attempts').fetchone()[0], 1)
+
+    def test_admission_is_rechecked_after_preparation(self):
+        for mode in ('paused', 'running', 'blocked'):
+            with self.subTest(mode=mode), sqlite3.connect(Path(self.tmp.name) / mode) as db:
+                dispatcher = Dispatcher(db, lambda: self.now, (TestRole,))
+                def prepare():
+                    self.assertFalse(db.in_transaction)
+                    with sqlite3.connect(Path(self.tmp.name) / mode) as concurrent:
+                        store = JobStore(concurrent, lambda: self.now)
+                        if mode == 'paused':
+                            concurrent.execute('UPDATE dispatcher_policy SET paused=1')
+                            concurrent.commit()
+                        else:
+                            job = store.create('Other', [], 'output:v1')
+                            claim = store.claim(job, 'other')
+                            if mode == 'blocked':
+                                store.finish(claim, 'uncertain', [])
+                with patch.object(TestRole, 'prepare', side_effect=prepare) as preparation, \
+                        patch.object(TestRole, 'produce', side_effect=AssertionError('admission must win')):
+                    self.assertEqual(self.start(dispatcher=dispatcher), {'claim': None})
+                    preparation.assert_called_once()
+                    self.assertEqual(self.start(dispatcher=dispatcher), {'claim': None})
+                self.assertEqual(db.execute('SELECT count(*) FROM executor_activations').fetchone()[0], 1)
+
+    def test_same_activation_committed_during_preparation_replays_winner(self):
+        winner = []
+        def prepare():
+            self.assertFalse(self.db.in_transaction)
+            with sqlite3.connect(self.path) as db:
+                JobStore(db, lambda: self.now).create('TestRole', [], 'test:output:v1')
+                winner.append(self.start(dispatcher=Dispatcher(db, lambda: self.now, (TestRole,))))
+        with patch.object(TestRole, 'prepare', side_effect=prepare) as preparation:
+            self.assertEqual(self.start(), winner[0])
+            preparation.assert_called_once()
+        self.assertEqual(self.db.execute('SELECT count(*) FROM job_attempts').fetchone()[0], 1)
+
     def test_schema_nine_receipts_migrate_and_replay_without_sherlock_adapter(self):
         with sqlite3.connect(':memory:') as db:
             with patch.object(database, 'SCHEMA_VERSION', 9):

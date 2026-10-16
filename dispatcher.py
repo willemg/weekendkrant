@@ -40,44 +40,49 @@ class Dispatcher:
         for value in args.values():
             _text(value, 128)
         self.store._idle()
-        # A durable receipt must survive later edits/removal of deployment files.
-        known = self.db.execute('SELECT 1 FROM executor_activations WHERE operation_id=? OR activation_id=?',
-            (args['operation_id'], args['activation_id'])).fetchone()
-        # File IO happens before BEGIN IMMEDIATE, never during the transaction.
-        prepared = {} if known else {p.role: p.prepare() for p in self.producers}
-        conflict = None
-        with self.store._write() as now:
-            self.store._expire(now)
-            prior = self.store._row('SELECT * FROM executor_activations WHERE operation_id=? OR activation_id=?',
-                (args['operation_id'], args['activation_id']))
-            if self.db.execute('SELECT 1 FROM job_operations WHERE operation_id=?',
-                               (args['operation_id'],)).fetchone():
-                conflict = 'Operation identity already used'
-            elif prior:
-                if (prior['operation_id'], prior['activation_id']) != (args['operation_id'], args['activation_id']):
-                    conflict = 'Activation/operation identity reused'
+        # Each locked pass resolves replay/admission/ready work first. Only a
+        # producer actually reached for new work may request unlocked file IO.
+        prepared = {}
+        while True:
+            conflict = None
+            with self.store._write() as now:
+                self.store._expire(now)
+                prior = self.store._row('SELECT * FROM executor_activations WHERE operation_id=? OR activation_id=?',
+                    (args['operation_id'], args['activation_id']))
+                if self.db.execute('SELECT 1 FROM job_operations WHERE operation_id=?',
+                                   (args['operation_id'],)).fetchone():
+                    conflict = 'Operation identity already used'
+                elif prior:
+                    if (prior['operation_id'], prior['activation_id']) != (args['operation_id'], args['activation_id']):
+                        conflict = 'Activation/operation identity reused'
+                    else:
+                        result = json.loads(prior['response'])
+                        if prior['attempt_id'] is not None:
+                            result['token'] = self.db.execute('SELECT token FROM job_attempts WHERE id=?',
+                                (prior['attempt_id'],)).fetchone()[0]
+                elif self.db.execute('SELECT 1 FROM job_attempts WHERE activation_id=?',
+                                     (args['activation_id'],)).fetchone():
+                    conflict = 'Activation already used'
                 else:
-                    result = json.loads(prior['response'])
-                    if prior['attempt_id'] is not None:
-                        result['token'] = self.db.execute('SELECT token FROM job_attempts WHERE id=?',
-                            (prior['attempt_id'],)).fetchone()[0]
-            elif self.db.execute('SELECT 1 FROM job_attempts WHERE activation_id=?',
-                                 (args['activation_id'],)).fetchone():
-                conflict = 'Activation already used'
-            else:
-                result = self._dispatch(args, now, prepared)
-                audit = dict(result)
-                audit.pop('token', None)
-                self.db.execute('''INSERT INTO executor_activations
-                    (operation_id,activation_id,job_id,attempt_id,response,confirmed_at)
-                    VALUES (?,?,?,?,?,?)''', (args['operation_id'], args['activation_id'],
-                    result.get('job_id'), result.get('attempt_id'),
-                    json.dumps(audit, ensure_ascii=False, separators=(',', ':')), _stamp(now)))
-        if conflict:
-            raise ControlConflict(conflict)
-        return result
+                    result = self._dispatch(args, now, prepared)
+                    if isinstance(result, dict):
+                        audit = dict(result)
+                        audit.pop('token', None)
+                        self.db.execute('''INSERT INTO executor_activations
+                            (operation_id,activation_id,job_id,attempt_id,response,confirmed_at)
+                            VALUES (?,?,?,?,?,?)''', (args['operation_id'], args['activation_id'],
+                            result.get('job_id'), result.get('attempt_id'),
+                            json.dumps(audit, ensure_ascii=False, separators=(',', ':')), _stamp(now)))
+            if conflict:
+                raise ControlConflict(conflict)
+            if isinstance(result, dict):
+                return result
+            # No transaction is open here. On the next pass, expiry, receipts,
+            # admission and ready-first selection are all evaluated again.
+            prepared[result.role] = result.prepare()
 
     def _dispatch(self, args, now, prepared):
+        """Locked decision: response, or next producer needing unlocked preparation."""
         if not admission(self.db):
             return {'claim': None}
         self.control.atomic.transaction_now = now
@@ -93,6 +98,8 @@ class Dispatcher:
             for adapter in self.producers:
                 if not admission(self.db, adapter.role):
                     continue
+                if adapter.role not in prepared:
+                    return adapter
                 job_id = adapter.produce(now, prepared[adapter.role])
                 if job_id is not None:
                     selected = (job_id, adapter)
