@@ -102,3 +102,17 @@ de testrunner worden niet automatisch overgenomen: die implementaties wijzigen
 niet. De default blijft Node-vrij. Alleen in de pluginontwikkelomgeving draait
 `./start_tests.sh --plugin` expliciet de JavaScript-contracttests en bridge/backend-
 keten; dit is geen volledige Python-suite en vereist geen Node op bibib.
+
+## Regressieset fase 9.6
+
+De selectie is bewust vervangen door acht modules: `test_leonardo_recall`
+(nieuwe autorisatie, herlezing, audit, grenzen, concurrente retries en migratie),
+`test_leonardo` (snapshot/state/finish), `test_database` (centrale migratieketen),
+`test_leonardo_operator` (volledige en compacte inspectie), `test_role_contracts`
+(immutable contracten), `test_job_control` (gedeelde finish/fencing),
+`test_executor_bootstrap` (ongewijzigd generiek jobtransport) en `test_system_e2e`
+(bestaande Sherlock → ingress → Ariadne-keten). De ongewijzigde slotting- en
+selectiepolicytests worden niet uit de vorige lijst overgenomen. Dit is de
+kleinste gekozen impactset op moduleniveau; Node blijft buiten de default.
+`./start_tests.sh --plugin` valideert apart de publieke toolmetadata, transport-
+contracten en echte MCP → HTTP → SQLite-recall plus generieke finish.

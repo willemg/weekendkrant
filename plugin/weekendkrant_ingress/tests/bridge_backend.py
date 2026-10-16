@@ -179,6 +179,13 @@ const packet=await call('get_weekendkrant_job',{executor_id:bootstrap.executor_i
 const claim={...packet,...packet.claim};
 assert.equal(claim.status,'success');assert.equal(claim.role,'Leonardo');
 const authority={job_id:claim.job_id,attempt_id:claim.attempt_id,token:claim.token};
+const read={...authority,ref:state.processed_refs[0],recall_id:'recall:1'};
+const recalled=await call('recall_weekendkrant_part',read);
+assert.equal(recalled.status,'success');
+assert.match(recalled.content,/WEEKENDKRANT-PART-1/);
+assert.equal(recalled.bytes,new TextEncoder().encode(recalled.content).length);
+assert.deepEqual(await call('recall_weekendkrant_part',read),recalled);
+assert.equal((await call('recall_weekendkrant_part',{...read,ref:'part:999:1'})).code,'conflict');
 if(mode==='abandon'){
  assert.equal((await call('abandon_weekendkrant_job',{...authority,error:'Unknown outcome'})).job_status,'blocked');
 }else{
@@ -205,6 +212,7 @@ if(mode==='abandon'){
                         self.assertEqual(result.returncode, 0, result.stderr)
                         with sqlite3.connect(path) as db:
                             store = JobStore(db)
+                            self.assertEqual(db.execute('SELECT count(*) FROM leonardo_recalls').fetchone()[0], 1)
                             expected = [f'leonardo-state:dossier:mcp:1'] if status == 'succeeded' else []
                             self.assertEqual(store.get(job)['output_refs'], expected)
                             self.assertEqual(store.attempts(job)[0]['output_refs'], expected)

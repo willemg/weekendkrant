@@ -222,3 +222,31 @@ Geen publicatie of live instructiewijziging vanuit deze PR.
 Pluginchecks: `./start_tests.sh --plugin` vanuit de repositoryroot, in de
 pluginontwikkelomgeving met Node. De standaard `./start_tests.sh` blijft
 uitsluitend de Node-vrije Python-fast-track draaien.
+
+## Leonardo historical recall (fase 9.6)
+
+Nieuwe tool `recall_weekendkrant_part` → `POST /jobs/leonardo-recall`, met exact
+`job_id`, `attempt_id`, `token`, `ref` en `recall_id`. De backend autoriseert onder
+actuele lease uitsluitend vorige processed_refs plus nieuwe assignmentrefs uit
+hetzelfde immutable dossiercontract. Topicgelijkheid verleent geen leesrecht.
+Reconstructie gebruikt het bestaande revision/source-archief; geen externe URLs,
+nieuwe jobs of bronkopieën. De response bevat `ref`, `sha256`, `content`, `bytes`
+en lokale `cl100k_base`-`tokens`, plus MCP `status:success`.
+
+Metadata: `readOnlyHint:false` vanwege append-only recallaudit,
+`destructiveHint:false`, `idempotentHint:true`, `openWorldHint:false`.
+Inhoud, provenance en lifecycle blijven read-only; geen indirecte expirywrites.
+Een retry gebruikt dezelfde attempt-lokale recall_id en ref, telt geen tweede
+logische read en valideert altijd opnieuw de actuele claim. Gewijzigde ref onder
+dezelfde identiteit conflicteert; een gesloten/verlopen claim krijgt geen replay.
+Geen claimtokens of bronbytes in audit. Compacte backendfouten blijven de bestaande
+`conflict`/`invalid_request`/`backend_server_error`-mapping gebruiken.
+
+Schema 12 verruimt de Leonardo-startinput en begrenst startinput plus cumulatieve
+unieke recalls per attempt technisch op 1.048.576 lokale tokens / 8 MiB UTF-8;
+geen providercontextclaim of kostenoptimum. State-output blijft 4K / 32.768 bytes.
+Zie [het volledige runtimecontract](../../docs/leonardo-state.md#historical-recall-fase-96).
+Backend/schema en Sites-publicatie zijn aparte invoerstappen; deze fase voert ze
+niet uit. Validatie in de pluginlaag: `./start_tests.sh --plugin`, inclusief
+exacte tools/list-annotations, request/responsevalidatie en echte recall door
+MCP → HTTP → SQLite → generieke statefinish. De normale fast-track blijft Node-vrij.

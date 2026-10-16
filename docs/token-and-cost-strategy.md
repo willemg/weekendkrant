@@ -24,8 +24,9 @@ als onbekend (`unavailable`/`null`); lokale deterministische Ariadne is
 API-kostenontwerpen zijn geen metingen van verbruik of resterende allowance.
 
 De bundelmeting, Leonardo-state/jobs en de eerste echte scheduled Leonardo-
-statecyclus zijn inmiddels geïmplementeerd. Historical recall, Kuifje-missies en
-betrouwbare providerusage-/kostenadministratie zijn nog doelontwerp. Zie
+statecyclus zijn inmiddels geïmplementeerd. Historical recall en lokale audit per attempt zijn in fase 9.6 geïmplementeerd;
+productiekarakterisering blijft open. Kuifje-missies en betrouwbare providerusage-/
+kostenadministratie zijn nog doelontwerp. Zie
 [het geheugen- en orchestratieontwerp](leonardo-memory-and-orchestration.md).
 De huidige bundels groeien over daggrenzen heen per ISO-week/topic via nieuwe
 immutable revisies, totdat overflow of een expliciet lokaal offer de part sluit.
@@ -34,15 +35,27 @@ en provenance, zonder bytes opnieuw te renderen. Offered/sealed is geen bewijs
 van een Leonardo-call en veroorzaakt geen modelkosten. Aanbiedplanning en de
 callbouwer volgen later; logisch dossiergeheugen blijft daarvan onafhankelijk.
 
-De huidige runtime heeft nog een harde 35K Leonardo-assignmentgrens, maar de
-eerste echte productieproef heeft bevestigd dat dit geen bewezen optimaal
-callvolume is. Die succesvolle assignment mat lokaal 23.665 `cl100k_base`-
-inputtokens en schreef 1.844 state-tokens, nog vóór historical recall beschikbaar
-is. In de volgende karakteriseringsfase wordt de 35K-projectgrens daarom bewust
-verruimd of vervangen door een ruime technische fail-safe/contextgrens. Slow burn
-blijft progressief nieuwe context verwerken met compacte state en tussenoutput;
-we willen eerst meten hoeveel context Leonardo zelf zinvol terugvraagt voordat we
-een economisch of kwaliteitsoptimum vastleggen.
+Schema 12 vervangt de vroege 35K-assignmentgrens door een ruime lokale
+technische fail-safe van 1.048.576 `cl100k_base`-tokens en 8 MiB UTF-8.
+Dezelfde grens bewaakt per attempt startinput plus cumulatieve unieke recalls.
+8 MiB begrenst allocatie/serialisatie; de afzonderlijke tokengrens beschermt tegen
+tokenrijke payloads. De orde van grootte sluit aan bij maximaal 32 parts van
+circa 30K tokens; dit blijft een lokaal gekozen noodrem. Dit is geen kostenoptimum en geen gemeten providerlimiet.
+Werkelijke modelcapaciteit is nog onbekend; de grens is geen belofte dat iedere
+payload door het scheduled model kan worden verwerkt. De circa-30K bundelgrens
+blijft; state-output blijft maximaal 4K tokens en 32.768 bytes.
+
+| Meting | Betekenis |
+| --- | --- |
+| Assignment-startinput | Canoniek immutable snapshot: contracten, vorige state en nieuwe parts |
+| Recallcontext | Exacte gereconstrueerde brontekst, bytes/tokens per logische recall, op volgorde per attempt |
+| Outputstate | Canonieke compacte nieuwe state, afzonderlijk gemeten |
+| Providerusage/kost | Onbekend, inclusief model-ID, werkelijk input/output/reasoning/cachegebruik, allowance en geldkost |
+
+`inspect --job ID --compact` toont deze lokale tellingen per attempt. Retry met
+dezelfde recall_id/ref telt één logische read; herhaald transport kan extra
+platformverbruik hebben dat niet lokaal meetbaar is. Een expired of failed
+attempt krijgt geen fictieve nulrekening. Er is geen prijsberekening toegevoegd.
 
 ## Kost per component
 
@@ -171,12 +184,8 @@ tussen hele fiches. Eén onmogelijke fiche faalt de hele snapshot zonder afkappe
 Ook identieke fiches blijven behouden. Provenance registreert per revisie de
 volledige telling, tokenizer, reserve en exacte geordende bronmembership.
 
-De 30.000 + 5.000-indeling hierboven is de historische bundelmotivatie en de
-huidige schema-11/backend weigert nog assignments boven 35.000 lokale tokens.
-Na de eerste echte Leonardo-proef is besloten die totale projectgrens in fase 9.6
-niet als doelcontract te behouden. De wijziging van die runtimevalidatie gebeurt
-apart; tot dan blijft zij technisch actief. Een toekomstige requestbouwer meet de
-volledige aangeboden context, inclusief eventuele recall, en bewaakt de werkelijke
-technische contextcapaciteit zonder inhoud stilzwijgend af te kappen. Voor
-installatie en caching op bibib: zie
-[de dagelijkse preflight](daily-runtime.md).
+De 30.000 + 5.000-indeling hierboven is historische bundelmotivatie. Schema 12
+heeft voor Leonardo het afzonderlijke ruime technische fail-safecontract zoals
+hierboven beschreven. De circa-30K Ariadne-partgrens blijft deterministisch;
+zij bepaalt geen optimale totale Leonardo-context. Voor installatie en caching
+op bibib: zie [de dagelijkse preflight](daily-runtime.md).

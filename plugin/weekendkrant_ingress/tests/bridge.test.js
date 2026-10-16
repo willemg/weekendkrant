@@ -74,6 +74,7 @@ const annotationMatrix=[
  ['claim_weekendkrant_job',false,true,true,false],
  ['finish_weekendkrant_job',false,true,true,false],
  ['get_weekendkrant_job',true,false,true,false],
+ ['recall_weekendkrant_part',false,false,true,false],
  ['abandon_weekendkrant_job',false,true,true,false],
  ['validate_weekendkrant_claim',false,true,true,false]
 ];
@@ -268,4 +269,21 @@ test('Leonardo assignment and atomic state finish use existing generic tools',as
  assert.deepEqual(await invoke('finish_weekendkrant_job',args,result),{status:'success',...result});
  for(const invalid of [null,[],{text:'x'.repeat(32769)}])
   assert.equal((await callTool('finish_weekendkrant_job',{...args,leonardo_state:invalid},env,()=>assert.fail('network'))).code,'invalid_request');
+});
+
+test('recall strict claim/ref/retry transport and compact content audit',async()=>{
+ const args={job_id:3,attempt_id:7,token:'secret',ref:'part:2:1',recall_id:'r:1'};
+ const content='bron é\n';
+ const result={ref:args.ref,sha256:'a'.repeat(64),content,bytes:new TextEncoder().encode(content).length,tokens:4};
+ let n=0;
+ const fetcher=async(url,o)=>{
+  if(!n++)return ok({url:good});
+  assert.equal(new URL(url).pathname,'/jobs/leonardo-recall');
+  assert.deepEqual(JSON.parse(o.body),args);return ok(result);
+ };
+ assert.deepEqual(await callTool('recall_weekendkrant_part',args,env,fetcher),{status:'success',...result});
+ for(const bad of [{...args,ref:'part:01:1'},{...args,recall_id:''},{...args,extra:1},{...args,job_id:true}])
+  assert.equal((await callTool('recall_weekendkrant_part',bad,env,()=>assert.fail('network'))).code,'invalid_request');
+ for(const bad of [{...result,ref:'part:9:1'},{...result,token:'secret'},{...result,bytes:1},{...result,tokens:0}])
+  assert.equal((await invoke('recall_weekendkrant_part',args,bad)).code,'response_invalid');
 });

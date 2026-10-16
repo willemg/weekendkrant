@@ -7,11 +7,13 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 import logging
 import os
+import re
 from pathlib import Path
 import sqlite3
 
 from ingress_queue import IngressQueue, FicheRunConflict
 from sherlock_state import SherlockState
+from leonardo import LeonardoStore
 from job_control import JobControl, ControlConflict
 from dispatcher import Dispatcher
 
@@ -21,6 +23,7 @@ TOOL_ROUTES = {
     '/executor/start': 'start_weekendkrant_executor',
     '/executor/sherlock/start': 'start_weekendkrant_executor',
     '/jobs/claim': 'claim_weekendkrant_job',
+    '/jobs/leonardo-recall': 'recall_weekendkrant_part',
     '/jobs/validate': 'validate_weekendkrant_claim',
     '/jobs/finish': 'finish_weekendkrant_job',
     '/jobs/abandon': 'abandon_weekendkrant_job',
@@ -100,6 +103,9 @@ def create_server(config):
             if self.audit_run_id is not None:
                 message += ' run_id=%s'
                 values.append(self.audit_run_id)
+            for key, value in getattr(self, 'audit_recall', {}).items():
+                message += ' %s=%%s' % key
+                values.append(value)
             if status is not None:
                 message += ' http_status=%s'
                 values.append(status)
@@ -122,6 +128,7 @@ def create_server(config):
             self.audit_tool = TOOL_ROUTES.get(self.path)
             self.audit_run_id = None
             self.audit_received = False
+            self.audit_recall = {}
             if self.audit_tool is None:
                 self.reply(404, {'error': 'not_found'})
                 return
@@ -144,6 +151,13 @@ def create_server(config):
                 run_id = payload.get('run_id')
                 if type(run_id) is int:
                     self.audit_run_id = run_id
+            if self.audit_tool == 'recall_weekendkrant_part':
+                for key in ('job_id', 'attempt_id'):
+                    if type(payload.get(key)) is int and 0 < payload[key] <= 9007199254740991:
+                        self.audit_recall[key] = payload[key]
+                ref = payload.get('ref')
+                if isinstance(ref, str) and len(ref) <= 128 and re.fullmatch(r'part:[1-9][0-9]*:[1-9][0-9]*', ref):
+                    self.audit_recall['ref'] = ref
             self.audit_event('received')
             if self.path == '/ingress':
                 try:
@@ -226,7 +240,9 @@ def create_server(config):
             with closing(sqlite3.connect(config.db_path, timeout=5)) as db:
                 control = JobControl(db)
                 operation = self.path.rsplit('/', 1)[-1]
-                if operation == 'validate':
+                if operation == 'leonardo-recall':
+                    result = LeonardoStore(db).recall(payload)
+                elif operation == 'validate':
                     result = control.validate(payload)
                 elif operation in ('finish', 'abandon') and 'operation_id' not in payload:
                     result = control.scheduled(operation, payload)

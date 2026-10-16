@@ -27,7 +27,8 @@ zonder een langlevend modelproces nodig te hebben.
 | Geïmplementeerde fase-7-dispatcher | Ready-first selectie, Sherlock als concrete producer, generieke activationreceipts (schema 10), persistente pause en globale/rolconcurrency; lokaal getest, niet gedeployd. |
 | Geïmplementeerde fase 8 en 8.5 | Expliciete Leonardo-dossiers/state/jobs (schema 11); Sherlock- en Leonardo-contracten onder `roles/`, immutable snapshots bij nieuwe jobs, geen automatische Leonardo-productie. |
 | Eerste fase-9-productieproef | Op 16 oktober 2026 is de eerste echte scheduled Leonardo-job succesvol afgerond: één eerdere attempt expireerde, attempt 2 schreef dossierstate v1. De immutable assignment mat lokaal 23.665 `cl100k_base`-inputtokens; de opgeslagen state 1.844 tokens. De proef bevestigde rolling state, maar maakte historische bronherlezing als ontbrekende runtimefunctie zichtbaar. |
-| Nog niet geïmplementeerd | Leonardo historical recall en recalltelemetrie; Kuifje-missies en -jobs; providerusage/kostenboekhouding; drafts, verificatie- en correctiejobs, capaciteitsbeleid en automatische eindredactie. |
+| Lokaal geïmplementeerde fase 9.6 | Selectieve claimgebonden historical recall, exacte reconstructie en audit per attempt (schema 12); ruime lokale technische contextfail-safe, compacte inspectie en bijgewerkt Leonardo-rolcontract. Productie-invoering en karakteriseringsruns blijven open. |
+| Nog niet geïmplementeerd | Kuifje-missies en -jobs; providerusage/kostenboekhouding; drafts, verificatie- en correctiejobs, capaciteitsbeleid en automatische eindredactie. |
 
 Fase 3 voegt uitsluitend lokale jobopslag en schema 7 toe, zonder plugin, actieve
 taakinstructies, cron, systemd of deployment te wijzigen. De bestaande runtimecontracten
@@ -210,7 +211,7 @@ ander werk volgt in een latere beschikbare activatie.
 
 | Budget | Betekenis en beleid |
 | --- | --- |
-| Context/tokenbudget per job | De huidige schema-11/backendgrens van 35K Leonardo-inputtokens is een geïmplementeerde veiligheidsgrens, geen bewezen kwaliteits- of kostenoptimum. De eerste echte run mat 23.665 lokale inputtokens vóór toekomstige recall. In de eerstvolgende karakteriseringsfase wordt deze projectgrens bewust verruimd of verwijderd ten gunste van een ruime technische fail-safe/contextgrens, zodat gemeten kan worden hoeveel nieuwe en historisch teruggehaalde context Leonardo zelf zinvol gebruikt. De compacte state-outputgrens blijft afzonderlijk. |
+| Context/tokenbudget per job | Schema 12 gebruikt 1.048.576 lokale tokens en 8 MiB voor startinput plus cumulatieve unieke recallcontext per attempt. Dit is een ruime technische allocatie-/serialisatienoodrem, geen kwaliteits-/kostenoptimum of bewezen providercontextlimiet. Circa-30K parts en 4K state-output blijven. |
 | Intelligente jobstarts | Configureerbaar aantal beschikbare activaties; alleen gebruiken voor nuttig werk. Een retry/attempt en verloren activatie moeten zichtbaar meetellen volgens later gekozen beleid. |
 | Gedeelde productallowance | Weekendkrant deelt beschikbare productcapaciteit met handmatige/persoonlijke intelligente arbeid. Concrete reservering, prioriteit en terugschakeling blijven open. |
 | Lokale deterministische verwerking | Verbruikt geen intelligent slot; de marginale lokale rekenkost is verwaarloosbaar, maar hosttijd en opslag blijven meetbaar. |
@@ -602,24 +603,24 @@ mat lokaal 23.665 inputtokens en state v1 1.844 tokens. Dit zijn vaste lokale
 Deze stap gaat bewust vóór fase 10. Eerst moet Leonardo veilig kunnen vergeten en
 terugvinden voordat hij gericht nieuw onderzoek kan bestellen.
 
-- [ ] Voeg een read-only historical-recallbrug toe waarmee een lopende Leonardo-job
+- [x] Voeg een read-only historical-recallbrug toe waarmee een lopende Leonardo-job
   eerder verwerkte `part:<id>:<revision>`-referenties gericht kan opvragen. Gebruik
   de bestaande immutable revisieprovenance en `revision_storage.reconstruct`;
   preload niet automatisch alle `processed_refs`.
-- [ ] Maak expliciet dat rolling state een compacte, verliesgevende kenniskaart is:
+- [x] Maak expliciet dat rolling state een compacte, verliesgevende kenniskaart is:
   Leonardo mag items consolideren, samenvatten, herschrijven of vervangen, terwijl
   het oorspronkelijke bronmateriaal lossless adresseerbaar blijft voor latere
   herlezing.
-- [ ] Registreer recalltelemetrie per job/attempt: gevraagde referentie, volgorde,
+- [x] Registreer recalltelemetrie per job/attempt: gevraagde referentie, volgorde,
   teruggegeven bytes en lokaal gemeten tokens. De inhoudelijke reden voor recall
   hoeft geen private reasoning te worden; een compacte controleerbare requestreden
   mag alleen worden toegevoegd als het runtimecontract die nodig heeft.
-- [ ] Behandel de huidige harde 35K Leonardo-inputgrens als tijdelijke
+- [x] Behandel de huidige harde 35K Leonardo-inputgrens als tijdelijke
   implementatiegrens. Verruim of vervang haar voor deze karakteriseringsfase door
   een ruime technische context/fail-safegrens; behoud de compacte state-outputgrens
   en meet eerst het feitelijke recallgedrag voordat een economisch of kwaliteits-
   optimum wordt gekozen.
-- [ ] Houd lokale input-/recalltellingen strikt gescheiden van werkelijke
+- [x] Houd lokale input-/recalltellingen strikt gescheiden van werkelijke
   providerusage en productallowance. Kosten/usage worden per attempt geboekt zodra
   een betrouwbare provider-/platformbron beschikbaar is; een expired of mislukte
   attempt mag later niet uit de kostadministratie verdwijnen.
@@ -630,6 +631,13 @@ terugvinden voordat hij gericht nieuw onderzoek kan bestellen.
 Historical recall creëert geen nieuwe intelligente job. Het is gecontroleerde
 herlezing binnen de bestaande Leonardo-uitvoering en telt wel mee als aangeboden
 context voor audit en latere budgettering.
+
+Implementatiebewijs: `test_leonardo_recall`, bestaande Leonardo-/operator-/
+contract-/control-plane-/bootstrap-/systeemtests en de afzonderlijke
+`./start_tests.sh --plugin`-keten. Schema-11-migratie met meerdere stateversies,
+rollback en immutable triggers zijn lokaal getest. De implementatiecheckboxes
+bewijzen geen deployment of semantische karakterisering. De bestaande scheduled
+taak blijft ongewijzigd. Zie [het recallcontract](leonardo-state.md#historical-recall-fase-96).
 
 ### Fase 10 — Kuifje
 

@@ -165,3 +165,29 @@ een automatische offer-to-jobpolicy. Eerst wordt de historical-recallgrens
 geïmplementeerd en over meerdere Leonardo-iteraties gekarakteriseerd. Kuifje,
 missies, Striktland, Minos en eindredactie blijven buiten deze oorspronkelijke
 proefslice.
+
+## Fase-9.6-vervolg: historical recall karakteriseren
+
+De lokale implementatie gebruikt schema 12 en de nieuwe tool
+`recall_weekendkrant_part`. Productie-invoering en nieuwe scheduled proeven zijn
+nog niet uitgevoerd. Vóór een vervolgproef moeten backend/schema en de gepubliceerde
+MCP-brug gesynchroniseerd zijn. Nieuwe jobs bevriezen het bijgewerkte rolcontract;
+bestaande jobs blijven hun oude immutable tekst uitvoeren. Er is geen nieuwe
+scheduler of gewijzigde executorinstructie nodig.
+
+Gebruik na een vervolgjob de compacte lokale audit:
+
+```bash
+python leonardo_operator.py --db /home/weekendkrant/weekendkrant.sqlite3 inspect --job "$JOB_ID" --compact
+```
+
+`context_usage.attempts` bewaart ook failed/expired attempts. Vergelijk
+startinputtokens, recalls op volgorde, tokens/bytes per recall, cumulatieve
+recallcontext en uiteindelijke state-tokens afzonderlijk. `provider_usage:null`
+betekent onbekend. Herhaalde transportantwoorden en reasoning/cachegebruik
+worden niet gemeten door deze lokale tellingen. Geen fictieve nulprijs of
+providerrekening afleiden uit lokale `cl100k_base`-aantallen.
+
+Beoordeel over meerdere iteraties of Leonardo nieuwe informatie in bestaande
+structuur integreert en oude details gericht kan terughalen. Die inhoudelijke
+karakterisering is nog open. Kuifje en missievoorstellen blijven fase 10.

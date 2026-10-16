@@ -96,6 +96,16 @@ class OperatorTests(PartFixture):
         self.assertEqual(report['offers'][0]['id'], offer)
         self.assertEqual(report['dispatch'][0]['activation_id'], 'trial-slot')
         self.assertNotIn(claim['token'], output.getvalue())
+        output = StringIO()
+        with redirect_stdout(output):
+            main(['--db', str(self.db), 'inspect', '--job', str(job), '--compact'])
+        compact = json.loads(output.getvalue())
+        self.assertEqual(set(compact), {'job_id', 'dossier_id', 'status', 'context_usage'})
+        attempt = compact['context_usage']['attempts'][0]
+        self.assertEqual(attempt['state_tokens'], report['state_metadata']['tokens'])
+        self.assertEqual(attempt['recall_count'], 0)
+        self.assertIsNone(attempt['provider_usage'])
+        self.assertNotIn(claim['token'], output.getvalue())
 
     def test_multiple_offers_exact_order_and_changed_operation(self):
         first = self.offer()

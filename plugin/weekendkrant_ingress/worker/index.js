@@ -50,6 +50,9 @@ const leonardoStateSchema=schema({schema_version:{type:'integer',enum:[1]},dossi
 // The backend validates semantics, budgets and revision membership authoritatively.
 const validLeonardoState=x=>object(x)&&new TextEncoder().encode(JSON.stringify(x)).length<=32768;
 const generic=[
+ {name:'recall_weekendkrant_part',path:'/jobs/leonardo-recall',description:'Lees één exacte immutable partrevisie binnen de private Weekendkrant-provenance van de lopende Leonardo-assignment. Vereist actuele claimautoriteit, ook bij retries. Wijzigt geen dossier-, bron- of jobstate; schrijft alleen recallaudit. Kies een attempt-lokale recall_id en herhaal dezelfde ref en recall_id bij verloren antwoord. Retourneert ref, sha256, content en lokale cl100k_base tokens/UTF-8 bytes van content. Geen nieuwe job of externe bronophaling.',properties:{...authoritySchema,ref:{type:'string',maxLength:128,pattern:'^part:[1-9][0-9]*:[1-9][0-9]*$'},recall_id:boundedSchema(128)},
+ valid:x=>strict(x,['job_id','attempt_id','token','ref','recall_id'])&&authority(x)&&bounded(x.recall_id,128)&&bounded(x.ref,128)&&/^part:[1-9][0-9]*:[1-9][0-9]*$/.test(x.ref),
+ result:(r,x)=>strict(r,['ref','sha256','content','bytes','tokens'])&&r.ref===x.ref&&typeof r.sha256==='string'&&/^[a-f0-9]{64}$/.test(r.sha256)&&typeof r.content==='string'&&positive(r.bytes)&&r.bytes===new TextEncoder().encode(r.content).length&&r.bytes<=8388608&&positive(r.tokens)&&r.tokens<=1048576?r:null},
  {name:'start_weekendkrant_executor',path:'/executor/start',description:'Meld de executor aan bij bibib. De backend bepaalt identiteit, admission en één duurzame werkbeslissing. Herhaal zonder argumenten bij verloren antwoord. executor_id:null betekent stoppen.',properties:{},
  valid:x=>strict(x,[]),
  result:r=>strict(r,['executor_id'])&&(r.executor_id===null||bounded(r.executor_id,128))?r:null},
@@ -71,7 +74,8 @@ const generic=[
 ];
 for(const tool of generic){
  const lookup=tool.name==='get_weekendkrant_job';
- TOOLS.push({name:tool.name,description:(lookup?'Leest uitsluitend private Weekendkrant-jobstate; bezoekt geen referenties en wijzigt niets. ':'Werkt uitsluitend op private Weekendkrant-jobstate; bezoekt geen input-/outputreferenties en publiceert niets extern. Kan verlopen running attempts persistent als expired afsluiten en hun jobs blokkeren, ook bij een geweigerde operatie of receipt-replay. ')+tool.description,inputSchema:schema(tool.properties,tool.required),annotations:{readOnlyHint:lookup,destructiveHint:!lookup,idempotentHint:true,openWorldHint:false}});
+ const recall=tool.name==='recall_weekendkrant_part';
+ TOOLS.push({name:tool.name,description:recall?tool.description:(lookup?'Leest uitsluitend private Weekendkrant-jobstate; bezoekt geen referenties en wijzigt niets. ':'Werkt uitsluitend op private Weekendkrant-jobstate; bezoekt geen input-/outputreferenties en publiceert niets extern. Kan verlopen running attempts persistent als expired afsluiten en hun jobs blokkeren, ook bij een geweigerde operatie of receipt-replay. ')+tool.description,inputSchema:schema(tool.properties,tool.required),annotations:{readOnlyHint:lookup,destructiveHint:!lookup&&!recall,idempotentHint:true,openWorldHint:false}});
  contracts[tool.name]={path:tool.path,valid:tool.valid,result:tool.result};
 }
 

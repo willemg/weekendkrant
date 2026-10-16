@@ -242,3 +242,13 @@ expliciet genummerde migratie en een verhoging van `database.SCHEMA_VERSION`.
 Wijzig reeds uitgebrachte migraties niet. Test zowel scratch-build als upgrades,
 dataretentie, idempotentie en rollback. Gebruik geen apart testschema als bootstrap:
 productie, CLI en nieuwe databases gebruiken dezelfde migratiecode.
+
+## Schema 12: Leonardo recall
+
+De centrale migratie `012_leonardo_recall.sql` bewaart alle bestaande immutable
+assignments, parts en states bytegelijk en herbouwt hun tabellen/triggers om de
+35K-input-CHECK te verruimen tot 1.048.576 tokens. Foreign-keycontroles blijven
+actief. Tijdelijke migratiekopieën verdwijnen binnen dezelfde atomaire transactie;
+een fout rolt de gehele stap terug naar schema 11. Geen permanente bronkopieën.
+`leonardo_recalls` voegt alleen append-only deliveryaudit per dossier/job/attempt/
+recall_id/ref toe. Zie [het recallcontract](leonardo-state.md#historical-recall-fase-96).

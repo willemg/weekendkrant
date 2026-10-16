@@ -13,7 +13,7 @@ Een topic is geen dossier: de aanroeper kiest expliciet een inhoudelijke
 
 ## Opslag en identiteit
 
-Schema 11 voegt vier append-only tabellen toe: `leonardo_dossiers`,
+Schema 11 introduceerde vier append-only tabellen: `leonardo_dossiers`,
 `leonardo_assignments`, `leonardo_assignment_parts`, `leonardo_states`.
 Update, delete en replace worden door triggers geweigerd. Bestaande data krijgt
 geen automatische dossierindeling. De huidige state is de hoogste opgeslagen
@@ -44,8 +44,10 @@ De assignment bevriest de vorige state, 1–32 expliciet gekozen revisies,
 exact gereconstrueerde brontekst en hashes, rolcontract en outputcontract in
 SQLite. Revisies moeten bij het dossiertopic horen. De normale provenance en
 `revision_storage.reconstruct` controleren bytes, bronvolgorde, hashes en tokens.
-Foreign keys naar de partrevisies blijven behouden. Het snapshot telt maximaal
-35.000 `cl100k_base`-tokens en 250.000 UTF-8 bytes, inclusief beide contracten.
+Foreign keys naar de partrevisies blijven behouden. Schema 12 verruimt het
+snapshot tot maximaal 1.048.576 `cl100k_base`-tokens en 8 MiB UTF-8, inclusief
+beide contracten. Dit zijn lokale technische allocatie-/serialisatiegrenzen,
+geen economisch optimum en geen gemeten providercontextlimiet.
 Dit is een backendpayloadgrens, geen bewijs over een toekomstige provider-
 messagewrapper of modeltokenizer; een echte modeladapter moet de volledige
 request nog meten volgens het modelcontract.
@@ -109,26 +111,72 @@ tokens. Een eerdere attempt expireerde en de succesvolle tweede attempt schreef 
 state via het bestaande fenced finishpad. Deze lokale tellingen zijn geen
 providerusage of productkost.
 
-De proef bevestigt het statecontract maar maakt een bewust uitgestelde functie nu
-prioritair: **historical recall**. De huidige assignment bevriest de vorige state
-en uitsluitend de nieuw aangeboden partrevisies. Oudere `processed_refs` blijven
-wel persistent en de opslaglaag kan hun immutable revisies exact reconstrueren,
-maar de lopende Leonardo-job kan die refs nog niet on demand teruglezen. Daardoor
-zou herhaalde rolling compressie op termijn relevante oude details uit de actieve
-context kunnen verdunnen, ook al blijven de bronbytes veilig opgeslagen.
+## Historical recall, fase 9.6
 
-De volgende fase vóór Kuifje voegt daarom een read-only recallbrug toe. Leonardo
-mag zijn state agressief consolideren of samenvatten, zolang eerder verwerkt
-bronmateriaal via stabiele refs lossless opnieuw bereikbaar blijft. Oude refs
-worden niet standaard allemaal opnieuw aangeboden; Leonardo vraagt alleen gericht
-materiaal terug dat hij opnieuw wil onderzoeken. Ariadne/backend registreert per
-recall welke ref werd geleverd en hoeveel bytes/lokaal gemeten tokens dat toevoegde.
+`recall_weekendkrant_part(job_id, attempt_id, token, ref, recall_id)` is de
+read-only inhoudsbrug binnen dezelfde lopende Leonardo-job. HTTP:
+`POST /jobs/leonardo-recall`. De request heeft exact die vijf velden;
+`recall_id` is een niet-lege attempt-lokale identiteit van maximaal 128 tekens.
+De response bevat uitsluitend `ref`, `sha256`, `content`, `bytes`, `tokens`
+(MCP voegt `status:success` toe). Bytes en vaste `cl100k_base`-tokens meten exact
+de UTF-8-brontekst in `content`, niet de JSON-wrapper of providerberichten.
 
-De huidige 35K-assignmentgrens blijft tot die codewijziging een echte backend-
-validatiegrens, maar geldt niet langer als gekozen experimenteel optimum. In de
-karakteriseringsfase wordt zij bewust verruimd of vervangen door een ruime
-technische context/fail-safegrens om het werkelijke recallgedrag te observeren.
-De 4K state-outputgrens blijft afzonderlijk en bewust compact.
+De backend autoriseert uitsluitend de unie van de vorige `processed_refs` en
+de nieuwe parts uit de immutable assignment. Een nieuw aangeboden ref mag dus
+ook opnieuw gelezen worden. Dezelfde topic of een ander dossier is op zichzelf
+nooit voldoende autorisatie. Geen lookup op willekeurige part/revisionparen,
+semantische selectie, nieuw dossier, nieuwe job of scheduleractivatie.
+
+Vóór reconstructie én onder de korte finale auditlock worden job, attempt,
+token, rol, executorbinding, running-status, laatste attempt en actuele lease
+gecontroleerd. Een oude receipt verleent geen leesrecht. Recall voert geen
+expirysweep uit en verandert geen job-, dossierstate- of bronprovenance.
+`revision_storage.reconstruct()` verifieert bestaande membership, source_archive,
+hashes en tokenaudit, ook zonder redundant revisiebestand. Reconstructie en
+meting gebeuren buiten de schrijflock. De bestaande centrale migratieketen
+verhoogt schema 11 naar 12 met behoud van alle assignments, states, foreign keys
+en immutable triggers; uitsluitend de oude input-CHECK wordt verruimd en de
+append-only tabel `leonardo_recalls` wordt toegevoegd.
+
+Een geslaagde logische read krijgt dossier/job/attempt, recall_id, ref,
+part/revision, oplopende audit-ID, UTC-timestamp, bytes en tokens. Bronbytes en
+claimtokens worden niet gekopieerd naar de audit. Dezelfde attempt/recall_id
+met dezelfde ref herhaalt de exacte reconstructie zonder tweede auditrecord;
+een gewijzigde ref conflicteert. Iedere retry controleert opnieuw actuele
+bevoegdheid, ook na een eerder bevestigd antwoord. Bewuste nieuwe herlezing
+krijgt een nieuwe recall_id en telt opnieuw. Audit betekent dat de backend de
+response heeft voorbereid, geen bewijs van modelontvangst. Fouten blijven
+zichtbaar via de bestaande received/finished/HTTP-statuslogging, met gevalideerde
+job-/attemptidentiteiten en ref, zonder payload of token te loggen.
+
+Per attempt geldt dezelfde technische fail-safe voor startinput plus cumulatieve
+unieke recallcontext: 1.048.576 lokale tokens en 8 MiB bron-/snapshotbytes.
+Een retry van dezelfde logische read telt niet dubbel; eventuele herhaalde
+transport-/modelconsumptie is onbekend. De bytegrens begrenst geheugen en
+serialisatie, de tokengrens beschermt ook tegen zeer tokenrijke payloads.
+De tokengrens ligt ruim boven één part en omvat de orde van grootte van de
+bestaande maximale startbundel (32 × circa 30K), plus ruimte voor compact geheugen.
+8 MiB is een expliciet eindig lokaal serialisatiebudget op de Pi-host, geen
+benchmarkclaim over piekgeheugen. Beide zijn ruime noodremmen tijdens karakterisering, geen
+bewezen capaciteit van het scheduled model. De bestaande 32-parts-per-assignment-
+en circa-30K-partgrenzen blijven gelden. Overschrijding weigert zichtbaar zonder
+truncatie, nieuwe state of recallrecord. De 4K/32.768-byte outputgrens blijft.
+
+Rolling state is een verliesgevende structurele kenniskaart. Items mogen
+samengevoegd, herschreven, samengevat of verwijderd worden; processed_refs blijven
+provenance. Modelstate wordt geen primaire bron. Historie wordt gericht herlezen,
+nooit integraal vooraf geladen. Nieuwe jobs bevriezen het bijgewerkte Leonardo-
+rolcontract; bestaande jobs behouden hun oude snapshot. Einstein-analyse en
+Kuifje-missievoorstellen/-uitvoering blijven uitgesloten.
+
+`leonardo_operator.py ... inspect --job ID --compact` toont startinput,
+recallvolgorde, bytes/tokens per read, cumulatieve recalltokens/-bytes en eventuele
+state-tokens afzonderlijk per attempt, inclusief expired/failed attempts.
+De volledige inspectie bevat dezelfde `context_usage`-sectie. Werkelijke
+providerusage en geldkost blijven onbekend (`provider_usage:null`), nooit nul
+op basis van een mislukte attempt en nooit afgeleid uit lokale tokenmetingen.
+Deze implementatie heeft lokale testdekking; productie-invoering en meerdere
+karakteriseringsruns blijven afzonderlijke operationele stappen.
 
 Missievoorstellen en -administratie volgen daarna. Een toekomstige Kuifje-missie
 is inhoudelijk een on-demand opdracht van Leonardo, maar wordt eerst door
@@ -137,9 +185,8 @@ dispatcher een Kuifje-job; Leonardo spawnt nooit rechtstreeks een andere worker.
 Dossieroverstijgende synthese, automatische offer-to-jobpolicy, betrouwbare
 providerkosten en eindredactionele selectie volgen eveneens afzonderlijk. Ariadne
 voert geen semantische dossierkeuze uit.
-Deployment vraagt schema 11, backendherstart, synchronisatie/publicatie van de
-MCP-bridge en synchronisatie van `executor/instructions.md`; deze PR doet geen
-productiedeployment of wijziging van de actieve scheduled task.
+Voor invoering van recall zijn schema 12, backendherstart en synchronisatie/
+publicatie van de MCP-bridge nodig. Het minimale executorcontract verandert niet.
 
 ## Eerste fase-9-experiment
 
@@ -149,4 +196,4 @@ uitsluitend `LeonardoStore.enqueue()`, inclusief de fase-8.5-contractsnapshot;
 zij leest of injecteert zelf geen roltekst. Dispatch en finish blijven ongewijzigd.
 Er is geen automatische routing of offerconsumptie. Schema 11, fase-8.5-backend,
 Sites-bridge met `leonardo_state` en rolagnostische executor zijn volgens de
-operator gedeployd; de echte scheduled Leonardo-proef blijft afzonderlijk open.
+operator gedeployd; de eerste echte scheduled Leonardo-proef is hierboven vastgelegd.

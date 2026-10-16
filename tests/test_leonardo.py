@@ -11,7 +11,7 @@ from leonardo import LeonardoStore
 from test_parts import PartFixture
 
 
-class LeonardoTests(PartFixture):
+class LeonardoFixture(PartFixture):
     def setUp(self):
         super().setUp()
         self.add()
@@ -64,6 +64,38 @@ class LeonardoTests(PartFixture):
         args.update(extra)
         return JobControl(self.conn, lambda: self.now).execute("finish", args)
 
+    def http_post(self):
+        import http.client
+        import threading
+        from ingress_api import Config, create_server
+
+        from unittest.mock import patch
+        patcher = patch("ingress_api.Dispatcher", side_effect=lambda db: Dispatcher(db, lambda: self.now))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        terminal_clock = patch("ingress_api.JobControl", side_effect=lambda db: JobControl(db, lambda: self.now))
+        terminal_clock.start()
+        self.addCleanup(terminal_clock.stop)
+        server = create_server(Config(token="secret", db_path=self.db, port=0))
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        self.addCleanup(thread.join)
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+
+        def post(route, args):
+            client = http.client.HTTPConnection(*server.server_address, timeout=3)
+            try:
+                client.request("POST", route, json.dumps(args), {"Authorization": "Bearer secret"})
+                response = client.getresponse()
+                return response.status, json.loads(response.read())
+            finally:
+                client.close()
+
+        return post
+
+
+class LeonardoTests(LeonardoFixture):
     def test_assignment_dispatch_finish_replay_and_next_snapshot(self):
         job = self.enqueue()
         self.assertEqual(job, self.enqueue())
@@ -182,36 +214,6 @@ class LeonardoTests(PartFixture):
             self.conn.rollback()
         self.assertEqual(self.store.latest("dossier:reproduction"), self.state())
 
-    def http_post(self):
-        import http.client
-        import threading
-        from ingress_api import Config, create_server
-
-        from unittest.mock import patch
-        patcher = patch("ingress_api.Dispatcher", side_effect=lambda db: Dispatcher(db, lambda: self.now))
-        patcher.start()
-        self.addCleanup(patcher.stop)
-        terminal_clock = patch("ingress_api.JobControl", side_effect=lambda db: JobControl(db, lambda: self.now))
-        terminal_clock.start()
-        self.addCleanup(terminal_clock.stop)
-        server = create_server(Config(token="secret", db_path=self.db, port=0))
-        thread = threading.Thread(target=server.serve_forever, daemon=True)
-        thread.start()
-        self.addCleanup(thread.join)
-        self.addCleanup(server.server_close)
-        self.addCleanup(server.shutdown)
-
-        def post(route, args):
-            client = http.client.HTTPConnection(*server.server_address, timeout=3)
-            try:
-                client.request("POST", route, json.dumps(args), {"Authorization": "Bearer secret"})
-                response = client.getresponse()
-                return response.status, json.loads(response.read())
-            finally:
-                client.close()
-
-        return post
-
     def test_http_start_finish_state_and_retry(self):
         self.enqueue()
         post = self.http_post()
@@ -250,7 +252,7 @@ class LeonardoTests(PartFixture):
     def test_input_budget_and_failed_output_leave_no_state(self):
         from unittest.mock import patch
 
-        with patch("leonardo.token_count", return_value=35001):
+        with patch("leonardo.token_count", return_value=1048577):
             with self.assertRaises(ValueError):
                 self.enqueue()
         self.assertEqual(

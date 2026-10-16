@@ -1,10 +1,9 @@
-# Fase 9.5: bootstrap, shared selector, terminal fencing and concrete role state.
-test_executor_bootstrap
-test_dispatcher
-test_job_control
-test_sherlock_executor
+# Fase 9.6: recall authority/reconstruction/audit, migration, role/finish transport.
+test_leonardo_recall
 test_leonardo
-test_system_e2e
-test_job_http
-test_executor_slot
+test_database
+test_leonardo_operator
 test_role_contracts
+test_job_control
+test_executor_bootstrap
+test_system_e2e
