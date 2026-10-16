@@ -67,6 +67,9 @@ def offline(event, args):
             raise RuntimeError('systemtest forbids external network: %r' % (address,))
 sys.addaudithook(offline)
 ''', encoding='utf-8')
+        with (guard / 'sitecustomize.py').open('a') as setup:
+            setup.write("\nimport datetime\nsys.path.insert(0, " + repr(str(REPO)) +
+                        ")\nimport executor_slot\nexecutor_slot.SLOT_TOLERANCE = datetime.timedelta(minutes=30)\n")
         self.env = {'PATH': os.environ.get('PATH', ''), 'HOME': str(self.base),
                     'LANG': 'C.UTF-8', 'PYTHONPATH': str(guard),
                     'TIKTOKEN_CACHE_DIR': str(self.base / 'cache'),
@@ -192,11 +195,15 @@ sys.addaudithook(offline)
                              'replay: immutable artifacts unchanged')
 
     def test_generic_sherlock_job_to_materialized_source(self):
-        args = dict(operation_id='start:system-occurrence', activation_id='system-occurrence')
+        args = {}
         code, start = self.request('POST', '/executor/sherlock/start', args)
         self.assertEqual(code, 200, str(start))
         self.assertEqual(self.request('POST', '/executor/sherlock/start', args), (code, start))
-        claim = {k: start[k] for k in ('job_id', 'attempt_id', 'token')}
+        bootstrap = start
+        code, start = self.request('POST', '/executor/job', bootstrap)
+        self.assertEqual(code, 200)
+        self.assertEqual(self.request('POST', '/executor/job', bootstrap), (200, start))
+        claim = {k: start['claim'][k] for k in ('job_id', 'attempt_id', 'token')}
         self.assertTrue(self.request('POST', '/jobs/validate', claim)[1]['valid'])
         source = dict(run_id=start['run_id'], topic=start['input']['topic'],
             url='https://example.invalid/generic-system-gate', outcome='fixture',
@@ -206,17 +213,17 @@ sys.addaudithook(offline)
             content='# Generic system source\n\nhttps://example.invalid/generic-system-gate\n')
         code, receipt = self.request('POST', '/ingress', dict(fiche, run_id=start['run_id'], claim=claim))
         self.assertEqual(code, 201)
-        finish = dict(claim, operation_id='finish:system-occurrence', status='succeeded', output_refs=[start['result_ref']])
+        finish = dict(claim, status='succeeded', output_refs=[start['result_ref']])
         answer = self.request('POST', '/jobs/finish', finish)
         self.assertEqual(answer[0], 200)
         self.assertEqual(self.request('POST', '/jobs/finish', finish), answer)
-        self.assertEqual(self.request('POST', '/executor/sherlock/start', args), (200, start))
+        self.assertEqual(self.request('POST', '/executor/sherlock/start', args), (200, bootstrap))
         self.assertFalse(self.request('POST', '/jobs/validate', claim)[1]['valid'])
         self.assertEqual(self.request('POST', '/ingress', dict(fiche, run_id=start['run_id'], claim=claim))[0], 409)
         self.assertEqual(self.rows('''SELECT s.run_id,r.job_id,r.attempt_id,f.queue_item_id
             FROM sherlock_sources s JOIN sherlock_job_runs r USING(run_id)
             JOIN sherlock_fiches f USING(run_id)'''),
-            [(start['run_id'], start['job_id'], start['attempt_id'], receipt['id'])])
+            [(start['run_id'], claim['job_id'], claim['attempt_id'], receipt['id'])])
         self.assertEqual(json.loads(self.rows('SELECT payload FROM ingress_queue')[0][0]), fiche)
         self.assertEqual(self.rows('SELECT status FROM sherlock_runs'), [('completed',)])
         self.assertEqual(self.rows('SELECT status FROM jobs'), [('succeeded',)])

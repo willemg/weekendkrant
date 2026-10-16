@@ -73,6 +73,7 @@ const annotationMatrix=[
  ['finish_sherlock_run',false,true,true,false],
  ['claim_weekendkrant_job',false,true,true,false],
  ['finish_weekendkrant_job',false,true,true,false],
+ ['get_weekendkrant_job',true,false,true,false],
  ['abandon_weekendkrant_job',false,true,true,false],
  ['validate_weekendkrant_claim',false,true,true,false]
 ];
@@ -163,9 +164,9 @@ test('generic claim/finish/abandon/validate preserve operation and claim identit
  const cases=[
   ['claim_weekendkrant_job','/jobs/claim',{job_id:3,activation_id:'activation:1',operation_id:'claim:1'},
    {...authority,lease_until:'2026-10-14T20:00:00.000000+00:00',role:'test',input_refs:['input:v1'],output_contract_ref:'contract:v1'}],
-  ['finish_weekendkrant_job','/jobs/finish',{...authority,operation_id:'finish:1',status:'succeeded',output_refs:['result:v1']},
+  ['finish_weekendkrant_job','/jobs/finish',{...authority,status:'succeeded',output_refs:['result:v1']},
    {job_id:3,attempt_id:7,job_status:'succeeded'}],
-  ['abandon_weekendkrant_job','/jobs/abandon',{...authority,operation_id:'abandon:1',error:'unknown effects'},
+  ['abandon_weekendkrant_job','/jobs/abandon',{...authority,error:'unknown effects'},
    {job_id:3,attempt_id:7,job_status:'blocked'}],
   ['validate_weekendkrant_claim','/jobs/validate',authority,
    {job_id:3,attempt_id:7,claim_status:'expired',valid:false,lease_until:'2026-10-14T20:00:00.000000+00:00'}]
@@ -193,7 +194,7 @@ test('generic tools reject malformed identity and bound content before network',
   assert.equal((await callTool('claim_weekendkrant_job',{...args,job_id:bad},env,()=>assert.fail('network'))).code,'invalid_request');
  for(const bad of ['', ' ', 'x'.repeat(129)])
   assert.equal((await callTool('claim_weekendkrant_job',{...args,operation_id:bad},env,()=>assert.fail('network'))).code,'invalid_request');
- const finish={job_id:3,attempt_id:7,token:'secret',operation_id:'op',status:'succeeded',output_refs:[]};
+ const finish={job_id:3,attempt_id:7,token:'secret',status:'succeeded',output_refs:[]};
  for(const output_refs of [null,[''],Array(33).fill('ref'),['x'.repeat(513)]])
   assert.equal((await callTool('finish_weekendkrant_job',{...finish,output_refs},env,()=>assert.fail('network'))).code,'invalid_request');
 });
@@ -211,35 +212,34 @@ test('generic null claims, forged responses and finish failure states are explic
  for(const result of [{claim:null,token:'unexpected'},{job_id:3,attempt_id:7,token:'',lease_until:'invalid',role:'r',input_refs:[],output_contract_ref:'c'}])
   assert.equal((await invoke('claim_weekendkrant_job',args,result)).code,'response_invalid');
  for(const status of ['failed','uncertain']){
-  const finish={job_id:3,attempt_id:7,token:'secret',operation_id:'op',status,output_refs:[],error:null};
+  const finish={job_id:3,attempt_id:7,token:'secret',status,output_refs:[],error:null};
   const result={job_id:3,attempt_id:7,job_status:status==='uncertain'?'blocked':status};
   assert.deepEqual(await invoke('finish_weekendkrant_job',finish,result),{status:'success',...result});
  }
 });
 
-test('executor start advertises exact annotations and forwards stable occurrence identities',async()=>{
+test('server bootstrap rejects caller IDs and separates immutable job retrieval',async()=>{
  const tool=TOOLS.find(t=>t.name==='start_weekendkrant_executor');
+ assert.deepEqual(tool.inputSchema,schemaForEmpty());
  assert.deepEqual(tool.annotations,{readOnlyHint:false,destructiveHint:true,idempotentHint:true,openWorldHint:false});
- const args={operation_id:'start:occurrence',activation_id:'scheduler:occurrence'};
- assert.deepEqual(await invoke(tool.name,args,{claim:null}),{status:'success',claim:null});
- let n=0;
- const result={job_id:3,attempt_id:7,token:'secret',lease_until:'2026-10-15T20:00:00.000000+00:00',
-  role:'Sherlock',run_id:9,input:{topic:2,date:'2026-10-15'},input_refs:['sha256:input','sha256:role'],
-  role_contract_ref:'sha256:role',role_contract:'role text',output_contract_ref:'sha256:output',
-  output_contract:'output text',result_ref:'sherlock-run:9'};
- assert.deepEqual(await callTool(tool.name,args,env,async(url,options)=>{
-  if(!n++)return ok({url:good});
-  assert.equal(new URL(url).pathname,'/executor/start');
-  assert.deepEqual(JSON.parse(options.body),args);return ok(result);
- }),{status:'success',...result});
- const future={...result,role:'TestRole',input:{state_ref:'state:v1'},result_ref:'result:v1'};
- delete future.run_id;
- assert.deepEqual(await invoke(tool.name,args,future),{status:'success',...future});
- for(const bad of [{...args,extra:true},{...args,activation_id:''},{}])
+ assert.deepEqual(await invoke(tool.name,{}, {executor_id:null}),{executor_id:null});
+ assert.deepEqual(await invoke(tool.name,{}, {executor_id:'server:slot'}),{executor_id:'server:slot'});
+ for(const bad of [{operation_id:'x'},{activation_id:'x'},{timestamp:'x'}])
   assert.equal((await callTool(tool.name,bad,env,()=>assert.fail('network'))).code,'invalid_request');
- for(const bad of [{...result,role:''},{...result,input:{topic:4,date:'x'}},{...result,run_id:0},{...result,result_ref:'sherlock-run:8'},{...result,extra:'secret'}])
-  assert.equal((await invoke(tool.name,args,bad)).code,'response_invalid');
+ assert.equal((await invoke(tool.name,{}, {executor_id:'x',role:'secret'})).code,'response_invalid');
+ const result={executor_id:'server:slot',claim:{job_id:3,attempt_id:7,token:'secret',lease_until:'2026-10-15T20:00:00.000000+00:00'},
+  role:'TestRole',input:{},input_refs:['sha256:input'],
+  role_contract_ref:'sha256:role',role_contract:'role text',output_contract_ref:'sha256:output',
+  output_contract:'output text',result_ref:'result:v1'};
+ assert.deepEqual(await invoke('get_weekendkrant_job',{executor_id:'server:slot'},result),{status:'success',...result});
+ for(const bad of [{...result,executor_id:'other'},{...result,claim:{...result.claim,token:''}},{...result,extra:'x'}])
+  assert.equal((await invoke('get_weekendkrant_job',{executor_id:'server:slot'},bad)).code,'response_invalid');
+ for(const name of ['finish_weekendkrant_job','abandon_weekendkrant_job']){
+  assert.equal(TOOLS.find(t=>t.name===name).inputSchema.required.includes('operation_id'),false);
+  assert.equal((await callTool(name,{job_id:3,attempt_id:7,token:'secret',operation_id:'',status:'succeeded',output_refs:[],error:'x'},env,()=>assert.fail('network'))).code,'invalid_request');
+ }
 });
+function schemaForEmpty(){return {type:'object',properties:{},required:[],additionalProperties:false};}
 test('job-backed source and fiche forward exact claim while refusing malformed claims locally',async()=>{
  const claim={job_id:3,attempt_id:7,token:'secret'};
  assert.equal((await invoke('record_sherlock_source',{...record,claim},{canonical_url:record.url})).status,'success');
@@ -260,8 +260,10 @@ test('Leonardo assignment and atomic state finish use existing generic tools',as
  const claim={job_id:4,attempt_id:8,token:'secret',lease_until:'2026-10-16T14:00:00.000000+00:00',role:'Leonardo',
   input:{state:null,parts:[{ref:'part:1:1',content:'source'}]},input_refs:['sha256:input'],
   role_contract_ref:'sha256:role',role_contract:'Leonardo',output_contract_ref:'sha256:output',output_contract:'state-v1',result_ref:'leonardo-state:dossier:1:1'};
- assert.deepEqual(await invoke('start_weekendkrant_executor',{operation_id:'start:leo',activation_id:'leo'},claim),{status:'success',...claim});
- const args={job_id:4,attempt_id:8,token:'secret',operation_id:'finish:leo',status:'succeeded',output_refs:[claim.result_ref],leonardo_state:state};
+ const {job_id,attempt_id,token,lease_until,...data}=claim;
+ const packet={...data,executor_id:'leo',claim:{job_id,attempt_id,token,lease_until}};
+ assert.deepEqual(await invoke('get_weekendkrant_job',{executor_id:'leo'},packet),{status:'success',...packet});
+ const args={job_id:4,attempt_id:8,token:'secret',status:'succeeded',output_refs:[claim.result_ref],leonardo_state:state};
  const result={job_id:4,attempt_id:8,job_status:'succeeded'};
  assert.deepEqual(await invoke('finish_weekendkrant_job',args,result),{status:'success',...result});
  for(const invalid of [null,[],{text:'x'.repeat(32769)}])

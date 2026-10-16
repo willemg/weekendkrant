@@ -183,14 +183,14 @@ opnieuw onder de schrijfslot; een race na validate kan dus alsnog finish weigere
 Externe effecten vereisen een eigen adapter met idempotentie en ontvangerfencing,
 plus onderzoek bij onzeker antwoord. Validate alleen voorkomt geen side-effectrace.
 
-De vertrouwde caller kiest één globale `activation_id` per activation en behoudt
+De expliciete operator-caller kiest één globale `activation_id` per activation en behoudt
 haar gedurende de hele activation, over tools, rollen en transportretries heen.
 Een nieuwe toolcall of een gesloten attempt is geen nieuwe activation. De database
 weigert een tweede attempt bij dezelfde activation, ook voor een andere job.
-Caller-selected IDs zijn hier protocolidentiteiten, geen bewijs van een echte
-schedulerstart; de betrouwbare binding wordt bij latere schedulerintegratie gedaan.
+Caller-selected IDs zijn uitsluitend operator-protocolidentiteiten, geen bewijs
+van een echte schedulerstart. De scheduled route gebruikt backend-owned identiteit.
 
-Iedere mutatie vereist een globaal unieke, niet-lege `operation_id` van maximaal
+Iedere expliciete operator-mutatie vereist een globaal unieke, niet-lege `operation_id` van maximaal
 128 tekens. Gebruik een UUID of namespaced unieke identiteit. Behoud ID én exacte
 argumenten bij timeout, verloren antwoord, HTTP 503 of onzekere bridge-response.
 JSON-objectkeyvolgorde is irrelevant; expliciete optional null versus weglaten en
@@ -266,3 +266,17 @@ waaronder 13 control-protocoltests, 3 HTTP-tests en **2 systeemtests** inclusief
 cachepreflight, groen met Node volledig buiten `PATH`. **32 JavaScript-plugintests**,
 de afzonderlijke optionele bridge/backend-test en de pluginbuild groen. Dit is
 lokaal bewijs, geen uitvoering op bibib of nieuwe deployment-smoke.
+
+
+## Scheduled executorprotocol, fase 9.5
+
+Bovenstaande caller-identiteiten horen bij de expliciete operator-control-plane.
+De scheduled executor meldt zich zonder argumenten aan, krijgt executor_id en
+haalt daarmee precies zijn reeds gebonden job op. Klok, activation_id en interne
+operatie-identiteiten worden volledig op bibib bepaald. Zie [dispatcher](dispatcher.md).
+
+De publieke finish/abandon-tools vereisen geen operation_id: de backend leidt
+één terminale operatie af uit de gebonden job/attempt. De bestaande requestdigest,
+receipt en atomaire mutatie blijven behouden. Een gewijzigde terminale payload of
+andere terminale actie conflicteert. De expliciete operatorroute behoudt optioneel
+haar bestaande identiteit; deze wordt niet van de scheduled executor gevraagd.

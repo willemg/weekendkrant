@@ -381,5 +381,16 @@ De tiende tool `start_weekendkrant_executor` en de optionele claimmetadata bij
 bron-/fichewrites vereisen eerst backend/schema 9. De lokale bridge/backendtest
 omvat nu ook verloren executorstart- en finishantwoorden, met run/job/attempt/
 queue-provenance. Dit bewijst geen nieuwe externe deployment. Volg de expliciete
-[invoervolgorde en occurrencecontrole](sherlock-executor.md#testen-en-operationele-invoering).
+[invoervolgorde en occurrencecontrole](sherlock-executor.md#validatie-en-deploymentgrens).
 De scheduler blijft gepauzeerd; deze PR publiceert geen plugin en activeert geen taak.
+
+
+## Fase 9.5, afzonderlijk te deployen na review
+
+Deze PR wijzigt alleen broncode en contracten. Een latere expliciete deployment
+moet backend en plugin samen bijwerken: de starttool heeft geen argumenten meer,
+de nieuwe get_weekendkrant_job-tool haalt de binding op en scheduled finish/abandon
+laten operation_id weg. Het scheduled runtime-artifact is uitsluitend
+executor/instructions.md; docs/agents/executor.md is menselijke documentatie.
+Er is geen schemamigratie. Voer vanuit deze PR geen publicatie, live task-update
+of productieproef uit.

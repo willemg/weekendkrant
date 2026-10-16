@@ -9,6 +9,9 @@ import unittest
 
 from ingress_api import Config, create_server
 from jobs import JobStore
+from dispatcher import Dispatcher
+from datetime import datetime, timezone
+from unittest.mock import patch
 
 
 class JobHTTPTests(unittest.TestCase):
@@ -16,6 +19,10 @@ class JobHTTPTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.path = Path(self.tmp.name) / 'db'
+        now = datetime.now(timezone.utc).replace(minute=0,second=0,microsecond=0)
+        patcher = patch("ingress_api.Dispatcher", side_effect=lambda db: Dispatcher(db, lambda: now))
+        patcher.start()
+        self.addCleanup(patcher.stop)
         self.server = create_server(Config(token='worker-secret', recovery_token='operator-secret',
                                            db_path=self.path, port=0))
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
@@ -70,13 +77,24 @@ class JobHTTPTests(unittest.TestCase):
         self.assertEqual(Config(token='worker').recovery_token, '')
 
     def test_executor_start_and_fenced_source_fiche_finish_contract(self):
-        args = dict(operation_id='start:occurrence', activation_id='occurrence')
+        args = {}
+        for route in ('/executor/start','/executor/sherlock/start'):
+            for invalid in ({'operation_id':'old','activation_id':'old'}, {'timestamp':'now'}, {'timezone':'UTC'}):
+                self.assertEqual(self.post(route,invalid)[0],400)
+        self.assertEqual(self.post('/executor/job', {'executor_id':'unknown'})[0],409)
         self.assertEqual(self.post('/executor/sherlock/start', args, 'wrong')[0], 401)
         self.assertEqual(self.post('/executor/sherlock/start', dict(args, topic=2))[0], 400)
         code, answer = self.post('/executor/sherlock/start', args)
         self.assertEqual(code, 200)
         self.assertEqual(self.post('/executor/sherlock/start', args), (code, answer))
-        self.assertEqual(self.post('/executor/sherlock/start', dict(args, operation_id='changed'))[0], 409)
+        self.assertEqual(self.post('/executor/sherlock/start', dict(args, operation_id='changed'))[0], 400)
+        self.assertEqual(set(answer), {'executor_id'})
+        self.assertIsNotNone(answer['executor_id'])
+        with self.assertLogs('ingress_api',level='INFO') as audit:
+            code, answer = self.post('/executor/job', answer)
+        self.assertNotIn(answer['claim']['token'], '\n'.join(audit.output))
+        self.assertEqual(code, 200)
+        answer.update(answer['claim'])
         authority = {k: answer[k] for k in ('job_id', 'attempt_id', 'token')}
         source = dict(run_id=answer['run_id'], topic=answer['input']['topic'],
             url='https://example.org/phase5', outcome='reviewed', rationale='fixture', claim=authority)
@@ -86,7 +104,7 @@ class JobHTTPTests(unittest.TestCase):
                      date=answer['input']['date'], content='isolated fixture')
         self.assertEqual(self.post('/ingress', fiche)[0], 409)
         self.assertEqual(self.post('/ingress', dict(fiche, claim=authority))[0], 201)
-        finish = dict(authority, operation_id='finish:occurrence', status='succeeded', output_refs=[answer['result_ref']])
+        finish = dict(authority, status='succeeded', output_refs=[answer['result_ref']])
         self.assertEqual(self.post('/jobs/finish', finish)[0], 200)
         self.assertEqual(self.post('/jobs/finish', finish)[0], 200)
         self.assertEqual(self.post('/ingress', dict(fiche, claim=authority))[0], 409)

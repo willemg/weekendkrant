@@ -137,3 +137,10 @@ in één korte transactie, zonder files te wijzigen of een model aan te roepen.
 Een gesloten part zonder offer is ook nog offerbaar. Dossiers, rolling
 state, Kuifje, modelcalls, callbudgetten, aanbiedplanning en eindredactionele
 weekdeadline zijn nog niet geïmplementeerd.
+
+
+Fase 9.5: de scheduled executor gebruikt het minimale canonieke
+`executor/instructions.md`. Bibib beheert bootstrap-identiteit, tijd en interne
+operaties. Start geeft alleen executor_id; jobophaling leest de bestaande
+immutable binding. Finish/abandon vereisen geen modelgegenereerde operatie-ID.
+Er is geen nieuw schema, sessiemodel of scheduler. Zie [dispatcher](dispatcher.md).

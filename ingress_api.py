@@ -17,6 +17,7 @@ from dispatcher import Dispatcher
 
 
 TOOL_ROUTES = {
+    '/executor/job': 'get_weekendkrant_job',
     '/executor/start': 'start_weekendkrant_executor',
     '/executor/sherlock/start': 'start_weekendkrant_executor',
     '/jobs/claim': 'claim_weekendkrant_job',
@@ -171,7 +172,10 @@ def create_server(config):
             try:
                 if self.path in ('/executor/start', '/executor/sherlock/start'):
                     with closing(sqlite3.connect(config.db_path, timeout=5)) as db:
-                        self.reply(200, Dispatcher(db).start(payload))
+                        self.reply(200, Dispatcher(db).bootstrap(payload))
+                elif self.path == '/executor/job':
+                    with closing(sqlite3.connect(config.db_path, timeout=5)) as db:
+                        self.reply(200, Dispatcher(db).get_job(payload))
                 elif self.path.startswith('/jobs/'):
                     self.handle_job(payload)
                 else:
@@ -222,7 +226,12 @@ def create_server(config):
             with closing(sqlite3.connect(config.db_path, timeout=5)) as db:
                 control = JobControl(db)
                 operation = self.path.rsplit('/', 1)[-1]
-                result = control.validate(payload) if operation == 'validate' else control.execute(operation, payload)
+                if operation == 'validate':
+                    result = control.validate(payload)
+                elif operation in ('finish', 'abandon') and 'operation_id' not in payload:
+                    result = control.scheduled(operation, payload)
+                else:
+                    result = control.execute(operation, payload)
                 self.reply(200, result)
 
         def handle_sherlock(self, payload):

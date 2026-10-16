@@ -90,3 +90,15 @@ ready-first), `test_sherlock_executor` (claims, snapshotopslag en recovery),
 HTTP/queue/Ariadne-keten). Geen runner- of schemawijziging, dus geen automatische
 overname van de eerdere runner-/migratiechecks. Validatie: uitsluitend
 `./start_tests.sh`, 69 tests groen in 20,293 seconden; geen `--all` of deployment.
+
+
+## Regressieset fase 9.5
+
+De vorige fase-9-selectie is vervangen door bootstrap, dispatcher, slotting,
+job-control/HTTP, Sherlock, Leonardo, contractsnapshots en de lokale systeemketen.
+Deze negen modules raken precies het gewijzigde scheduled transport en zijn
+gedeelde state/fencing-invarianten. Operatorvoorbereiding, offers, migraties en
+de testrunner worden niet automatisch overgenomen: die implementaties wijzigen
+niet. De default blijft Node-vrij. Alleen in de pluginontwikkelomgeving draait
+`./start_tests.sh --plugin` expliciet de JavaScript-contracttests en bridge/backend-
+keten; dit is geen volledige Python-suite en vereist geen Node op bibib.

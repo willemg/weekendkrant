@@ -108,7 +108,7 @@ bronherlezingsverzoeken, automatische offer-to-jobpolicy, providerkosten en
 eindredactionele selectie volgen afzonderlijk. Deze slice voert geen
 semantische dossierkeuze uit in Ariadne en consumeert bestaande offers niet.
 Deployment vraagt schema 11, backendherstart, synchronisatie/publicatie van de
-MCP-bridge en synchronisatie van `docs/agents/executor.md`; deze PR doet geen
+MCP-bridge en synchronisatie van `executor/instructions.md`; deze PR doet geen
 productiedeployment of wijziging van de actieve scheduled task.
 
 ## Eerste fase-9-experiment

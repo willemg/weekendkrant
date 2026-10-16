@@ -8,4 +8,8 @@ if [[ -x .venv/bin/python ]]; then
 else
     python=python3
 fi
+if [[ "${1:-}" == "--plugin" && "$#" == 1 ]]; then
+    npm --prefix plugin/weekendkrant_ingress test
+    exec "$python" plugin/weekendkrant_ingress/tests/bridge_backend.py
+fi
 exec "$python" test_runner.py "$@"

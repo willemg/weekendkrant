@@ -30,11 +30,52 @@ class Dispatcher:
         if len(self.by_role) != len(self.producers):
             raise ValueError('Duplicate role adapter')
 
+    def bootstrap(self, args):
+        """Public no-argument start; all occurrence identity is server-owned."""
+        from executor_slot import start_arguments
+        JobControl._schema(args, set())
+        # Freeze this backend observation across unlocked preparation/retries.
+        # Dispatcher.start rechecks admission and receipts under its write lock.
+        with self.store._write() as now:
+            identity = start_arguments(now, admit=False)
+            self.store._expire(now)
+            known = self.db.execute(
+                'SELECT 1 FROM executor_activations WHERE activation_id=?',
+                (identity['activation_id'],)).fetchone()
+            admitted = start_arguments(now) is not None
+        if not admitted and not known:
+            return {'executor_id': None}
+        result = self.start(identity)
+        return {'executor_id': identity['activation_id'] if 'attempt_id' in result else None}
+
+    def get_job(self, args):
+        """Read the bound immutable package, never select or bind any work."""
+        JobControl._schema(args, {'executor_id'})
+        _text(args['executor_id'], 128)
+        self.store._idle()
+        row = self.store._row(
+            'SELECT * FROM executor_activations WHERE activation_id=?',
+            (args['executor_id'],))
+        if row is None or row['attempt_id'] is None:
+            raise ControlConflict('Unknown or unbound executor')
+        result = json.loads(row['response'])
+        attempt = self.store._row(
+            'SELECT job_id,id,token,lease_until FROM job_attempts WHERE id=? AND job_id=?',
+            (row['attempt_id'], row['job_id']))
+        if attempt is None:
+            raise ControlConflict('Missing executor attempt')
+        for key in ('job_id', 'attempt_id', 'token', 'lease_until'):
+            result.pop(key, None)
+        result['executor_id'] = args['executor_id']
+        result['claim'] = dict(job_id=attempt['job_id'], attempt_id=attempt['id'],
+                               token=attempt['token'], lease_until=attempt['lease_until'])
+        return result
+
     def start(self, args):
         """One stable logical activation ID, one atomic durable decision.
 
-        Identity is supplied by the single scheduler adapter, never generated
-        in the bridge. Changed operation identity for a used activation conflicts.
+        Internal identity is supplied by the backend bootstrap. Changed operation
+        identity for a used activation conflicts.
         Replayed receipts do not grant fresh execution authority.
         """
         JobControl._schema(args, {'operation_id', 'activation_id'})

@@ -5,9 +5,38 @@ Zie de [runtimecontractgrens en begrippen](roles.md#runtimecontracten-fase-85):
 bestaande jobs gebruiken uitsluitend hun immutable contractsnapshot.
 
 `Dispatcher.start` is de enige workselector achter `start_weekendkrant_executor`.
-Er blijft één scheduled executor en één tool. De canonieke backendroute is
+Er blijft één scheduled executor; start en jobophaling zijn aparte tools. De canonieke backendroute is
 `POST /executor/start`; `/executor/sherlock/start` blijft een compatibiliteitsalias
 naar exact dezelfde dispatcher, zonder eigen selectie of activatiestate.
+
+## Publieke bootstrap (fase 9.5)
+
+`start_weekendkrant_executor()` accepteert uitsluitend een leeg object. Bibib
+berekent met zijn eigen klok de logische UTC-occurrence (executor_slot.py) en
+interne startoperatie. De bestaande executor_activations.activation_id is tevens
+executor_id; er is geen nieuw schema of sessiemodel. Start retourneert alleen
+`{"executor_id": "..."}` of `{"executor_id": null}`. De alias accepteert
+eveneens geen caller-identiteiten. De selector hieronder blijft intern.
+
+`get_weekendkrant_job(executor_id)` via `POST /executor/job` leest uitsluitend
+die duurzame receipt, met immutable input-, rol- en outputcontracten. Hij
+dispatcht nooit opnieuw en leest geen deploymentbestanden. Het pakket bevat
+executor_id, role, role_contract, input, input_refs, result_ref, output_contract
+en snapshotreferenties plus eventuele aanvullende jobvelden. Claim is één object
+met job_id, attempt_id, token en lease_until. De token en lease worden uit de
+gebonden attempt gelezen; de receipt bevat geen token. Onbekende of ongebonden
+identiteiten worden geweigerd, nooit vervangen door ander werk. Een oude claim
+kan worden opgehaald maar verleent geen uitvoeringsmachtiging: validate en
+write-fencing blijven noodzakelijk.
+
+Finish en abandon zonder operation_id leiden dezelfde terminale operatie-identiteit
+af uit job_id/attempt_id. Exacte payloadretry is idempotent; gewijzigde payload of
+een wissel van terminale actie conflicteert. Deze route vereist een bestaande
+executorbinding en gebruikt dezelfde atomaire JobControl-mutatie, statecommit en
+receipts. De expliciete operator-control-plane behoudt zijn eigen operatie-ID.
+De cloudexecutor berekent geen tijd, slots of technische IDs.
+Het canonieke runtime-artifact is [executor/instructions.md](../executor/instructions.md);
+[executor.md](agents/executor.md) beschrijft de infrastructuur en replaygrenzen.
 
 ## Deterministische selectie en uitvoerbaarheid
 
@@ -117,11 +146,9 @@ geen wijziging aan de scheduled executor zolang het generieke executorprotocol
 ongewijzigd blijft. Rolkennis hoort in producer/adapter, immutable assignment en
 rol-/outputcontract, niet in de gemeenschappelijke executorinstructie.
 
-Het startantwoord bevat de claimvelden, `role`, `input`, `input_refs`,
+Het interne dispatchantwoord (opgeslagen zonder token) bevat de claimvelden, `role`, `input`, `input_refs`,
 `role_contract_ref`, `role_contract`, `output_contract_ref`, `output_contract` en
-`result_ref`. `run_id` is een optioneel rolspecifiek veld. De plugin accepteert een
-begrensde rolnaam en objectinput; voor Sherlock blijven topic/date/run/result
-extra gevalideerd. Dit maakt andere rollen transporteerbaar, maar autoriseert
+`result_ref`. `run_id` is een optioneel rolspecifiek veld. De jobophaaltool transporteert een begrensde rolnaam en objectinput zonder rolspecifieke vertakkingen. Dit maakt andere rollen transporteerbaar, maar autoriseert
 geen nieuwe productierol. Alleen de backendregistry bepaalt uitvoerbaarheid.
 
 ## Tests en operationele grenzen

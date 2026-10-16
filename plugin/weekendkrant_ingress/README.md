@@ -2,7 +2,7 @@
 
 Fase 7: de startketen gebruikt nu de [algemene dispatcher](../../docs/dispatcher.md), met ready-first
 selectie, persistente pause en globale/rolconcurrency. `start_weekendkrant_executor`
-blijft het enige startpunt; `/executor/start` is canoniek en de oude
+meldt de executor zonder argumenten aan; `/executor/start` is canoniek en de oude
 `/executor/sherlock/start`-route blijft alias. Schema 10 bewaart generieke immutable
 activationreceipts en behoudt alle schema-9-audit. Alleen Sherlock is geregistreerd;
 geen Leonardo-jobs of verwerking van offers. Deze bronwijziging is geen deployment.
@@ -55,8 +55,8 @@ geven een JSON-RPC-error.
 | --- | --- | --- |
 | `claim_weekendkrant_job` | `operation_id`, `job_id`, `activation_id` | Claim-ID/token/lease, rol en immutable input/contractrefs; of `claim: null` |
 | `validate_weekendkrant_claim` | `job_id`, `attempt_id`, `token` | Job/attempt-ID, `claim_status`, `valid`, `lease_until` |
-| `finish_weekendkrant_job` | `operation_id`, claim-ID/token, `status` (`succeeded`/`failed`/`uncertain`), `output_refs`; optioneel `error` | Job/attempt-ID en `job_status` |
-| `abandon_weekendkrant_job` | `operation_id`, claim-ID/token, `error` | Job/attempt-ID en `job_status: blocked` |
+| `finish_weekendkrant_job` | claim-ID/token, `status` (`succeeded`/`failed`/`uncertain`), `output_refs`; optioneel `error` | Job/attempt-ID en `job_status` |
+| `abandon_weekendkrant_job` | claim-ID/token, `error` | Job/attempt-ID en `job_status: blocked` |
 
 Strikte velden en begrensde teksten/referenties; de plugin controleert ook
 response-identiteiten. Alle vier wijzigen private jobstate (validate kan expiry
@@ -196,29 +196,29 @@ replay-/idempotentiecontract; de werkelijk gepubliceerde Sites-route wordt apart
 bewezen door de bestaande deployment-smoke.
 
 
-## Fase 5: executorstart en gefencete Sherlock-writes
+## Fase 9.5: server-owned bootstrap
 
-Tiende tool: `start_weekendkrant_executor({operation_id,activation_id})` →
-`POST /executor/sherlock/start`. Productie, topickeuze, claim en run committen
-samen. De response bevat claim, concrete input en immutable rol-/outputcontracten,
-of `claim:null`. IDs komen uit de schedulercontext, blijven exact gelijk bij
-transportretry en worden niet door deze brug aangemaakt. Geen automatische retries.
+`start_weekendkrant_executor()` → `POST /executor/start` accepteert een leeg
+object en retourneert uitsluitend executor_id of null. Caller-generated
+operation_id, activation_id, timestamps en andere velden worden lokaal én door
+de backend geweigerd. Omitted MCP arguments worden een leeg object.
 
-Metadata-audit van deze tool: readOnlyHint=false (persistente productie/receipt),
-destructiveHint=true (expiryquarantaine en afsluiten van oude run na expliciete
-recovery), idempotentHint=true (persistente exacte replay, geen actuele
-uitvoeringsbevoegdheid), openWorldHint=false (alleen private Weekendkrant-state;
-geen referenties bezoeken of externe publicatie). Elke hint is exact getest.
+`get_weekendkrant_job(executor_id)` → `POST /executor/job` leest alleen het
+gebonden pakket met claim, rol/input/resultaat en immutable contractsnapshots.
+Geen productie, selectie of nieuwe attempt. Claimtoken komt uit attemptstate,
+nooit uit receipts. De generieke bridge kent geen rollenlijst of rolvertakking.
 
-`record_sherlock_source` en `submit_weekendkrant_fiche` accepteren aanvullend een
-strikt claimobject `{job_id,attempt_id,token}`. Voor job-backed runs is dit verplicht;
-de backend controleert actuele lease en binding binnen de write-transactie.
-Bestaande legacy-payloads en de vier generieke fase-4-tools blijven beschikbaar.
-Bronregistratie blijft een auditinsert (readOnly=false, destructive=false,
-idempotent=true, openWorld=false), fichepublicatie blijft append-only en
-niet-idempotent (false/false/false/false). Legacy-finish kan geen jobrun sluiten.
-Generieke finish sluit gekoppelde run en attempt samen; de bestaande destructive
-metadata dekt die terminale mutatie. Tokens zijn uitsluitend transportgegevens.
+Scheduled finish/abandon geven claim-ID/token en hun resultaatvelden mee zonder
+operation_id. Bibib bepaalt één terminale identiteit per attempt; gewijzigde
+retries conflicteren, ook bij een wissel tussen finish en abandon. Exacte retry
+is veilig na een verloren antwoord. Het model herstart geen inhoudelijk werk.
+De expliciete operator-control-plane kan optioneel zijn bestaande operation_id
+meegeven; dat hoort niet bij het scheduled contract.
 
-Zie [fase-5-protocol en deploymentgrenzen](../../docs/sherlock-executor.md).
-Backend/schema 9 vóór pluginimport/publicatie; de actieve scheduler blijft uit.
+Het canonieke runtime-artifact is
+[executor/instructions.md](../../executor/instructions.md).
+Geen publicatie of live instructiewijziging vanuit deze PR.
+
+Pluginchecks: `./start_tests.sh --plugin` vanuit de repositoryroot, in de
+pluginontwikkelomgeving met Node. De standaard `./start_tests.sh` blijft
+uitsluitend de Node-vrije Python-fast-track draaien.

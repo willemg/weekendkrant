@@ -50,7 +50,7 @@ class JobControl:
 
     def validate(self, args):
         """Current authority, not a cached receipt or permission for external effects."""
-        self._schema(args, {'job_id', 'attempt_id', 'token'})
+        self._schema(args, {'job_id', 'attempt_id', 'token'}, {'lease_until'})
         self._claim_fields(args)
         with self.store._write() as now:
             self.store._expire(now)
@@ -62,6 +62,22 @@ class JobControl:
         return {'job_id': row['job_id'], 'attempt_id': row['id'],
                 'claim_status': row['status'], 'valid': row['status'] == 'running',
                 'lease_until': row['lease_until']}
+
+    def scheduled(self, operation, args):
+        """Terminal identity belongs to one bound attempt, across finish/abandon."""
+        if operation not in ('finish', 'abandon'):
+            raise ValueError('Unknown scheduled operation')
+        required, optional = self.fields[operation]
+        self._schema(args, required - {'operation_id'}, optional)
+        self._claim_fields(args)
+        row = self.db.execute(
+            'SELECT 1 FROM executor_activations WHERE job_id=? AND attempt_id=?',
+            (args['job_id'], args['attempt_id'])).fetchone()
+        if row is None:
+            raise ControlConflict('Claim is not bound to an executor')
+        # One namespace for both terminal actions: changing action also conflicts.
+        identity = 'executor-terminal:%s:%s' % (args['job_id'], args['attempt_id'])
+        return self.execute(operation, dict(args, operation_id=identity))
 
     def execute(self, operation, args):
         if operation not in self.fields:

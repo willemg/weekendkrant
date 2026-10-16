@@ -9,7 +9,7 @@ const integer={type:'integer',minimum:1,maximum:Number.MAX_SAFE_INTEGER};
 const topicSchema={type:'integer',enum:[1,2,3]};
 const textSchema={type:'string',minLength:1,pattern:'\\S'};
 const schema=(properties,required=Object.keys(properties))=>({type:'object',properties,required,additionalProperties:false});
-const claimSchema=schema({job_id:integer,attempt_id:integer,token:{...textSchema,maxLength:512}});
+const claimSchema=schema({job_id:integer,attempt_id:integer,token:{...textSchema,maxLength:512},lease_until:textSchema},['job_id','attempt_id','token']);
 export const TOOL={name:'submit_weekendkrant_fiche',description:'Sla één bronfiche uitsluitend op in de private Weekendkrant-ingressqueue; publiceert niets publiek. Geef voor Sherlock het huidige run_id mee als transportmetadata om de producerende run persistent te koppelen. De backend vereist dan hetzelfde topic en een running run; job-backed runs vereisen tevens claim met job_id, attempt_id en token. Claimgegevens blijven transportmetadata en autoriseren alleen een nog geldige lease. Na de eerste job-backed assignment weigert de backend ook volledig ongekoppelde fiches. Geeft een compacte status en bij succes het queue-item-ID.',inputSchema:{type:'object',properties:{run_id:integer,claim:claimSchema},additionalProperties:true},annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:false}};
 export const TOOLS=[TOOL,
  {name:'start_sherlock_run',description:'Start een Sherlock-run: de tool maakt uitsluitend private Weekendkrant-runstate aan; de backend kiest atomair het volgende topic. Gebruik het geretourneerde run_id en topic gedurende die run.',inputSchema:schema({}),annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:false}},
@@ -30,14 +30,14 @@ const contracts={
  record_sherlock_source:{path:'/sherlock/sources',valid:x=>strict(x,['run_id','topic','url','outcome','rationale'],['title','claim'])&&(!Object.hasOwn(x,'claim')||validClaim(x.claim))&&positive(x.run_id)&&topic(x.topic)&&['url','outcome','rationale'].every(k=>nonempty(x[k]))&&(!Object.hasOwn(x,'title')||x.title===null||typeof x.title==='string'),result:r=>nonempty(r.canonical_url)?{canonical_url:r.canonical_url}:null},
  finish_sherlock_run:{path:'/sherlock/runs/finish',valid:x=>strict(x,['run_id','status'])&&positive(x.run_id)&&runStatus(x.status),result:(r,x)=>positive(r.run_id)&&r.run_id===x.run_id&&runStatus(r.status)&&r.status===x.status?{run_id:r.run_id,run_status:r.status}:null}
 };
-// Generic operations select no work and publish no artifacts. Stable IDs are caller-owned.
+// Scheduled identities are backend-owned; explicit operator claim retains its identity.
 const bounded=(x,n=512)=>nonempty(x)&&x.length<=n;
 const refs=x=>Array.isArray(x)&&x.length<=32&&x.every(v=>bounded(v));
 const boundedSchema=n=>({...textSchema,maxLength:n});
 const referenceSchema={type:'array',maxItems:32,items:boundedSchema(512)};
 const authoritySchema={job_id:integer,attempt_id:integer,token:boundedSchema(512)};
 const authority=x=>positive(x.job_id)&&positive(x.attempt_id)&&bounded(x.token);
-const validClaim=x=>strict(x,['job_id','attempt_id','token'])&&authority(x);
+const validClaim=x=>strict(x,['job_id','attempt_id','token'],['lease_until'])&&authority(x);
 const operationSchema={operation_id:boundedSchema(128)};
 const stamp=x=>typeof x==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}\+00:00$/.test(x)&&Number.isFinite(Date.parse(x));
 const stateRefs={type:'array',maxItems:256,items:boundedSchema(128)};
@@ -50,24 +50,28 @@ const leonardoStateSchema=schema({schema_version:{type:'integer',enum:[1]},dossi
 // The backend validates semantics, budgets and revision membership authoritatively.
 const validLeonardoState=x=>object(x)&&new TextEncoder().encode(JSON.stringify(x)).length<=32768;
 const generic=[
- {name:'start_weekendkrant_executor',path:'/executor/start',description:'Dispatch maximaal één uitvoerbare opdracht voor één stabiele scheduled activation. Selecteert bestaand ready werk vóór nieuwe productie en bindt claim, rolcontract en activatie atomair; retourneert bij een bezette/geblokkeerde baan claim:null. Eén scheduler, deterministische ready-first dispatcher met persistente pause en harde concurrencygrens. De scheduler levert activation_id; genereer geen nieuwe identiteit bij retries, batches of finish. Gebruik dezelfde operation_id en exacte argumenten bij verloren antwoord. Een receipt is geen actuele uitvoeringsbevoegdheid: valideer de claim vóór werk. Kan eerder verlopen runstate na expliciete recovery afsluiten.',properties:{...operationSchema,activation_id:boundedSchema(128)},
- valid:x=>strict(x,['operation_id','activation_id'])&&bounded(x.operation_id,128)&&bounded(x.activation_id,128),
- result:r=>strict(r,['claim'])&&r.claim===null?{claim:null}:strict(r,['job_id','attempt_id','token','lease_until','role','input','input_refs','role_contract_ref','role_contract','output_contract_ref','output_contract','result_ref'],['run_id'])&&authority(r)&&stamp(r.lease_until)&&bounded(r.role,128)&&object(r.input)&&(r.role!=='Sherlock'||(positive(r.run_id)&&strict(r.input,['topic','date'])&&topic(r.input.topic)&&/^\d{4}-\d{2}-\d{2}$/.test(r.input.date)))&&refs(r.input_refs)&&bounded(r.role_contract_ref)&&bounded(r.role_contract,65536)&&bounded(r.output_contract_ref)&&bounded(r.output_contract,65536)&&bounded(r.result_ref)&&(r.role!=='Sherlock'||r.result_ref===`sherlock-run:${r.run_id}`)?r:null},
+ {name:'start_weekendkrant_executor',path:'/executor/start',description:'Meld de executor aan bij bibib. De backend bepaalt identiteit, admission en één duurzame werkbeslissing. Herhaal zonder argumenten bij verloren antwoord. executor_id:null betekent stoppen.',properties:{},
+ valid:x=>strict(x,[]),
+ result:r=>strict(r,['executor_id'])&&(r.executor_id===null||bounded(r.executor_id,128))?r:null},
+ {name:'get_weekendkrant_job',path:'/executor/job',description:'Haal uitsluitend het reeds gebonden immutable jobpakket op met executor_id. Selecteert geen werk en maakt geen attempt. Valideer de ontvangen claim vóór uitvoering.',properties:{executor_id:boundedSchema(128)},
+ valid:x=>strict(x,['executor_id'])&&bounded(x.executor_id,128),
+ result:(r,x)=>strict(r,['executor_id','claim','role','input','input_refs','role_contract_ref','role_contract','output_contract_ref','output_contract','result_ref'],['run_id'])&&r.executor_id===x.executor_id&&strict(r.claim,['job_id','attempt_id','token','lease_until'])&&authority(r.claim)&&stamp(r.claim.lease_until)&&bounded(r.role,128)&&object(r.input)&&refs(r.input_refs)&&bounded(r.role_contract_ref)&&bounded(r.role_contract,65536)&&bounded(r.output_contract_ref)&&bounded(r.output_contract,65536)&&bounded(r.result_ref)&&(!Object.hasOwn(r,'run_id')||positive(r.run_id))?r:null},
  {name:'claim_weekendkrant_job',path:'/jobs/claim',description:'Claim één expliciet aangeleverde job, zonder werkselectie. Gebruik dezelfde globale activation_id voor de hele activatie, en dezelfde operation_id en argumenten bij ieder transportretry. Een bevestigd antwoord kan een oude receipt zijn: controleer lease en validate_weekendkrant_claim vóór uitvoering. Geen tweede job binnen dezelfde activatie.',properties:{...operationSchema,job_id:integer,activation_id:boundedSchema(128)},
  valid:x=>strict(x,['operation_id','job_id','activation_id'])&&positive(x.job_id)&&bounded(x.operation_id,128)&&bounded(x.activation_id,128),
  result:(r,x)=>strict(r,['claim'])&&r.claim===null?{claim:null}:strict(r,['job_id','attempt_id','token','lease_until','role','input_refs','output_contract_ref'])&&authority(r)&&r.job_id===x.job_id&&stamp(r.lease_until)&&bounded(r.role,128)&&refs(r.input_refs)&&bounded(r.output_contract_ref)?r:null},
- {name:'finish_weekendkrant_job',path:'/jobs/finish',description:'Registreer bestaande immutable outputreferenties en uitkomst van één job, zonder publicatie. Claim-ID/token/fencing en lease worden gecontroleerd. Herhaal dezelfde operation_id en exacte argumenten bij onzeker antwoord, nooit het inhoudelijke werk of side effect. Sluit de attempt en een gekoppelde Sherlock-run atomair af; gebruik voor Sherlock de geleverde result_ref als enige output_refs. Voor Leonardo succeeded is leonardo_state verplicht volgens het outputcontract; state en jobafronding worden atomair gevalideerd en opgeslagen. succeeded en failed zijn terminaal, uncertain blokkeert voor operatoronderzoek.',properties:{...operationSchema,...authoritySchema,status:{type:'string',enum:['succeeded','failed','uncertain']},output_refs:referenceSchema,leonardo_state:leonardoStateSchema,error:{type:['string','null'],minLength:1,maxLength:2048,pattern:'\\S'}},required:['operation_id','job_id','attempt_id','token','status','output_refs'],
- valid:x=>strict(x,['operation_id','job_id','attempt_id','token','status','output_refs'],['error','leonardo_state'])&&(!Object.hasOwn(x,'leonardo_state')||validLeonardoState(x.leonardo_state))&&authority(x)&&bounded(x.operation_id,128)&&['succeeded','failed','uncertain'].includes(x.status)&&refs(x.output_refs)&&(x.error==null||bounded(x.error,2048)),
+ {name:'finish_weekendkrant_job',path:'/jobs/finish',description:'Registreer bestaande immutable outputreferenties en uitkomst van één job, zonder publicatie. Claim-ID/token/fencing en lease worden gecontroleerd. Laat bij scheduled uitvoering operation_id weg; bibib bepaalt de identiteit. Herhaal exact dezelfde argumenten bij onzeker antwoord, nooit het inhoudelijke werk of side effect. Sluit de attempt en een gekoppelde Sherlock-run atomair af; gebruik voor Sherlock de geleverde result_ref als enige output_refs. Voor Leonardo succeeded is leonardo_state verplicht volgens het outputcontract; state en jobafronding worden atomair gevalideerd en opgeslagen. succeeded en failed zijn terminaal, uncertain blokkeert voor operatoronderzoek.',properties:{...operationSchema,...authoritySchema,status:{type:'string',enum:['succeeded','failed','uncertain']},output_refs:referenceSchema,leonardo_state:leonardoStateSchema,error:{type:['string','null'],minLength:1,maxLength:2048,pattern:'\\S'}},required:['job_id','attempt_id','token','status','output_refs'],
+ valid:x=>strict(x,['job_id','attempt_id','token','status','output_refs'],['error','leonardo_state','operation_id'])&&(!Object.hasOwn(x,'leonardo_state')||validLeonardoState(x.leonardo_state))&&(!Object.hasOwn(x,'operation_id')||bounded(x.operation_id,128))&&authority(x)&&['succeeded','failed','uncertain'].includes(x.status)&&refs(x.output_refs)&&(x.error==null||bounded(x.error,2048)),
  result:(r,x)=>strict(r,['job_id','attempt_id','job_status'])&&r.job_id===x.job_id&&r.attempt_id===x.attempt_id&&r.job_status===(x.status==='uncertain'?'blocked':x.status)?r:null},
- {name:'abandon_weekendkrant_job',path:'/jobs/abandon',description:'Geef een nog geldige claim op met onzekere effecten: registreert uncertain en blokkeert de job, geeft geen toestemming tot retry. Compacte foutnotitie, geen private reasoning. Herhaal dezelfde operation_id en exacte argumenten als het antwoord verloren gaat.',properties:{...operationSchema,...authoritySchema,error:boundedSchema(2048)},
- valid:x=>strict(x,['operation_id','job_id','attempt_id','token','error'])&&authority(x)&&bounded(x.operation_id,128)&&bounded(x.error,2048),
+ {name:'abandon_weekendkrant_job',path:'/jobs/abandon',description:'Geef een nog geldige claim op met onzekere effecten: registreert uncertain en blokkeert de job, geeft geen toestemming tot retry. Compacte foutnotitie, geen private reasoning. Laat bij scheduled uitvoering operation_id weg; bibib bepaalt de identiteit. Herhaal exact dezelfde argumenten als het antwoord verloren gaat.',properties:{...operationSchema,...authoritySchema,error:boundedSchema(2048)},required:['job_id','attempt_id','token','error'],
+ valid:x=>strict(x,['job_id','attempt_id','token','error'],['operation_id'])&&(!Object.hasOwn(x,'operation_id')||bounded(x.operation_id,128))&&authority(x)&&bounded(x.error,2048),
  result:(r,x)=>strict(r,['job_id','attempt_id','job_status'])&&r.job_id===x.job_id&&r.attempt_id===x.attempt_id&&r.job_status==='blocked'?r:null},
- {name:'validate_weekendkrant_claim',path:'/jobs/validate',description:'Controleer huidige claimautoriteit bij de backend. Leasegevoelige actuele state, geen gecachte bevestiging. valid=false verbiedt nieuwe uitvoering/resultaatmutatie; een geldig antwoord is geen fencing of exactly-once-garantie voor externe side effects.',properties:authoritySchema,
- valid:x=>strict(x,['job_id','attempt_id','token'])&&authority(x),
+ {name:'validate_weekendkrant_claim',path:'/jobs/validate',description:'Controleer huidige claimautoriteit bij de backend. Leasegevoelige actuele state, geen gecachte bevestiging. valid=false verbiedt nieuwe uitvoering/resultaatmutatie; een geldig antwoord is geen fencing of exactly-once-garantie voor externe side effects.',properties:{...authoritySchema,lease_until:textSchema},required:['job_id','attempt_id','token'],
+ valid:x=>strict(x,['job_id','attempt_id','token'],['lease_until'])&&authority(x),
  result:(r,x)=>strict(r,['job_id','attempt_id','claim_status','valid','lease_until'])&&r.job_id===x.job_id&&r.attempt_id===x.attempt_id&&['running','expired','uncertain','succeeded','failed'].includes(r.claim_status)&&r.valid===(r.claim_status==='running')&&stamp(r.lease_until)?r:null}
 ];
 for(const tool of generic){
- TOOLS.push({name:tool.name,description:'Werkt uitsluitend op private Weekendkrant-jobstate; bezoekt geen input-/outputreferenties en publiceert niets extern. Kan verlopen running attempts persistent als expired afsluiten en hun jobs blokkeren, ook bij een geweigerde operatie of receipt-replay. '+tool.description,inputSchema:schema(tool.properties,tool.required),annotations:{readOnlyHint:false,destructiveHint:true,idempotentHint:true,openWorldHint:false}});
+ const lookup=tool.name==='get_weekendkrant_job';
+ TOOLS.push({name:tool.name,description:(lookup?'Leest uitsluitend private Weekendkrant-jobstate; bezoekt geen referenties en wijzigt niets. ':'Werkt uitsluitend op private Weekendkrant-jobstate; bezoekt geen input-/outputreferenties en publiceert niets extern. Kan verlopen running attempts persistent als expired afsluiten en hun jobs blokkeren, ook bij een geweigerde operatie of receipt-replay. ')+tool.description,inputSchema:schema(tool.properties,tool.required),annotations:{readOnlyHint:lookup,destructiveHint:!lookup,idempotentHint:true,openWorldHint:false}});
  contracts[tool.name]={path:tool.path,valid:tool.valid,result:tool.result};
 }
 
@@ -103,13 +107,14 @@ export async function submit(payload,env,fetcher=fetch){
 }
 export async function callTool(name,args,env,fetcher=fetch){
  if(name===TOOL.name)return submit(args,env,fetcher);
- if(name==='start_sherlock_run'&&args===undefined)args={};
+ if(['start_sherlock_run','start_weekendkrant_executor'].includes(name)&&args===undefined)args={};
  const contract=Object.hasOwn(contracts,name)?contracts[name]:null;
  if(!contract||!contract.valid(args))return fail('invalid_request');
  const response=await post(contract.path,args,env,fetcher);
  if(response.status==='error')return response;
  const result=contract.result(response.result,args);
- return result?{status:'success',...result}:fail('response_invalid');
+ if(!result)return fail('response_invalid');
+ return name==='start_weekendkrant_executor'?result:{status:'success',...result};
 }
 const json=(value,status=200)=>Response.json(value,{status});
 export default {async fetch(request,env){
