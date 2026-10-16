@@ -1,5 +1,9 @@
 # Intelligente workers, rollen en persistente redactie
 
+Vóór iedere volgende fase/PR gelden [AGENTS.md](../AGENTS.md) en de
+[blijvende ontwikkelregels](lessons-learned.md): beoordeel en actualiseer
+`tests/fast_track.txt` voor de impact van die PR voordat hij reviewklaar is.
+
 ## Status en ontwerpbesluit van 13 oktober 2026
 
 Dit document is het canonieke doelontwerp voor execution identity en orchestratie
