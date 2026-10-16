@@ -49,7 +49,7 @@ class DatabaseTests(unittest.TestCase):
         with sqlite3.connect(':memory:') as fresh:
             database.migrate(fresh)
             self.assertEqual([row for row in self.schema(fresh)
-                              if not row[1].startswith(('sherlock_', 'source_materializations', 'job', 'executor_', 'dispatcher_'))], expected)
+                              if not row[1].startswith(('sherlock_', 'source_materializations', 'job', 'executor_', 'dispatcher_', 'leonardo_'))], expected)
             self.assertEqual(fresh.execute('PRAGMA user_version').fetchone(), (database.SCHEMA_VERSION,))
             self.assertEqual(fresh.execute('PRAGMA foreign_keys').fetchone(), (1,))
             before = list(fresh.iterdump())

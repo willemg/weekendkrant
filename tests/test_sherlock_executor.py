@@ -286,7 +286,7 @@ SherlockExecutor(db).start(dict(operation_id='start:one',activation_id='schedule
                     database.migrate(db)
             self.assertEqual(list(db.iterdump()), before)
             executor = SherlockExecutor(db)
-            self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0], 10)
+            self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0], database.SCHEMA_VERSION)
             # A running legacy producer must be stopped explicitly, not silently adopted.
             self.assertEqual(self.start(executor=executor), {'claim': None})
             SherlockState(db).finish_run(legacy, 'completed')

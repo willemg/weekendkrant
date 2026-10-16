@@ -143,3 +143,7 @@ Generieke jobopslag (fase 3) en MCP/control-plane (fase 4), Sherlock-adapter (fa
 conservatieve claim-/herstel- en operation-retrycontract
 staan in [docs/jobs.md](docs/jobs.md) en [Sherlock-executor](docs/sherlock-executor.md);
 operationele invoering volgt afzonderlijk.
+
+Tests: `./start_tests.sh` kiest [impacttests](docs/test-fast-track.md);
+`./start_tests.sh --all` draait de volledige suite.
+De eerste [Leonardo-backendslice](docs/leonardo-state.md) gebruikt schema 11.

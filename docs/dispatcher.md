@@ -27,8 +27,9 @@ lockverwerving:
    expiry, receipts, admission en bestaand ready werk worden volledig herbeoordeeld.
    Nieuw ready werk gaat dus vóór productie, en een inmiddels bezette of gepauzeerde
    lane levert een duurzame lege receipt op. Replay, onmiddellijke admissionweigering
-   en bestaand ready/recovery-werk hebben helemaal geen preparation nodig. Momenteel is uitsluitend
-   `SherlockProducer` geregistreerd. Geen rolrotatie in de dispatcher.
+   en bestaand ready/recovery-werk hebben helemaal geen preparation nodig. Geregistreerd zijn
+   `SherlockProducer` en de ready-only `LeonardoProducer`. Alleen Sherlock
+   produceert automatisch nieuwe jobs. Geen rolrotatie in de dispatcher.
 6. De geselecteerde job wordt opnieuw op ready-status, rol en opdracht gecontroleerd,
    atomair geclaimd en aan rolspecifieke execution-state gebonden. De generieke
    receipt, job, attempt en eventuele run worden samen gecommit. Daarna stopt
@@ -39,8 +40,10 @@ Sherlock behoudt zijn drie topics, immutable assignments/contracts, runbinding e
 legacy en recovery. Alleen nieuwe productie is geremd; ready recovery behoudt
 opdracht/topic. Geen claim betekent geen nieuwe run of verbruikte topicrotatie.
 `part_offers` worden nergens door de dispatcher gelezen of geconsumeerd.
-Ook een handmatig toegevoegde ready Leonardo-job is niet uitvoerbaar: Leonardo
-heeft nog geen geregistreerde adapter, state of outputcontract.
+Leonardo is uitvoerbaar wanneer `LeonardoStore.enqueue` een expliciete immutable
+assignment heeft vastgelegd; een losse jobrij zonder assignment volstaat niet.
+Zie het [fase-8-statecontract](leonardo-state.md). Er is geen automatische
+Leonardo-productie uit offers.
 
 ## Harde grenzen en pause
 
@@ -86,7 +89,8 @@ contractteksten mee. Oude tabellen/gegevens blijven intact. Nieuwe receipts beva
 het volledige rolantwoord zonder token; replay herstelt alleen de token uit
 `job_attempts`, zonder adapter- of deploymentbestanden nodig te hebben.
 De control-plane deelt de operatie- en activatienamespace met deze algemene tabel.
-Er verandert niets aan leases, claimtokens, finish/abandon/recovery of fencing.
+Leases, claimtokens en fencing blijven generiek. Fase 8 voegt voor Leonardo
+atomair gevalideerde statefinish toe en weigert losse recovery naar succeeded.
 
 Een toekomstige rol registreert een adapter bij `Dispatcher`:
 `role`, `prepare()` (begrensde deploymentinput tussen selectietransacties), `ready(job_id)`

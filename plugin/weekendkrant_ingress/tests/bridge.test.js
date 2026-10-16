@@ -253,3 +253,17 @@ test('job-backed source and fiche forward exact claim while refusing malformed c
   assert.equal((await submit({...payload,claim:bad},env,()=>assert.fail('network'))).code,'invalid_payload');
  }
 });
+
+test('Leonardo assignment and atomic state finish use existing generic tools',async()=>{
+ const state={schema_version:1,dossier_id:'dossier:1',version:1,previous_version:0,
+  hypotheses:[],claims:[],uncertainties:[],open_questions:[],processed_refs:['part:1:1']};
+ const claim={job_id:4,attempt_id:8,token:'secret',lease_until:'2026-10-16T14:00:00.000000+00:00',role:'Leonardo',
+  input:{state:null,parts:[{ref:'part:1:1',content:'source'}]},input_refs:['sha256:input'],
+  role_contract_ref:'sha256:role',role_contract:'Leonardo',output_contract_ref:'sha256:output',output_contract:'state-v1',result_ref:'leonardo-state:dossier:1:1'};
+ assert.deepEqual(await invoke('start_weekendkrant_executor',{operation_id:'start:leo',activation_id:'leo'},claim),{status:'success',...claim});
+ const args={job_id:4,attempt_id:8,token:'secret',operation_id:'finish:leo',status:'succeeded',output_refs:[claim.result_ref],leonardo_state:state};
+ const result={job_id:4,attempt_id:8,job_status:'succeeded'};
+ assert.deepEqual(await invoke('finish_weekendkrant_job',args,result),{status:'success',...result});
+ for(const invalid of [null,[],{text:'x'.repeat(32769)}])
+  assert.equal((await callTool('finish_weekendkrant_job',{...args,leonardo_state:invalid},env,()=>assert.fail('network'))).code,'invalid_request');
+});

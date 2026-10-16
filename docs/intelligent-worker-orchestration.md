@@ -523,12 +523,17 @@ via fase 5 kan draaien; zij is geen voorwaarde meer voor die eerste migratie.
 
 ### Fase 8 — Leonardo-state en Leonardo-job
 
-- [ ] Dossieridentiteit, rolling state en stateversies ontwerpen en opslaan.
-- [ ] Hypotheses, claims, onzekerheden, open vragen en part/revisionreferenties opnemen.
-- [ ] Begrensde Leonardo-job met expliciete input- en outputstate valideren.
-- [ ] Geheugen-/missieprincipes uit het eerdere Leonardo-ontwerp hergebruiken.
+- [x] Dossieridentiteit, rolling state en stateversies ontwerpen en opslaan.
+- [x] Hypotheses, claims, onzekerheden, open vragen en part/revisionreferenties opnemen.
+- [x] Begrensde Leonardo-job met expliciete input- en outputstate valideren.
+- [x] Geheugen-/missieprincipes uit het eerdere Leonardo-ontwerp hergebruiken.
 
 Leonardo krijgt geen permanente worker; ieder vervolg krijgt zijn state opnieuw.
+De eerste backend-slice is geïmplementeerd: expliciete dossier/jobaanmaak,
+ready-only dispatcheradapter en atomair gevalideerde statefinish via HTTP/MCP.
+Zie [het v1-contract en de grenzen](leonardo-state.md). Automatische jobproductie
+uit offers en de operationele proefcyclus blijven fase 9; fase 8 is hiermee
+backendmatig geïmplementeerd, nog niet gedeployd.
 
 ### Fase 9 — eerste volledige Sherlock/Leonardo-cyclus
 
