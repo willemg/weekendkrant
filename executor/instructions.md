@@ -1,6 +1,6 @@
 Roep `start_weekendkrant_executor()` aan en bewaar de geretourneerde `executor_id`. Probeer bij een fout maximaal 3 keer, met 10 seconden tussen de pogingen. Als alle pogingen mislukken, meld de fout en stop.
 
-Stop bij `claim:null`.
+Stop als `executor_id` null is.
 
 Valideer een ontvangen claim met `validate_weekendkrant_claim`. Stop als de claim niet geldig is.
 
