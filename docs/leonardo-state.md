@@ -110,3 +110,13 @@ semantische dossierkeuze uit in Ariadne en consumeert bestaande offers niet.
 Deployment vraagt schema 11, backendherstart, synchronisatie/publicatie van de
 MCP-bridge en synchronisatie van `docs/agents/executor.md`; deze PR doet geen
 productiedeployment of wijziging van de actieve scheduled task.
+
+## Eerste fase-9-experiment
+
+De [lokale operatorbrug en proefprocedure](phase-9-trial.md) koppelen expliciet
+gekozen bestaande sealed offers aan een bewust gekozen dossier. De brug gebruikt
+uitsluitend `LeonardoStore.enqueue()`, inclusief de fase-8.5-contractsnapshot;
+zij leest of injecteert zelf geen roltekst. Dispatch en finish blijven ongewijzigd.
+Er is geen automatische routing of offerconsumptie. Schema 11, fase-8.5-backend,
+Sites-bridge met `leonardo_state` en rolagnostische executor zijn volgens de
+operator gedeployd; de echte scheduled Leonardo-proef blijft afzonderlijk open.

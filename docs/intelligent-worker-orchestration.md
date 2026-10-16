@@ -546,12 +546,19 @@ backendmatig geïmplementeerd, nog niet gedeployd.
 
 ### Fase 9 — eerste volledige Sherlock/Leonardo-cyclus
 
-- [ ] Bijvoorbeeld Sherlock topic 1 → topic 2 → topic 3 → Leonardo als experiment uitvoeren.
-- [ ] Verse materialisatie, offers, stateovergang en provenance end-to-end controleren.
-- [ ] Backlog en informatiewinst meten en prioriteiten daarop aanpassen.
+- [x] Lokale expliciete operatorbrug uit gesloten PR #58 porten naar fase 8.5: sealed offer → bewuste dossierkeuze → `LeonardoStore.enqueue()` met immutable runtimecontracten.
+- [x] Inspectie van provenance, dispatcher/attempts, backlog, inputomvang en objectieve state-delta's; actueel proefrunbook.
+- [ ] Eén echte gecontroleerde Sherlock → Ariadne → sealed offer → expliciete dossierkeuze → Leonardo-job → bestaande scheduled executor → Leonardo-state-cyclus uitvoeren en bewijs bewaren.
+- [ ] Inhoudelijke opbrengst beoordelen en pas daarna bewust eventuele automatische routingpolicy kiezen.
 
-De voorbeeldcyclus is geen permanente hardcoded policy. Later kunnen expliciete
-missies, verificatie of beschikbare input een andere volgorde rechtvaardigen.
+Zie [het fase-9-proefrunbook](phase-9-trial.md). Schema 11, fase-8.5-backend,
+gepubliceerde `leonardo_state`-bridge en rolagnostische executor zijn volgens de
+operator ingevoerd; controleer vóór de proef opnieuw de actuele runtime-state.
+De lokale tests bewijzen geen echte scheduled Leonardo-uitvoering. Deze PR doet
+geen deployment of productieproef. Topic is geen dossier; Ariadne kiest geen
+semantisch dossier. Geen automatische offerconsumptie of vaste topicvolgorde.
+Aantallen, tokenmetingen en itemwijzigingen zijn observaties, geen bewezen
+inhoudelijke vooruitgang of informatiewinstscore.
 
 ### Fase 10 — Kuifje
 
