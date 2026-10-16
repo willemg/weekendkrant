@@ -1,5 +1,3 @@
-Verkrijg één verse, betrouwbare timezone-aware huidige tijd. Als dat niet lukt, meld kort dat geen backendcall is uitgevoerd en stop.
-
 Normaliseer die tijd naar UTC en kies het dichtstbijzijnde hele UTC-uur. Ga alleen verder wanneer de afstand tot dat uur maximaal 15 minuten is. Vorm dan:
 - `activation_id=weekendkrant:executor-1:<YYYY-MM-DDTHH:00:00Z>`
 - `operation_id=start:<activation_id>`
