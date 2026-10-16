@@ -16,7 +16,7 @@ def reconstruct(db, part_id, revision):
     Unknown serializers/tokenizers fail closed, never authorize deletion.
     """
     from daily import Fiche, token_count
-    from parts import render, TOKENIZER
+    from part_format_v1 import render, TOKENIZER
     row = db.execute('''SELECT p.week,p.topic,p.part,r.sha256,r.tokens,
         r.tokenizer,r.reserved_tokens FROM parts p JOIN part_revisions r
         ON r.part_id=p.id WHERE p.id=? AND r.revision=?''', (part_id, revision)).fetchone()

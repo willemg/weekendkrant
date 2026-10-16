@@ -176,3 +176,16 @@ class RevisionStorageTests(PartFixture):
             self.assertEqual([r['status'] for r in cleanup(db, self.output, True)['revisions']],
                              ['missing', 'removed', 'protected'])
             self.assertEqual(len([reconstruct(db, 1, r) for r in (1, 2, 3)]), 3)
+
+    def test_v1_reconstruction_survives_replaced_current_renderer_and_tokenizer(self):
+        self.grow(2)
+        with sqlite3.connect(self.db) as db:
+            expected = reconstruct(db, 1, 1)
+            # The historical file is gone: the frozen serializer is provenance.
+            self.assertFalse(Path(db.execute(
+                'SELECT path FROM part_revisions WHERE revision=1').fetchone()[0]).exists())
+            with patch('parts.render', side_effect=AssertionError('future active renderer')), \
+                    patch('parts.TOKENIZER', 'future-tokenizer'):
+                self.assertEqual(reconstruct(db, 1, 1), expected)
+                self.assertEqual(hashlib.sha256(expected).hexdigest(), db.execute(
+                    'SELECT sha256 FROM part_revisions WHERE revision=1').fetchone()[0])

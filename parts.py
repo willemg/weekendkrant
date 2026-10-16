@@ -35,11 +35,9 @@ class PlannedRevision:
 
 
 def render(items, week, topic, part, revision, reserve):
-    head = (f'WEEKENDKRANT-PART-1\nweek: {week}\ntopic: {topic}\npart: {part}\n'
-            f'revision: {revision}\ntokenizer: {TOKENIZER}\nreserved_tokens: {reserve}\n\n')
-    return head + ''.join(
-        f'\n--- SOURCE {f.path} date={f.date} sha256={f.sha256} bytes={len(f.data)} ---\n'
-        + f.data.decode('utf-8') + '\n--- END SOURCE ---\n' for f in items)
+    """Current writer; historical reconstruction uses the frozen v1 directly."""
+    from part_format_v1 import render as render_v1
+    return render_v1(items, week, topic, part, revision, reserve)
 
 
 def weave(fiches, week, topic, state, existing, count, limit, reserve):

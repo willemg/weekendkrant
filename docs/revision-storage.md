@@ -39,8 +39,17 @@ inclusief datum, bronhash, bytegrootte, revisieheader en reserve. De functie
 controleert aaneengesloten posities, brontopic/schema/hash, volledige revisiehash,
 tokenizer en tokenmeting met de gepinde tokenizer. Ontbrekende of afwijkende audit,
 onbekende tokenizer/serialization en corrupte bytes geven een fout; ze geven
-nooit toestemming om een file te verwijderen. Behoud de renderer en tokenizer
-voor dit historische formaat ook bij een eventuele latere formaatwijziging.
+nooit toestemming om een file te verwijderen.
+
+`part_format_v1.py` bevriest het v1-serialisatiecontract en zijn tokenizernaam.
+Historische reconstructie gebruikt deze renderer rechtstreeks, onafhankelijk van
+`parts.render` en de actieve `parts.TOKENIZER`. De huidige schrijver delegeert
+voorlopig naar dezelfde v1-renderer; wijzigingen aan een toekomstig actief formaat
+mogen het bevroren v1-contract niet aanpassen. Alle bestaande revisies zijn v1,
+dus nu is geen schemawijziging nodig. Een nieuw partformaat vereist expliciete
+versie-identificatie en dispatch/migratie vóór nieuwe revisies fysiek retirebaar
+zijn. Alleen de actieve renderer vervangen is daarvoor onvoldoende: hashcontrole
+weigert afwijkende reconstructies. Behoud ook de gepinde tokenizer voor v1.
 
 Retirement vereist een byte-exacte reconstructie én een byte-exacte fysieke kopie.
 Na die controle volgt onder dezelfde Ariadne-runtime-lock een korte SQLite
