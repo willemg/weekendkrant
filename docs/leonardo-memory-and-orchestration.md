@@ -45,13 +45,29 @@ om fiches te ordenen, state samen te vatten of onderzoeksvragen te kiezen.
 | --- | --- |
 | Sherlock | Vindt signalen en levert bronvaste fiches met expliciet topic. |
 | Ariadne | Valideert metadata, bewaart bronnen en state, telt tokens, bundelt deterministisch, bewaakt budgetten en voert toegestane acties uit. |
-| Leonardo | Herkent patronen, kiest inhoudelijke dossierverbanden, bewaakt per dossier/verhaal bron- en perspectiefbreedte en onafhankelijke bevestiging, schrijft rolling state en formuleert gerichte onderzoeksmissies. |
+| Leonardo | Herkent inhoudelijke en structurele patronen, kiest inhoudelijke dossierverbanden, bewaakt per dossier/verhaal bron- en perspectiefbreedte en onafhankelijke bevestiging, schrijft rolling state en formuleert gerichte onderzoeksmissies. |
+| Einstein (gepland) | Analyseert longitudinale patronen in persistente redactionele state: groei/verzwakking, terugkeer, karakterverandering en langetermijnontwikkelingen. |
 | Kuifje | Onderzoekt een afgebakende missie en retourneert bronnen, bevindingen, onzekerheden en eventuele lege oogst onder de meegegeven identifiers. |
 | Striktland | Controleert claims tegen oorspronkelijke bronfragmenten. |
 | Minos | Herschrijft waar nodig één keer de problematische passage. |
 
 Kuifje is een toekomstige onderzoeksrol. Sherlock blijft de brede reporter:
 dit ontwerp schuift geen missieadministratie of extra synthese naar hem door.
+
+## Inhoudelijke ruimte en tijdsdimensie
+
+Leonardo onderzoekt inhoudelijke samenhang, onafhankelijke sporen binnen een topic,
+ondersteunende of tegenstrijdige claims/hypotheses, bron- en perspectieflacunes,
+dossierverbanden en begrensde onderzoeksvragen. Topic is niet automatisch dossier.
+Datums, volgorde, causaliteit en andere temporele bronfeiten blijven bruikbaar om
+het aangeboden materiaal correct te begrijpen.
+
+Einstein onderzoekt later de tijdsdimensie: wat doorheen opeenvolgende observaties
+of states groeit, verzwakt, versnelt, terugkeert of uitdooft, wat van karakter
+verandert en welke oude signalen later betekenis krijgen. Longitudinale trend-
+en evolutieanalyse is zijn verantwoordelijkheid, niet die van Leonardo. Einstein
+is gepland; deze PR voegt geen rolbestand, job, producer/adapter, scheduler,
+schema of runtimecode voor hem toe. Ariadne verricht geen semantische analyse.
 
 ## Drie soorten context
 
@@ -69,6 +85,12 @@ De identiteit van Leonardo zit in de combinatie van model, vaste instructies,
 persistente state en het protocol dat vervolgcalls samenstelt. Een eventueel
 providermechanisme voor conversaties of caching vervangt onze lokale audit niet.
 
+Rolling dossierstate, `previous_version` en opeenvolgende stateversies zijn opslag-
+en continuïteitsmechanismen. Een langlevend of bijgewerkt dossier maakt Leonardo
+niet verantwoordelijk voor temporele analyse. Hij gebruikt eerdere state als
+compacte context voor zijn volgende structurele analyse; vergelijking van states
+om trends of evolutie door de tijd te ontdekken behoort later bij Einstein.
+
 Rolling state is verliesgevende compressie. Een eigen samenvatting wordt geen
 nieuwe primaire bron en mag bij herhaling niet vanzelf aan bewijskracht winnen.
 Originele fiches blijven beschikbaar voor gerichte herlezing en verificatie.
@@ -81,7 +103,7 @@ Deze begrippen hebben verschillende grenzen:
 | --- | --- | --- |
 | Dagelijkse consumptie | De deterministische selectie en verwerking van queue-items. | Pending payloaddatums tot en met vandaag in Europe/Brussels. |
 | Topic | Vooraf vastgelegde brede rubriek, momenteel 1, 2 of 3. | Expliciete fichemetadata. |
-| Logisch dossier of draad | Een inhoudelijk onderzoek met eigen state en eventueel missies. | Expliciete redactionele beslissing van Leonardo. |
+| Logisch dossier of draad | Een inhoudelijk onderzoek met eigen state en eventueel missies. | Intelligente redactionele keuze; definitieve automatische routingrol/policy nog te bepalen. |
 | Part | Een begrensde hoeveelheid broncontext voor een Leonardo-call. | Tokenbudget of expliciet aanbiedmoment. |
 
 De huidige code noemt een fysiek inputbestand `thread`. Dat is nog geen

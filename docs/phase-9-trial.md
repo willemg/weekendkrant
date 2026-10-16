@@ -7,6 +7,22 @@ model-API-call vanuit bibib of permanente Leonardo-worker. Ariadne kiest geen
 semantisch dossier. Topic is geen dossier, meerdere dossiers per topic blijven
 mogelijk. Er is geen automatische offerconsumptie of vaste topicvolgorde.
 
+De menselijke/operator-dossierkeuze is uitsluitend teststeun voor deze eerste
+gecontroleerde cyclus, niet het doelmodel van Weekendkrant. Het uiteindelijke
+systeem moet zichzelf zonder menselijke routing organiseren. Toekomstige
+semantische dossierkeuze vereist intelligentie; welke rol of policy dat precies
+doet blijft open. Eén dossier per topic, topic-ID → dossier-ID, first-offer-wins,
+een vaste topicvolgorde of semantische interpretatie door Ariadne zijn daarvoor
+geen vervanging. Ariadne blijft de deterministische opslag-, validatie-, budget-
+en routinglaag. Deze PR implementeert die automatische keuze niet.
+
+Leonardo voert tijdens de proef zijn actuele [runtimecontract](../roles/leonardo.md)
+uit: structurele/semantische organisatie van aangeboden materiaal. Eerdere state
+is compacte context; rolling state en `previous_version` geven continuïteit en
+geen opdracht tot longitudinale trendanalyse. Temporele bronfeiten mag hij wel
+gebruiken. Analyse van evolutie doorheen states hoort later bij Einstein, die
+hier geen runtime krijgt.
+
 Deze PR levert een reproduceerbaar lokaal bewijs van operatorbrug → dispatcher
 → statefinish. De eerste **echte** Sherlock → Ariadne → offer → scheduled
 Leonardo → state-cyclus moet daarna operationeel worden uitgevoerd en vastgelegd;

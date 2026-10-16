@@ -1,4 +1,6 @@
-# Fase 9: geporteerde operatorgrens, bestaande snapshot- en offergaranties.
+# Fase 9: operatorgrens en actueel Leonardo-runtimecontract.
+# Behouden: operator snapshot actuele role bij enqueue; bind/replay/recovery
+# gebruiken uitsluitend immutable contracten. Geen extra runtime/schema-impact.
 test_leonardo_operator
 test_role_contracts
 test_leonardo.LeonardoTests.test_assignment_dispatch_finish_replay_and_next_snapshot
