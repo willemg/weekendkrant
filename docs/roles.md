@@ -180,10 +180,9 @@ met immutable revisies en exact bronarchief, en de
 - maximaal 30.000 geserialiseerde brontokens per draad bewaken; deze
   deterministische partgrens blijft bruikbaar, maar is niet langer bedoeld als
   afleiding van een definitieve totale Leonardo-contextgrens. De huidige
-  schema-11/backend valideert nog maximaal 35.000 lokale assignmenttokens; fase
-  9.6 zal die tijdelijke projectgrens verruimen of vervangen door een ruime
-  technische fail-safe om Leonardo's werkelijke context- en recallgebruik te
-  karakteriseren;
+  schema-12/backend gebruikt een ruime technische fail-safe van 1.048.576
+  lokale tokens en 8 MiB voor startinput plus recall per attempt, om Leonardo's
+  contextgebruik te karakteriseren;
 - verwerkingsstatus en provenance in een lokale SQLite-database administreren;
 - mislukte pogingen zichtbaar bewaren terwijl queue-items pending blijven;
 - alle runtime-informatie via de centrale Python-`logging`configuratie schrijven,
@@ -226,11 +225,12 @@ Ariadne vlecht draden; ze denkt niet.
 ## Leonardo — de schrijver en synthesizer
 
 Leonardo krijgt context met nieuwe bronparts en de geldige compacte dossierstate;
-later kan daar gerichte historical recall en Kuifje-missiecontext bijkomen. Elke
+gerichte historical recall is binnen dezelfde job beschikbaar; Kuifje-missiecontext
+volgt later. Elke
 uitvoering wordt expliciet samengesteld; continuïteit zit in de opgeslagen state
 en bronnen. Dossierstate/jobs en de eerste echte scheduled statecyclus zijn
-inmiddels operationeel bewezen. Historical recall en Kuifje-acties zijn nog niet
-geïmplementeerd.
+inmiddels operationeel bewezen. Historical recall is lokaal getest; productie-invoering blijft open. Kuifje-acties
+zijn nog niet geïmplementeerd.
 
 Leonardo onderzoekt primair de inhoudelijke/structurele ruimte: welke informatie
 samenhangt, welke onafhankelijke sporen binnen een topic bestaan, welke claims en
@@ -259,7 +259,7 @@ Leonardo wel gebruiken om het aangeboden materiaal correct te begrijpen.
 - state als verliesgevende kenniskaart mogen consolideren: samenvatten,
   samenvoegen en herschrijven is toegestaan zolang het lossless bronarchief via
   stabiele refs beschikbaar blijft;
-- zodra fase 9.6 dit ondersteunt, eerder verwerkt materiaal gericht opnieuw
+- via `recall_weekendkrant_part` eerder verwerkt materiaal gericht opnieuw
   opvragen wanneer een later spoor herlezing nodig maakt, in plaats van alle oude
   bronnen standaard opnieuw in context te laden;
 - expliciete dossierkoppelingen en begrensde Kuifje-missies voorstellen;

@@ -6,6 +6,7 @@ All source reconstruction/tokenization happens before the short enqueue lock.
 
 import hashlib
 import json
+import re
 from pathlib import Path
 
 import role_contracts
@@ -15,6 +16,11 @@ from part_format_v1 import token_count
 from revision_storage import reconstruct
 
 ROOT = Path(__file__).resolve().parent
+
+# Local allocation/serialization guardrails, NOT measured provider context limits
+# or economic targets. Apply to start snapshot plus cumulative delivered recalls.
+MAX_CONTEXT_TOKENS = 1048576
+MAX_CONTEXT_BYTES = 8 * 1024 * 1024
 
 
 def canonical(value):
@@ -102,6 +108,79 @@ class LeonardoStore:
         self.store = JobStore(db, clock)
         self.db = db
 
+    def _recall_authority(self, args, now):
+        """Read-only current fencing, deliberately without a lifecycle expiry sweep."""
+        from job_control import ControlConflict
+        row = self.db.execute(
+            """SELECT l.dossier_id,l.snapshot,l.tokens FROM leonardo_assignments l
+               JOIN jobs j ON j.id=l.job_id
+               JOIN job_attempts a ON a.job_id=j.id
+               WHERE j.id=? AND a.id=? AND a.token=? AND j.role='Leonardo'
+                 AND j.status='running' AND a.status='running' AND a.lease_until>?
+                 AND a.id=(SELECT max(id) FROM job_attempts WHERE job_id=j.id)
+                 AND EXISTS(SELECT 1 FROM executor_activations e
+                            WHERE e.job_id=j.id AND e.attempt_id=a.id)""",
+            (args['job_id'], args['attempt_id'], args['token'], _stamp(now)),
+        ).fetchone()
+        if row is None:
+            raise ControlConflict('Recall requires current Leonardo authority')
+        return row
+
+    def recall(self, args):
+        """Selective read under current authority; only audit is appended.
+
+        recall_id is attempt-local: retry exact arguments, never a cached authority.
+        Reconstruction and tokenization run outside the short final write lock.
+        """
+        from job_control import JobControl, ControlConflict
+        JobControl._schema(args, {'job_id', 'attempt_id', 'token', 'ref', 'recall_id'})
+        JobControl._claim_fields(args)
+        _text(args['recall_id'], 128)
+        _text(args['ref'], 128)
+        self.store._idle()
+        dossier, snapshot, start_tokens = self._recall_authority(args, self.store.clock())
+        data = json.loads(snapshot)
+        allowed = {p['ref'] for p in data['parts']}
+        if data['state']:
+            allowed.update(data['state']['processed_refs'])
+        if args['ref'] not in allowed:
+            raise ControlConflict('Reference outside immutable dossier provenance')
+        match = re.fullmatch(r'part:([1-9][0-9]*):([1-9][0-9]*)', args['ref'])
+        if match is None:
+            raise ControlConflict('Invalid historical reference')
+        part, revision = map(int, match.groups())
+        content = reconstruct(self.db, part, revision)
+        text = content.decode('utf-8')
+        response = dict(ref=args['ref'], sha256=hashlib.sha256(content).hexdigest(),
+                        content=text, bytes=len(content), tokens=token_count(text))
+        with self.store._write() as now:
+            # Expired/finished/recovered during reconstruction: return no bytes,
+            # write no delivery record, and never mutate lifecycle state here.
+            self._recall_authority(args, now)
+            prior = self.db.execute(
+                'SELECT ref,bytes,tokens FROM leonardo_recalls WHERE attempt_id=? AND recall_id=?',
+                (args['attempt_id'], args['recall_id']),
+            ).fetchone()
+            if prior:
+                if prior != (args['ref'], response['bytes'], response['tokens']):
+                    raise ControlConflict('Recall identity reused with different request')
+            else:
+                used_bytes, used_tokens = self.db.execute(
+                    'SELECT COALESCE(sum(bytes),0),COALESCE(sum(tokens),0) FROM leonardo_recalls WHERE attempt_id=?',
+                    (args['attempt_id'],),
+                ).fetchone()
+                if (start_tokens + used_tokens + response['tokens'] > MAX_CONTEXT_TOKENS
+                        or len(snapshot.encode('utf-8')) + used_bytes + len(content) > MAX_CONTEXT_BYTES):
+                    raise ControlConflict('Leonardo technical context fail-safe exceeded')
+                self.db.execute(
+                    """INSERT INTO leonardo_recalls
+                       (dossier_id,job_id,attempt_id,recall_id,ref,part_id,revision,bytes,tokens,recalled_at)
+                       VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                    (dossier, args['job_id'], args['attempt_id'], args['recall_id'], args['ref'],
+                     part, revision, len(content), response['tokens'], _stamp(now)),
+                )
+        return response
+
     def create_dossier(self, dossier_id, topic):
         _text(dossier_id, 128)
         if type(topic) is not int or topic not in (1, 2, 3):
@@ -188,8 +267,8 @@ class LeonardoStore:
             )
         )
         tokens = token_count(snapshot)
-        if tokens > 35000 or len(snapshot.encode()) > 250000:
-            raise ValueError("Leonardo input budget exceeded")
+        if tokens > MAX_CONTEXT_TOKENS or len(snapshot.encode()) > MAX_CONTEXT_BYTES:
+            raise ValueError("Leonardo technical input fail-safe exceeded")
         digest = hashlib.sha256(snapshot.encode()).hexdigest()
         from job_control import _AtomicStore
 

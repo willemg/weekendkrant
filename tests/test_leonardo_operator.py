@@ -96,6 +96,16 @@ class OperatorTests(PartFixture):
         self.assertEqual(report['offers'][0]['id'], offer)
         self.assertEqual(report['dispatch'][0]['activation_id'], 'trial-slot')
         self.assertNotIn(claim['token'], output.getvalue())
+        output = StringIO()
+        with redirect_stdout(output):
+            main(['--db', str(self.db), 'inspect', '--job', str(job), '--compact'])
+        compact = json.loads(output.getvalue())
+        self.assertEqual(set(compact), {'job_id', 'dossier_id', 'status', 'context_usage'})
+        attempt = compact['context_usage']['attempts'][0]
+        self.assertEqual(attempt['state_tokens'], report['state_metadata']['tokens'])
+        self.assertEqual(attempt['recall_count'], 0)
+        self.assertIsNone(attempt['provider_usage'])
+        self.assertNotIn(claim['token'], output.getvalue())
 
     def test_multiple_offers_exact_order_and_changed_operation(self):
         first = self.offer()
@@ -107,6 +117,24 @@ class OperatorTests(PartFixture):
         self.assertEqual(self.enqueue([second, first]), job)
         from leonardo_operator import inspect_job
         self.assertEqual([o['id'] for o in inspect_job(self.conn, job)['offers']], [second, first])
+        from part_format_v1 import token_count
+        snapshot_text, start_tokens = self.conn.execute(
+            'SELECT snapshot,tokens FROM leonardo_assignments WHERE job_id=?', (job,)).fetchone()
+        snapshot = json.loads(snapshot_text)
+        before = self.conn.total_changes
+        compact = inspect_job(self.conn, job, compact=True)['context_usage']
+        expected = [dict(ref=p['ref'], tokens=token_count(p['content']),
+                         bytes=len(p['content'].encode('utf-8'))) for p in snapshot['parts']]
+        self.assertEqual(compact['new_parts'], expected)
+        self.assertEqual(compact['new_part_count'], 2)
+        self.assertEqual(compact['new_part_tokens'], sum(p['tokens'] for p in expected))
+        self.assertEqual(compact['new_part_bytes'], sum(p['bytes'] for p in expected))
+        self.assertEqual(compact['previous_state_tokens'], 0)
+        self.assertEqual(compact['start_input_tokens'], start_tokens)
+        self.assertGreater(start_tokens, compact['new_part_tokens'])
+        self.assertEqual(inspect_job(self.conn, job)['context_usage'], compact)
+        self.assertEqual(self.conn.total_changes, before)
+        self.assertFalse(self.conn.in_transaction)
         for changed in ([second], [first, second], [first, 999]):
             with self.assertRaises(ValueError):
                 self.enqueue(changed)
@@ -169,6 +197,20 @@ class OperatorTests(PartFixture):
         self.assertEqual(report['delta']['processed_refs'], dict(added=[]))
         self.assertEqual(report['state_metadata']['previous_version'], 1)
         self.assertEqual(report['state_metadata']['version'], 2)
+        from leonardo import canonical
+        from part_format_v1 import token_count
+        snapshot = json.loads(self.conn.execute(
+            'SELECT snapshot FROM leonardo_assignments WHERE job_id=?', (job,)).fetchone()[0])
+        before_tokens = token_count(canonical(snapshot['state']))
+        usage = inspect_job(self.conn, job, compact=True)['context_usage']
+        self.assertEqual(usage['previous_state_tokens'], before_tokens)
+        self.assertEqual(before_tokens, self.conn.execute(
+            'SELECT tokens FROM leonardo_states WHERE version=1').fetchone()[0])
+        self.assertEqual(usage['new_part_count'], 1)
+        self.assertEqual(usage['attempts'][0]['state_tokens'], report['state_metadata']['tokens'])
+        self.assertEqual(usage['attempts'][0]['recall_tokens'], 0)
+        self.assertEqual(usage['attempts'][0]['recall_bytes'], 0)
+        self.assertIsNone(usage['attempts'][0]['provider_usage'])
 
     def test_cli_requires_existing_database(self):
         with self.assertRaises(sqlite3.OperationalError):

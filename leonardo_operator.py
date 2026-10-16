@@ -6,7 +6,8 @@ from pathlib import Path
 import sqlite3
 
 from jobs import _id
-from leonardo import LeonardoStore
+from leonardo import LeonardoStore, canonical
+from part_format_v1 import token_count
 
 
 def enqueue_offers(db, operation_id, dossier_id, base_version, offer_ids):
@@ -33,11 +34,50 @@ def rows(db, sql, args=()):
     return [dict(zip([c[0] for c in cursor.description], row)) for row in cursor]
 
 
-def inspect_job(db, job):
+def context_usage(db, job):
+    """Local measurements per attempt; unknown provider usage never means zero."""
+    assignment = db.execute('SELECT tokens,snapshot FROM leonardo_assignments WHERE job_id=?', (job,)).fetchone()
+    if assignment is None:
+        raise ValueError('Unknown Leonardo assignment')
+    snapshot = json.loads(assignment[1])
+    # Measure exact offered text, not the enclosing JSON, contracts or state.
+    # 'New' means offered in this assignment, not semantic novelty/deduplication.
+    new_parts = [dict(ref=part['ref'], tokens=token_count(part['content']),
+                      bytes=len(part['content'].encode('utf-8')))
+                 for part in snapshot['parts']]
+    previous_state_tokens = (token_count(canonical(snapshot['state']))
+                             if snapshot['state'] is not None else 0)
+    attempts = rows(db, 'SELECT id AS attempt_id,status FROM job_attempts WHERE job_id=? ORDER BY id', (job,))
+    for attempt in attempts:
+        attempt['recalls'] = rows(db, '''SELECT id AS sequence,recall_id,ref,bytes,tokens,recalled_at
+            FROM leonardo_recalls WHERE attempt_id=? ORDER BY id''', (attempt['attempt_id'],))
+        attempt['recall_count'] = len(attempt['recalls'])
+        attempt['recall_tokens'] = sum(r['tokens'] for r in attempt['recalls'])
+        attempt['recall_bytes'] = sum(r['bytes'] for r in attempt['recalls'])
+        attempt['start_input_tokens'] = assignment[0]
+        attempt['local_context_tokens'] = assignment[0] + attempt['recall_tokens']
+        state = db.execute('SELECT tokens FROM leonardo_states WHERE attempt_id=?', (attempt['attempt_id'],)).fetchone()
+        attempt['state_tokens'] = state[0] if state else None
+        attempt['provider_usage'] = None
+    return dict(tokenizer='cl100k_base', new_part_count=len(new_parts),
+                new_part_tokens=sum(part['tokens'] for part in new_parts),
+                new_part_bytes=sum(part['bytes'] for part in new_parts),
+                new_parts=new_parts, previous_state_tokens=previous_state_tokens,
+                start_input_tokens=assignment[0],
+                start_input_bytes=len(assignment[1].encode('utf-8')), attempts=attempts)
+
+
+def inspect_job(db, job, compact=False):
     if db.in_transaction:
         raise ValueError('Inspection requires an idle connection')
     db.execute('BEGIN')  # One consistent read snapshot, without a writer lock.
     try:
+        if compact:
+            result = rows(db, '''SELECT a.job_id,a.dossier_id,j.status FROM leonardo_assignments a
+                JOIN jobs j ON j.id=a.job_id WHERE a.job_id=?''', (job,))
+            if not result:
+                raise ValueError('Unknown Leonardo assignment')
+            return dict(result[0], context_usage=context_usage(db, job))
         return _inspect_job(db, job)
     finally:
         db.rollback()  # Release the read snapshot, including on unknown jobs.
@@ -51,6 +91,7 @@ def _inspect_job(db, job):
         raise ValueError('Unknown Leonardo assignment')
     report = result[0]
     snapshot = report.pop('snapshot')
+    report['context_usage'] = context_usage(db, job)
     report['input_bytes'] = len(snapshot.encode('utf-8'))
     assignment = json.loads(snapshot)
     before = assignment['state'] or {}
@@ -110,6 +151,7 @@ def main(argv=None):
     enqueue.add_argument('--offer', required=True, action='append', type=int)
     inspect = sub.add_parser('inspect')
     inspect.add_argument('--job', required=True, type=int)
+    inspect.add_argument('--compact', action='store_true', help='Only local context usage per attempt')
     args = parser.parse_args(argv)
     # mode=rw prevents a typo from silently creating a fresh database.
     with closing(sqlite3.connect(args.db.resolve().as_uri() + '?mode=rw', uri=True)) as db:
@@ -126,7 +168,7 @@ def main(argv=None):
             result = dict(job_id=enqueue_offers(db, args.operation_id, args.dossier,
                                               args.base_version, args.offer))
         else:
-            result = inspect_job(db, args.job)
+            result = inspect_job(db, args.job, compact=args.compact)
         print(json.dumps(result, ensure_ascii=False, indent=2))
 
 

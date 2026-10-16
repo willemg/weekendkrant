@@ -28,8 +28,9 @@ beheerd door `database.py` en `migrations/`; de canonieke details staan in
 [databasebeheer](database.md). Zie het [huidige runtimecontract](daily-runtime.md).
 
 De eerste echte scheduled Leonardo-call en rolling dossierstate zijn inmiddels
-operationeel bewezen via fase 9. Nog niet geïmplementeerd zijn historical recall
-binnen een Leonardo-job, recalltelemetrie, Kuifje-missies, betrouwbare
+operationeel bewezen via fase 9. Fase 9.6 implementeert selectieve historical
+recall binnen een lopende job en recalltelemetrie; productieproeven daarvan
+blijven open. Nog niet geïmplementeerd zijn Kuifje-missies, betrouwbare
 providerusage-/kostenboekhouding, automatische aanbiedplanning en de
 uiteindelijke weekredactie. De verdere secties beschrijven het doelontwerp en
 worden hieronder aangevuld met de bevindingen uit de eerste productieproef.
@@ -104,12 +105,12 @@ moet later selectief opnieuw gelezen kunnen worden.
 
 De opslaglaag kan oude partrevisies al exact reconstrueren uit immutable
 membership en `source_archive`, ook wanneer een redundant revisiebestand is
-opgeruimd. De huidige Leonardo-runtime geeft een lopende job echter nog geen
-read-interface om zulke eerder verwerkte refs on demand terug te halen. Dat is de
-volgende ontbrekende geheugenbrug: state dient als compacte kaart en index,
-historical recall als gerichte terugweg naar het oorspronkelijke opgeslagen
-materiaal. Alle oude `processed_refs` standaard opnieuw in iedere request stoppen
-is uitdrukkelijk niet het doel.
+opgeruimd. Fase 9.6 biedt hiervoor `recall_weekendkrant_part` onder de actuele
+claim van dezelfde job, uitsluitend voor refs uit zijn immutable dossierprovenance.
+State dient als compacte kaart; recall als gerichte terugweg naar de oorspronkelijke
+bron. Alle oude refs standaard opnieuw aanbieden blijft uitgesloten. Zie het
+[recallcontract](leonardo-state.md#historical-recall-fase-96) voor autorisatie,
+retry-identiteit, reconstructie en audit per attempt.
 
 ## Dag, topic, dossier en part
 
@@ -264,19 +265,30 @@ expliciete missiecontext, nieuwe bronparts en eventueel gevraagde herlezing.
 De selectie volgt vaste volgorde en toegestane acties, niet Ariadnes oordeel
 over relevantie.
 
-De huidige schema-11/backend implementeert nog een harde grens van **35.000
-lokale `cl100k_base`-inputtokens per Leonardo-assignment**. Dat is na de eerste
-echte run niet langer een gekozen experimenteel optimum maar een tijdelijke
-implementatiegrens. De eerste succesvolle productieassignment mat 23.665
-inputtokens en schreef een state van 1.844 tokens. Dat is al vóór historical
-recall en is geen providerusage- of kostmeting.
+De oorspronkelijke 35K-grens was een arbitraire eerste cognitieve
+chunkinghypothese: geef Leonardo niet zoveel nieuw, onbekend bronmateriaal
+tegelijk dat hij zijn overzicht verliest. Het was geen kostenbudget. Fase 9.6
+laat die hypothese bewust los om empirisch te ontdekken hoeveel nieuw materiaal
+hij in één run goed structureel kan verwerken. De 1.048.576-token/8-MiB-grens is
+uitsluitend een technische noodrem, evenmin een optimale behapbare brok.
 
-Voor de eerstvolgende karakteriseringsfase willen we de 35K-projectgrens bewust
-verruimen of vervangen door een ruime technische fail-safe/contextgrens. Leonardo
-mag dan zelf laten zien hoeveel nieuwe en opnieuw opgehaalde historische context
-hij zinvol consumeert. De bestaande circa-30K partgrens kan als deterministische
-bundelgrens blijven bestaan; zij hoeft niet gelijk te zijn aan het totale
-Leonardo-contextbudget. De compacte state-outputgrens blijft juist waardevol.
+Schema 12 vervangt de vroege 35K-projectgrens door een lokale technische
+fail-safe: 1.048.576 `cl100k_base`-tokens en 8 MiB UTF-8 voor startinput plus
+cumulatieve unieke recallcontext per attempt. Deze ruime allocatie-/serialisatie-
+noodrem is geen economisch optimum of gemeten providercontextlimiet. Circa-30K
+parts en de compacte 4K outputstate blijven behouden. De eerste succesvolle
+productieassignment mat 23.665 lokale inputtokens en 1.844 state-tokens.
+
+Nieuwe broncontext (`new_part_count`, `new_part_tokens`, `new_part_bytes`,
+`new_parts` met ref/tokens/bytes per aangeboden part), vorige state
+(`previous_state_tokens`, 0 zonder state), totale startinput, dynamische recall en
+outputstate worden afzonderlijk geteld. De extra inspectiemetingen worden uit het
+immutable snapshot afgeleid, zonder nieuwe opslag. Zo kan karakterisering zich
+richten op de hoeveelheid nieuw aangeboden materiaal en de kwaliteit van de
+structurele synthese.
+`inspect --job ID --compact` toont per attempt de lokale tellingen, recallvolgorde
+en cumulatieve context; providerusage blijft expliciet onbekend. Ook een
+expired/failed attempt blijft aanwezig voor toekomstige usageboekhouding.
 
 Voor iedere werkelijke call geldt:
 
@@ -321,7 +333,7 @@ state; extra compressiecalls kosten eveneens tokens. Daarom bundelen we waar
 mogelijk hele fiches binnen het budget en laten we de kwaliteits- en
 kostenmetingen het aanbiedritme bepalen.
 
-De historische 35K-grens bleek geen bewezen economisch of kwaliteitsoptimum en
+De historische 35K-grens was een onbewezen cognitieve chunkinghypothese en
 wordt daarom in de karakteriseringsfase niet als doelwaarde behandeld. Iedere
 historical-recallresponse moet wel afzonderlijk auditbaar blijven met ten minste
 ref, bytes en lokaal gemeten tokens, zodat Ariadne later zowel startinput als
@@ -354,18 +366,15 @@ Schema, migratie en het cross-day vlechtwerk zijn geïmplementeerd, inclusief
 groei, overflow, retries, weekgrenzen en behoud van geregistreerde revisies.
 
 De lokale offer/seal-grens en de eerste echte Leonardo-statecyclus zijn
-geïmplementeerd en operationeel bewezen. Vóór Kuifje volgt nu eerst historical
-recall: een read-only brug van een lopende Leonardo-job naar eerder verwerkte
-immutable partrevisies, plus recalltelemetrie en meerdere karakteriseringsruns.
-Daarbij wordt de huidige 35K-assignmentgrens bewust herbekeken zonder de compacte
-state-outputgrens los te laten.
+geïmplementeerd en operationeel bewezen. Historical recall en lokale audit zijn
+in fase 9.6 geïmplementeerd en lokaal getest. Productie-invoering en meerdere
+karakteriseringsruns met daadwerkelijke recall blijven open vóór Kuifje.
 
 Daarna volgt het action-/missieprotocol: Leonardo kan een gerichte lacune als
 missievoorstel afleveren, Ariadne valideert en persisteert die aanvraag en de
 generieke dispatcher kan er een Kuifje-job van maken. Kostenadministratie hoort
 bij diezelfde regielaag en moet starts, attempts, recalls en toekomstige missies
-kunnen onderscheiden. Deze documentatiestap voegt zelf nog geen nieuw
-runtimegedrag toe.
+kunnen onderscheiden. Werkelijke providerusage is momenteel onbekend.
 
 Deze runtime-stap wijzigt geen cronjob, actieve Sherlock-taak, MCP-plugin of
 inrichting van bibib en doet geen modelcalls.
