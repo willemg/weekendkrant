@@ -177,9 +177,13 @@ met immutable revisies en exact bronarchief, en de
 - mechanisch groeperen per onderwerp;
 - tokenaantal meten met `tiktoken==0.12.0`, encoding `cl100k_base`;
 - lokale draden maken;
-- maximaal 30.000 geserialiseerde brontokens per draad bewaken, met 5.000 reserve
-  voor overige Leonardo-input; de toekomstige callbouwer moet de volledige
-  request opnieuw meten en maximaal 35.000 inputtokens afdwingen;
+- maximaal 30.000 geserialiseerde brontokens per draad bewaken; deze
+  deterministische partgrens blijft bruikbaar, maar is niet langer bedoeld als
+  afleiding van een definitieve totale Leonardo-contextgrens. De huidige
+  schema-11/backend valideert nog maximaal 35.000 lokale assignmenttokens; fase
+  9.6 zal die tijdelijke projectgrens verruimen of vervangen door een ruime
+  technische fail-safe om Leonardo's werkelijke context- en recallgebruik te
+  karakteriseren;
 - verwerkingsstatus en provenance in een lokale SQLite-database administreren;
 - mislukte pogingen zichtbaar bewaren terwijl queue-items pending blijven;
 - alle runtime-informatie via de centrale Python-`logging`configuratie schrijven,
@@ -221,10 +225,12 @@ Ariadne vlecht draden; ze denkt niet.
 
 ## Leonardo — de schrijver en synthesizer
 
-Leonardo krijgt een begrensde context met nieuwe bronparts, de geldige compacte
-dossierstate en eventueel de oorspronkelijke Kuifje-missie met resultaten.
-Elke call wordt expliciet samengesteld; continuïteit zit in de opgeslagen state
-en bronnen. Dit is doelontwerp, geen bestaande modelruntime.
+Leonardo krijgt context met nieuwe bronparts en de geldige compacte dossierstate;
+later kan daar gerichte historical recall en Kuifje-missiecontext bijkomen. Elke
+uitvoering wordt expliciet samengesteld; continuïteit zit in de opgeslagen state
+en bronnen. Dossierstate/jobs en de eerste echte scheduled statecyclus zijn
+inmiddels operationeel bewezen. Historical recall en Kuifje-acties zijn nog niet
+geïmplementeerd.
 
 Leonardo onderzoekt primair de inhoudelijke/structurele ruimte: welke informatie
 samenhangt, welke onafhankelijke sporen binnen een topic bestaan, welke claims en
@@ -250,6 +256,12 @@ Leonardo wel gebruiken om het aangeboden materiaal correct te begrijpen.
 - onderscheid maken tussen feit, inferentie en interpretatie;
 - een inhoudelijk coherent verhaal of bijgewerkt dossier maken;
 - compacte rolling state schrijven met bronverwijzingen, tegenbewijs en open vragen;
+- state als verliesgevende kenniskaart mogen consolideren: samenvatten,
+  samenvoegen en herschrijven is toegestaan zolang het lossless bronarchief via
+  stabiele refs beschikbaar blijft;
+- zodra fase 9.6 dit ondersteunt, eerder verwerkt materiaal gericht opnieuw
+  opvragen wanneer een later spoor herlezing nodig maakt, in plaats van alle oude
+  bronnen standaard opnieuw in context te laden;
 - expliciete dossierkoppelingen en begrensde Kuifje-missies voorstellen;
 - op verzoek de eigen state comprimeren met behoud van onzekerheden en provenance.
 
@@ -276,14 +288,18 @@ deterministische opslag-, validatie-, budget- en routinglaag.
 
 ## Kuifje — de onderzoeksreporter (gepland)
 
-Kuifje werkt alleen aan een afgebakende onderzoeksmissie van Leonardo die Ariadne
-binnen toegestane acties en budget kan uitvoeren. Hij krijgt de vraag en relevante
-context, zoekt aanvullend bewijs of tegenspraak en levert bronvaste resultaten
-onder dezelfde missie- en dossieridentiteit. Ook lege oogst en beperkingen worden
-expliciet gerapporteerd.
+Kuifje werkt alleen aan een afgebakende onderzoeksmissie die inhoudelijk door
+Leonardo wordt voorgesteld en door Ariadne/backend als duurzame opdracht wordt
+gevalideerd en opgeslagen. Leonardo start of spawnt Kuifje dus niet rechtstreeks:
+een open geldige missie wordt later via dezelfde generieke dispatcher een
+Kuifje-job. Hij krijgt de vraag en relevante context, zoekt aanvullend bewijs of
+tegenspraak en levert bronvaste resultaten onder dezelfde missie- en
+dossieridentiteit. Ook lege oogst en beperkingen worden expliciet gerapporteerd.
 
 Kuifje bepaalt niet zelf naar welk dossier zijn oogst gaat en vervangt Sherlocks
 brede signalering niet. Ariadne routeert zijn resultaten zonder inhoudelijk oordeel.
+Kuifje wijzigt de Leonardo-state niet zelf; een volgende Leonardo-iteratie verwerkt
+missie en resultaten in een nieuwe state.
 Zie het [missie- en geheugenontwerp](leonardo-memory-and-orchestration.md).
 
 ## Striktland — de feitencontroleur

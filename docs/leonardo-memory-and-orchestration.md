@@ -27,9 +27,12 @@ memberships en immutable lokale revision-offers. Schema en migratieketen worden
 beheerd door `database.py` en `migrations/`; de canonieke details staan in
 [databasebeheer](database.md). Zie het [huidige runtimecontract](daily-runtime.md).
 
-Nog niet geïmplementeerd: daadwerkelijke Leonardo-calls, rolling
-dossierstate, dossiers, Kuifje, callbudgetten, aanbiedplanning en
-eindredactionele weekdeadline. De verdere secties daarover zijn doelontwerp.
+De eerste echte scheduled Leonardo-call en rolling dossierstate zijn inmiddels
+operationeel bewezen via fase 9. Nog niet geïmplementeerd zijn historical recall
+binnen een Leonardo-job, recalltelemetrie, Kuifje-missies, betrouwbare
+providerusage-/kostenboekhouding, automatische aanbiedplanning en de
+uiteindelijke weekredactie. De verdere secties beschrijven het doelontwerp en
+worden hieronder aangevuld met de bevindingen uit de eerste productieproef.
 
 Het nieuwe uitgangspunt is:
 
@@ -93,7 +96,20 @@ om trends of evolutie door de tijd te ontdekken behoort later bij Einstein.
 
 Rolling state is verliesgevende compressie. Een eigen samenvatting wordt geen
 nieuwe primaire bron en mag bij herhaling niet vanzelf aan bewijskracht winnen.
-Originele fiches blijven beschikbaar voor gerichte herlezing en verificatie.
+Leonardo mag bestaande state-items consolideren, samenvatten, herschrijven of
+laten opgaan in een betere structuur; de state hoeft niet lossless te zijn.
+Daartegenover staat een harde geheugeninvariant: het onderliggende historische
+bronmateriaal blijft lossless adresseerbaar via stabiele revisiereferenties en
+moet later selectief opnieuw gelezen kunnen worden.
+
+De opslaglaag kan oude partrevisies al exact reconstrueren uit immutable
+membership en `source_archive`, ook wanneer een redundant revisiebestand is
+opgeruimd. De huidige Leonardo-runtime geeft een lopende job echter nog geen
+read-interface om zulke eerder verwerkte refs on demand terug te halen. Dat is de
+volgende ontbrekende geheugenbrug: state dient als compacte kaart en index,
+historical recall als gerichte terugweg naar het oorspronkelijke opgeslagen
+materiaal. Alle oude `processed_refs` standaard opnieuw in iedere request stoppen
+is uitdrukkelijk niet het doel.
 
 ## Dag, topic, dossier en part
 
@@ -202,8 +218,13 @@ ontbrekende onafhankelijke bevestiging. Leonardo mag daarvoor een begrensde
 Kuifje-missie voorstellen met de concrete lacune als onderzoeksvraag en alleen
 de noodzakelijke context. Sherlock blijft de brede scout; Ariadne stelt deze
 inhoudelijke lacunes nooit zelf vast.
-Ariadne voert die alleen uit binnen vooraf toegestane acties en beschikbaar
-budget. Een aanvraag is nog geen uitgevoerde missie.
+
+Dit is de eerste bewust agent-gegenereerde werkstroom: semantisch komt de opdracht
+van Leonardo, maar Leonardo start Kuifje nooit rechtstreeks. Ariadne/backend
+valideert en bewaart het voorstel eerst als duurzame missie met stabiele identiteit,
+context, status en budget; pas daarna kan de generieke dispatcher er in een latere
+activatie een Kuifje-job van maken. Een aanvraag is dus nog geen uitgevoerde
+missie en een modelworker spawnt nooit een andere worker.
 
 Een missie bevat minimaal een stabiele `mission_id`, `parent_thread_id`
 (de logische dossieridentiteit), `topic`, oorspronkelijke vraag, relevante
@@ -222,8 +243,10 @@ Een voorbeeld:
 2. Hij levert state versie 3 en vraagt missie 12 naar onafhankelijke reproductie.
 3. Ariadne bewaart beide en laat Kuifje binnen het toegestane budget werken.
 4. Kuifje retourneert D en E onder missie 12 en hetzelfde dossier.
-5. De vervolgcall krijgt state versie 3, de oorspronkelijke missie en D en E.
-6. Leonardo levert state versie 4, inclusief wat de nieuwe bronnen veranderen.
+5. Ariadne bewaart en routeert dat resultaat zonder de Leonardo-state zelf te
+   wijzigen.
+6. De vervolgcall krijgt state versie 3, de oorspronkelijke missie en D en E.
+7. Leonardo levert state versie 4, inclusief wat de nieuwe bronnen veranderen.
 
 A, B en C hoeven daarbij niet standaard opnieuw mee. Als de state onvoldoende
 is, vraagt Leonardo gericht oorspronkelijke fiches op; die herlezing telt mee
@@ -241,17 +264,26 @@ expliciete missiecontext, nieuwe bronparts en eventueel gevraagde herlezing.
 De selectie volgt vaste volgorde en toegestane acties, niet Ariadnes oordeel
 over relevantie.
 
-Het projectbudget blijft **maximaal 35.000 inputtokens per Leonardo-call**.
-De huidige bronpart heeft maximaal circa 30.000 geserialiseerde tokens met
-5.000 reserve voor alle overige input samen. Die reserve is dus niet 5.000
-extra tokens bóven de limiet en ook geen outputbudget.
+De huidige schema-11/backend implementeert nog een harde grens van **35.000
+lokale `cl100k_base`-inputtokens per Leonardo-assignment**. Dat is na de eerste
+echte run niet langer een gekozen experimenteel optimum maar een tijdelijke
+implementatiegrens. De eerste succesvolle productieassignment mat 23.665
+inputtokens en schreef een state van 1.844 tokens. Dat is al vóór historical
+recall en is geen providerusage- of kostmeting.
+
+Voor de eerstvolgende karakteriseringsfase willen we de 35K-projectgrens bewust
+verruimen of vervangen door een ruime technische fail-safe/contextgrens. Leonardo
+mag dan zelf laten zien hoeveel nieuwe en opnieuw opgehaalde historische context
+hij zinvol consumeert. De bestaande circa-30K partgrens kan als deterministische
+bundelgrens blijven bestaan; zij hoeft niet gelijk te zijn aan het totale
+Leonardo-contextbudget. De compacte state-outputgrens blijft juist waardevol.
 
 Voor iedere werkelijke call geldt:
 
 ```text
 input = instructies + berichtoverhead + state + missiecontext
         + nieuwe bronnen + expliciet opnieuw opgehaalde bronnen
-input <= 35.000
+input <= actuele technische context/fail-safegrens
 input + gereserveerde output <= contextcapaciteit van gekozen model
 ```
 
@@ -289,9 +321,13 @@ state; extra compressiecalls kosten eveneens tokens. Daarom bundelen we waar
 mogelijk hele fiches binnen het budget en laten we de kwaliteits- en
 kostenmetingen het aanbiedritme bepalen.
 
-35K is een projectgrens, geen bewezen economisch optimum. Trager aanbieden
-of meer kleine calls is op zichzelf niet goedkoper. We leggen hier geen
-actuele modeltarieven of gegarandeerde besparing vast. Zie de
+De historische 35K-grens bleek geen bewezen economisch of kwaliteitsoptimum en
+wordt daarom in de karakteriseringsfase niet als doelwaarde behandeld. Iedere
+historical-recallresponse moet wel afzonderlijk auditbaar blijven met ten minste
+ref, bytes en lokaal gemeten tokens, zodat Ariadne later zowel startinput als
+cumulatief teruggehaalde context kan begroten. Werkelijke providerusage,
+reasoningtokens, cachegebruik en productallowance blijven afzonderlijke metingen;
+lokale `cl100k_base`-tellingen mogen daarvoor niet als vervanging dienen. Zie de
 [token- en kostenstrategie](token-and-cost-strategy.md).
 
 ## Opslag, audit en retentie
@@ -317,11 +353,19 @@ missies en callaudit, met behoud van traceerbaarheid en beperkte schijfruimte.
 Schema, migratie en het cross-day vlechtwerk zijn geïmplementeerd, inclusief
 groei, overflow, retries, weekgrenzen en behoud van geregistreerde revisies.
 
-De lokale offer/seal-grens is geïmplementeerd; zij bevriest één geregistreerde
-actieve revisie zonder externe uitvoering. Daarna volgen state-/actieprotocol,
-callbouwer, tokenlimieten, aanbiedplanning,
-kostenadministratie en uiteindelijk Kuifje-missies met expliciete dossiers.
-Deze toekomstige onderdelen krijgen hier nog geen nieuw runtimegedrag.
+De lokale offer/seal-grens en de eerste echte Leonardo-statecyclus zijn
+geïmplementeerd en operationeel bewezen. Vóór Kuifje volgt nu eerst historical
+recall: een read-only brug van een lopende Leonardo-job naar eerder verwerkte
+immutable partrevisies, plus recalltelemetrie en meerdere karakteriseringsruns.
+Daarbij wordt de huidige 35K-assignmentgrens bewust herbekeken zonder de compacte
+state-outputgrens los te laten.
+
+Daarna volgt het action-/missieprotocol: Leonardo kan een gerichte lacune als
+missievoorstel afleveren, Ariadne valideert en persisteert die aanvraag en de
+generieke dispatcher kan er een Kuifje-job van maken. Kostenadministratie hoort
+bij diezelfde regielaag en moet starts, attempts, recalls en toekomstige missies
+kunnen onderscheiden. Deze documentatiestap voegt zelf nog geen nieuw
+runtimegedrag toe.
 
 Deze runtime-stap wijzigt geen cronjob, actieve Sherlock-taak, MCP-plugin of
 inrichting van bibib en doet geen modelcalls.

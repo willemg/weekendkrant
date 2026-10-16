@@ -23,8 +23,10 @@ als onbekend (`unavailable`/`null`); lokale deterministische Ariadne is
 `not_applicable`. De onderstaande bundelmetingen, inputgrenzen en oudere
 API-kostenontwerpen zijn geen metingen van verbruik of resterende allowance.
 
-De bundelmeting is geïmplementeerd; Leonardo-calls, statebeheer, Kuifje-missies en
-kostenadministratie zijn doelontwerp. Zie [het ontwerpbesluit van 8 oktober 2026](leonardo-memory-and-orchestration.md).
+De bundelmeting, Leonardo-state/jobs en de eerste echte scheduled Leonardo-
+statecyclus zijn inmiddels geïmplementeerd. Historical recall, Kuifje-missies en
+betrouwbare providerusage-/kostenadministratie zijn nog doelontwerp. Zie
+[het geheugen- en orchestratieontwerp](leonardo-memory-and-orchestration.md).
 De huidige bundels groeien over daggrenzen heen per ISO-week/topic via nieuwe
 immutable revisies, totdat overflow of een expliciet lokaal offer de part sluit.
 Een offer bevriest exact de actieve revisie en verwijst naar bestaande tokenmeting
@@ -32,11 +34,15 @@ en provenance, zonder bytes opnieuw te renderen. Offered/sealed is geen bewijs
 van een Leonardo-call en veroorzaakt geen modelkosten. Aanbiedplanning en de
 callbouwer volgen later; logisch dossiergeheugen blijft daarvan onafhankelijk.
 
-35K is een gekozen inputgrens, geen bewezen optimaal callvolume. Slow burn betekent
-progressief nieuwe context verwerken met compacte state en tussenoutput. De winst
-moet komen van minder herlezen en minder output; kleine calls of een trager ritme
-maken dezelfde tokens niet vanzelf goedkoper. Herhaalde instructies, state en
-compressiecalls tellen ook mee. Het aanbiedritme vereist kosten- en kwaliteitsmeting.
+De huidige runtime heeft nog een harde 35K Leonardo-assignmentgrens, maar de
+eerste echte productieproef heeft bevestigd dat dit geen bewezen optimaal
+callvolume is. Die succesvolle assignment mat lokaal 23.665 `cl100k_base`-
+inputtokens en schreef 1.844 state-tokens, nog vóór historical recall beschikbaar
+is. In de volgende karakteriseringsfase wordt de 35K-projectgrens daarom bewust
+verruimd of vervangen door een ruime technische fail-safe/contextgrens. Slow burn
+blijft progressief nieuwe context verwerken met compacte state en tussenoutput;
+we willen eerst meten hoeveel context Leonardo zelf zinvol terugvraagt voordat we
+een economisch of kwaliteitsoptimum vastleggen.
 
 ## Kost per component
 
@@ -52,24 +58,25 @@ Ariadne draait lokaal en doet alleen deterministische verwerking. De marginale r
 
 ### Leonardo
 
-Leonardo is de voornaamste betaalde intelligentielaag.
+Leonardo is de eerste syntheselaag waarvan we nu de werkelijke contextappetijt
+kunnen karakteriseren. De huidige scheduled uitvoeringsroute levert Weekendkrant
+nog geen betrouwbare providerreceipt met model-ID, usage of geldkost; lokale
+tokenmetingen blijven daarom capaciteits- en auditmetingen, geen factuur.
 
-De basisstrategie:
+De experimentele basisstrategie wordt na de eerste echte run:
 
-- standaard een kosten-efficiënt maar sterk model gebruiken, bijvoorbeeld Terra;
-- per call een harde bovengrens instellen;
-- de volledige Leonardo-input, dus draad plus dossierstate plus instructies, mag maximaal **35.000 tokens** bedragen;
-- grotere oogsten worden progressief in meerdere draden verwerkt.
+- meet iedere aangeboden component afzonderlijk: nieuwe parts, rolling state,
+  instructies en later iedere historical-recallresponse;
+- behoud een ruime technische context/fail-safegrens, maar gebruik 35K voorlopig
+  niet als economische of kwaliteitsdoelwaarde voor Leonardo;
+- houd de rolling state compact, zodat veel lezen niet automatisch veel blijvend
+  geheugen betekent;
+- verwerk grotere oogsten nog steeds progressief wanneer dat inhoudelijk of
+  technisch nodig blijkt, maar karakteriseer eerst Leonardo's werkelijke
+  informatieappetijt.
 
-Een bruikbare verdeling kan bijvoorbeeld zijn:
-
-```text
-nieuwe draad          ~30k
-rolling dossierstate   ~4k
-instructies/metadata   ~1k
---------------------------
-maximale input         35k
-```
+De bestaande circa-30K bronpart blijft een nuttige deterministische bundelgrens.
+Zij is niet langer bedoeld als afleiding van een vaste 35K totale Leonardo-input.
 
 De tussenoutput moet compact blijven. Leonardo hoeft na elke draad geen afgewerkt artikel te schrijven; hij kan een compacte research state bijwerken. Pas aan het einde volgt een langere synthese.
 
@@ -135,13 +142,18 @@ werkelijke usage. Gelijktijdige aanvragen mogen hetzelfde budget niet dubbel
 uitgeven. Tarieven, modelconfiguratie en ramingen worden geversioneerd; concrete
 week- en maandgrenzen zijn nog te kiezen.
 
-De 35.000 geldt voor **input**. Output krijgt een afzonderlijke grens; input plus
-gereserveerde output moet binnen de contextcapaciteit van het gekozen model passen.
-De 5.000 reserve bevat alle overige input, inclusief state, missiecontext en
-berichtoverhead. Een state rond maximaal 4K past dus alleen als ook de rest binnen
-die reserve blijft. De callbouwer meet de complete request met de modeltokenizer;
-een overschrijding leidt tot wachten of herverdeling van nog niet aangeboden
-materiaal, nooit stilzwijgend afkappen of overschrijden.
+Historical recall moet vanaf de eerste implementatie afzonderlijk meetbaar zijn:
+per job/attempt de gevraagde ref, teruggegeven bytes en lokaal gemeten tokens,
+plus het cumulatieve recallvolume. Dat maakt de contextappetijt observeerbaar,
+maar is nog geen providerrekening. Werkelijke input-, output-, reasoning- en
+cached-inputusage en productallowance moeten uit een betrouwbare provider- of
+platformbron komen en worden per attempt geboekt. Een expired of failed attempt
+kan dus kosten hebben en mag niet uit de latere boekhouding verdwijnen.
+
+Output houdt een afzonderlijke compacte grens; totale aangeboden context plus
+gereserveerde output moet altijd binnen de technische contextcapaciteit van het
+gekozen uitvoeringsmodel passen. De karakteriseringsfase kiest pas daarna een
+lagere economische of kwaliteitsgrens als de metingen daar aanleiding toe geven.
 
 ## Dagelijkse bundeling versie 1
 
@@ -159,11 +171,12 @@ tussen hele fiches. Eén onmogelijke fiche faalt de hele snapshot zonder afkappe
 Ook identieke fiches blijven behouden. Provenance registreert per revisie de
 volledige telling, tokenizer, reserve en exacte geordende bronmembership.
 
-Deze PR doet geen Leonardo-calls en kent nog geen definitieve instructies of
-modelkeuze. De reserve is daarom een bindend budget voor de latere callbouwer.
-Die moet de werkelijk samengestelde input opnieuw meten met de tokenizer van het
-gekozen model, inclusief berichtoverhead, en een call boven 35.000 weigeren of de
-input opnieuw laten verdelen. Een andere tokenizer of context boven de reserve
-maakt de huidige draadindeling niet automatisch geschikt. De reserve mag nooit
-stilzwijgend worden overschreden. Voor installatie en caching op bibib: zie
+De 30.000 + 5.000-indeling hierboven is de historische bundelmotivatie en de
+huidige schema-11/backend weigert nog assignments boven 35.000 lokale tokens.
+Na de eerste echte Leonardo-proef is besloten die totale projectgrens in fase 9.6
+niet als doelcontract te behouden. De wijziging van die runtimevalidatie gebeurt
+apart; tot dan blijft zij technisch actief. Een toekomstige requestbouwer meet de
+volledige aangeboden context, inclusief eventuele recall, en bewaakt de werkelijke
+technische contextcapaciteit zonder inhoud stilzwijgend af te kappen. Voor
+installatie en caching op bibib: zie
 [de dagelijkse preflight](daily-runtime.md).

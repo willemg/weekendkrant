@@ -101,12 +101,42 @@ van gestopte uitvoering en gecontroleerde effecten: retry of failed. Losse recov
 succeeded is voor Leonardo verboden: succes en state moeten samen ontstaan.
 Een retry krijgt dezelfde immutable input en een nieuwe gefencete attempt.
 
-## Uitgestelde scope
+## Uitgestelde scope en bevinding na de eerste productieproef
 
-Missievoorstellen en -administratie, dossieroverstijgende synthese,
-bronherlezingsverzoeken, automatische offer-to-jobpolicy, providerkosten en
-eindredactionele selectie volgen afzonderlijk. Deze slice voert geen
-semantische dossierkeuze uit in Ariadne en consumeert bestaande offers niet.
+De eerste echte scheduled Leonardo-job is op 16 oktober 2026 succesvol afgerond.
+De assignment mat lokaal 23.665 `cl100k_base`-inputtokens; state v1 mat 1.844
+tokens. Een eerdere attempt expireerde en de succesvolle tweede attempt schreef de
+state via het bestaande fenced finishpad. Deze lokale tellingen zijn geen
+providerusage of productkost.
+
+De proef bevestigt het statecontract maar maakt een bewust uitgestelde functie nu
+prioritair: **historical recall**. De huidige assignment bevriest de vorige state
+en uitsluitend de nieuw aangeboden partrevisies. Oudere `processed_refs` blijven
+wel persistent en de opslaglaag kan hun immutable revisies exact reconstrueren,
+maar de lopende Leonardo-job kan die refs nog niet on demand teruglezen. Daardoor
+zou herhaalde rolling compressie op termijn relevante oude details uit de actieve
+context kunnen verdunnen, ook al blijven de bronbytes veilig opgeslagen.
+
+De volgende fase vóór Kuifje voegt daarom een read-only recallbrug toe. Leonardo
+mag zijn state agressief consolideren of samenvatten, zolang eerder verwerkt
+bronmateriaal via stabiele refs lossless opnieuw bereikbaar blijft. Oude refs
+worden niet standaard allemaal opnieuw aangeboden; Leonardo vraagt alleen gericht
+materiaal terug dat hij opnieuw wil onderzoeken. Ariadne/backend registreert per
+recall welke ref werd geleverd en hoeveel bytes/lokaal gemeten tokens dat toevoegde.
+
+De huidige 35K-assignmentgrens blijft tot die codewijziging een echte backend-
+validatiegrens, maar geldt niet langer als gekozen experimenteel optimum. In de
+karakteriseringsfase wordt zij bewust verruimd of vervangen door een ruime
+technische context/fail-safegrens om het werkelijke recallgedrag te observeren.
+De 4K state-outputgrens blijft afzonderlijk en bewust compact.
+
+Missievoorstellen en -administratie volgen daarna. Een toekomstige Kuifje-missie
+is inhoudelijk een on-demand opdracht van Leonardo, maar wordt eerst door
+Ariadne/backend persistent gevalideerd en krijgt pas daarna via de generieke
+dispatcher een Kuifje-job; Leonardo spawnt nooit rechtstreeks een andere worker.
+Dossieroverstijgende synthese, automatische offer-to-jobpolicy, betrouwbare
+providerkosten en eindredactionele selectie volgen eveneens afzonderlijk. Ariadne
+voert geen semantische dossierkeuze uit.
 Deployment vraagt schema 11, backendherstart, synchronisatie/publicatie van de
 MCP-bridge en synchronisatie van `executor/instructions.md`; deze PR doet geen
 productiedeployment of wijziging van de actieve scheduled task.
