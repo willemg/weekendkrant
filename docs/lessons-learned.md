@@ -83,7 +83,8 @@ onderscheid waargenomen gedrag van een nog onbewezen oorzaak.
   alle andere calls. Zet een volgende batch voort met dezelfde run-ID/topic en
   bevestigde voortgang; verlaag de vereiste brondekking niet.
 - **Afgedwongen in:** [Sherlocks Code Mode-batching](../roles/sherlock.md#code-mode-batching).
-  Dit is een executorinstructie; de backend kan het platformbudget niet afdwingen.
+  Dit is een rolinstructie in Sherlocks runtimecontract; de backend kan het
+  platformbudget niet afdwingen.
 
 ## Node bijna een impliciete bibib-dependency (14 oktober 2026, PR #48)
 
