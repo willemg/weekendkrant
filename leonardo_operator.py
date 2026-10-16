@@ -6,7 +6,8 @@ from pathlib import Path
 import sqlite3
 
 from jobs import _id
-from leonardo import LeonardoStore
+from leonardo import LeonardoStore, canonical
+from part_format_v1 import token_count
 
 
 def enqueue_offers(db, operation_id, dossier_id, base_version, offer_ids):
@@ -38,6 +39,14 @@ def context_usage(db, job):
     assignment = db.execute('SELECT tokens,snapshot FROM leonardo_assignments WHERE job_id=?', (job,)).fetchone()
     if assignment is None:
         raise ValueError('Unknown Leonardo assignment')
+    snapshot = json.loads(assignment[1])
+    # Measure exact offered text, not the enclosing JSON, contracts or state.
+    # 'New' means offered in this assignment, not semantic novelty/deduplication.
+    new_parts = [dict(ref=part['ref'], tokens=token_count(part['content']),
+                      bytes=len(part['content'].encode('utf-8')))
+                 for part in snapshot['parts']]
+    previous_state_tokens = (token_count(canonical(snapshot['state']))
+                             if snapshot['state'] is not None else 0)
     attempts = rows(db, 'SELECT id AS attempt_id,status FROM job_attempts WHERE job_id=? ORDER BY id', (job,))
     for attempt in attempts:
         attempt['recalls'] = rows(db, '''SELECT id AS sequence,recall_id,ref,bytes,tokens,recalled_at
@@ -50,7 +59,11 @@ def context_usage(db, job):
         state = db.execute('SELECT tokens FROM leonardo_states WHERE attempt_id=?', (attempt['attempt_id'],)).fetchone()
         attempt['state_tokens'] = state[0] if state else None
         attempt['provider_usage'] = None
-    return dict(tokenizer='cl100k_base', start_input_tokens=assignment[0],
+    return dict(tokenizer='cl100k_base', new_part_count=len(new_parts),
+                new_part_tokens=sum(part['tokens'] for part in new_parts),
+                new_part_bytes=sum(part['bytes'] for part in new_parts),
+                new_parts=new_parts, previous_state_tokens=previous_state_tokens,
+                start_input_tokens=assignment[0],
                 start_input_bytes=len(assignment[1].encode('utf-8')), attempts=attempts)
 
 

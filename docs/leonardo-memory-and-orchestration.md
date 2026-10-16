@@ -265,6 +265,13 @@ expliciete missiecontext, nieuwe bronparts en eventueel gevraagde herlezing.
 De selectie volgt vaste volgorde en toegestane acties, niet Ariadnes oordeel
 over relevantie.
 
+De oorspronkelijke 35K-grens was een arbitraire eerste cognitieve
+chunkinghypothese: geef Leonardo niet zoveel nieuw, onbekend bronmateriaal
+tegelijk dat hij zijn overzicht verliest. Het was geen kostenbudget. Fase 9.6
+laat die hypothese bewust los om empirisch te ontdekken hoeveel nieuw materiaal
+hij in één run goed structureel kan verwerken. De 1.048.576-token/8-MiB-grens is
+uitsluitend een technische noodrem, evenmin een optimale behapbare brok.
+
 Schema 12 vervangt de vroege 35K-projectgrens door een lokale technische
 fail-safe: 1.048.576 `cl100k_base`-tokens en 8 MiB UTF-8 voor startinput plus
 cumulatieve unieke recallcontext per attempt. Deze ruime allocatie-/serialisatie-
@@ -272,7 +279,13 @@ noodrem is geen economisch optimum of gemeten providercontextlimiet. Circa-30K
 parts en de compacte 4K outputstate blijven behouden. De eerste succesvolle
 productieassignment mat 23.665 lokale inputtokens en 1.844 state-tokens.
 
-Startinput, dynamische recall en outputstate worden afzonderlijk geteld.
+Nieuwe broncontext (`new_part_count`, `new_part_tokens`, `new_part_bytes`,
+`new_parts` met ref/tokens/bytes per aangeboden part), vorige state
+(`previous_state_tokens`, 0 zonder state), totale startinput, dynamische recall en
+outputstate worden afzonderlijk geteld. De extra inspectiemetingen worden uit het
+immutable snapshot afgeleid, zonder nieuwe opslag. Zo kan karakterisering zich
+richten op de hoeveelheid nieuw aangeboden materiaal en de kwaliteit van de
+structurele synthese.
 `inspect --job ID --compact` toont per attempt de lokale tellingen, recallvolgorde
 en cumulatieve context; providerusage blijft expliciet onbekend. Ook een
 expired/failed attempt blijft aanwezig voor toekomstige usageboekhouding.
@@ -320,7 +333,7 @@ state; extra compressiecalls kosten eveneens tokens. Daarom bundelen we waar
 mogelijk hele fiches binnen het budget en laten we de kwaliteits- en
 kostenmetingen het aanbiedritme bepalen.
 
-De historische 35K-grens bleek geen bewezen economisch of kwaliteitsoptimum en
+De historische 35K-grens was een onbewezen cognitieve chunkinghypothese en
 wordt daarom in de karakteriseringsfase niet als doelwaarde behandeld. Iedere
 historical-recallresponse moet wel afzonderlijk auditbaar blijven met ten minste
 ref, bytes en lokaal gemeten tokens, zodat Ariadne later zowel startinput als

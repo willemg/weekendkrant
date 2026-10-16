@@ -603,6 +603,19 @@ mat lokaal 23.665 inputtokens en state v1 1.844 tokens. Dit zijn vaste lokale
 Deze stap gaat bewust vóór fase 10. Eerst moet Leonardo veilig kunnen vergeten en
 terugvinden voordat hij gericht nieuw onderzoek kan bestellen.
 
+De oorspronkelijke 35K-grens was een arbitraire eerste cognitieve
+chunkinghypothese: geef Leonardo niet zoveel nieuw, onbekend bronmateriaal
+tegelijk dat hij zijn overzicht verliest. Het was geen kostenbudget. Fase 9.6
+laat die hypothese bewust los om empirisch te ontdekken hoeveel nieuw materiaal
+hij in één run goed structureel kan verwerken. De 1.048.576-token/8-MiB-grens is
+uitsluitend een technische noodrem, evenmin een optimale behapbare brok.
+
+De compacte inspectie scheidt daarom nieuw aangeboden bronparts (aantal,
+tokens/bytes en refs per part), vorige state, totale startinput, recall per
+attempt en outputstate. Deze metingen worden afgeleid uit de immutable snapshot;
+providerusage blijft onbekend. Zo meten we specifiek hoeveel nieuw materiaal
+Leonardo verwerkt voordat zijn structurele synthese eventueel verslechtert.
+
 - [x] Voeg een read-only historical-recallbrug toe waarmee een lopende Leonardo-job
   eerder verwerkte `part:<id>:<revision>`-referenties gericht kan opvragen. Gebruik
   de bestaande immutable revisieprovenance en `revision_storage.reconstruct`;

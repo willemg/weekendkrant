@@ -182,11 +182,19 @@ python leonardo_operator.py --db /home/weekendkrant/weekendkrant.sqlite3 inspect
 ```
 
 `context_usage.attempts` bewaart ook failed/expired attempts. Vergelijk
+`new_part_count`, `new_part_tokens`, `new_part_bytes` en de `new_parts`-lijst
+(ref/tokens/bytes in assignmentvolgorde), `previous_state_tokens`, totale
 startinputtokens, recalls op volgorde, tokens/bytes per recall, cumulatieve
 recallcontext en uiteindelijke state-tokens afzonderlijk. `provider_usage:null`
 betekent onbekend. Herhaalde transportantwoorden en reasoning/cachegebruik
 worden niet gemeten door deze lokale tellingen. Geen fictieve nulprijs of
 providerrekening afleiden uit lokale `cl100k_base`-aantallen.
+
+De oorspronkelijke 35K was een arbitraire eerste cognitieve chunkinghypothese,
+geen kostenlimiet: voorkom dat te veel onbekend nieuw materiaal tegelijk het
+overzicht aantast. Deze hypothese laten we nu bewust los; ook de nieuwe technische
+noodrem claimt geen optimale behapbare brok. Beoordeel specifiek de hoeveelheid
+nieuw aangeboden bronmateriaal tegenover de kwaliteit van de structurele synthese.
 
 Beoordeel over meerdere iteraties of Leonardo nieuwe informatie in bestaande
 structuur integreert en oude details gericht kan terughalen. Die inhoudelijke

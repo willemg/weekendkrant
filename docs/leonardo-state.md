@@ -113,6 +113,13 @@ providerusage of productkost.
 
 ## Historical recall, fase 9.6
 
+De oorspronkelijke 35K-grens was een arbitraire eerste cognitieve
+chunkinghypothese: geef Leonardo niet zoveel nieuw, onbekend bronmateriaal
+tegelijk dat hij zijn overzicht verliest. Het was geen kostenbudget. Fase 9.6
+laat die hypothese bewust los om empirisch te ontdekken hoeveel nieuw materiaal
+hij in één run goed structureel kan verwerken. De 1.048.576-token/8-MiB-grens is
+uitsluitend een technische noodrem, evenmin een optimale behapbare brok.
+
 `recall_weekendkrant_part(job_id, attempt_id, token, ref, recall_id)` is de
 read-only inhoudsbrug binnen dezelfde lopende Leonardo-job. HTTP:
 `POST /jobs/leonardo-recall`. De request heeft exact die vijf velden;
@@ -169,9 +176,21 @@ nooit integraal vooraf geladen. Nieuwe jobs bevriezen het bijgewerkte Leonardo-
 rolcontract; bestaande jobs behouden hun oude snapshot. Einstein-analyse en
 Kuifje-missievoorstellen/-uitvoering blijven uitgesloten.
 
-`leonardo_operator.py ... inspect --job ID --compact` toont startinput,
+`leonardo_operator.py ... inspect --job ID --compact` toont in `context_usage`
+ook `new_part_count`, `new_part_tokens`, `new_part_bytes` en `new_parts`: een lijst
+in assignmentvolgorde met `ref`, `tokens` en `bytes` per aangeboden part. De
+metingen tellen uitsluitend de exacte UTF-8-brontekst uit het immutable snapshot,
+zonder state, contracten of JSON-wrapper. "Nieuw" betekent hier aangeboden in deze
+assignment, geen semantische nieuwheid of deduplicatie van overlappende revisies.
+`previous_state_tokens` meet de canonieke JSON van de vorige snapshotstate
+(0 zonder vorige state). Deze deterministisch afleidbare inspectiemetingen
+vereisen geen schemawijziging, nieuwe auditopslag of reconstructie van bronfiles.
+De som van afzonderlijk getokeniseerde componenten hoeft door tokenisatiegrenzen
+en JSON-escaping niet gelijk te zijn aan de tokenmeting van de totale snapshot.
+
+Daarnaast blijven totale `start_input_tokens`,
 recallvolgorde, bytes/tokens per read, cumulatieve recalltokens/-bytes en eventuele
-state-tokens afzonderlijk per attempt, inclusief expired/failed attempts.
+state-tokens afzonderlijk per attempt beschikbaar, inclusief expired/failed attempts.
 De volledige inspectie bevat dezelfde `context_usage`-sectie. Werkelijke
 providerusage en geldkost blijven onbekend (`provider_usage:null`), nooit nul
 op basis van een mislukte attempt en nooit afgeleid uit lokale tokenmetingen.

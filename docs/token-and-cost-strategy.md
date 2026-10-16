@@ -35,6 +35,13 @@ en provenance, zonder bytes opnieuw te renderen. Offered/sealed is geen bewijs
 van een Leonardo-call en veroorzaakt geen modelkosten. Aanbiedplanning en de
 callbouwer volgen later; logisch dossiergeheugen blijft daarvan onafhankelijk.
 
+De oorspronkelijke 35K-grens was een arbitraire eerste cognitieve
+chunkinghypothese: geef Leonardo niet zoveel nieuw, onbekend bronmateriaal
+tegelijk dat hij zijn overzicht verliest. Het was geen kostenbudget. Fase 9.6
+laat die hypothese bewust los om empirisch te ontdekken hoeveel nieuw materiaal
+hij in één run goed structureel kan verwerken. De 1.048.576-token/8-MiB-grens is
+uitsluitend een technische noodrem, evenmin een optimale behapbare brok.
+
 Schema 12 vervangt de vroege 35K-assignmentgrens door een ruime lokale
 technische fail-safe van 1.048.576 `cl100k_base`-tokens en 8 MiB UTF-8.
 Dezelfde grens bewaakt per attempt startinput plus cumulatieve unieke recalls.
@@ -47,6 +54,8 @@ blijft; state-output blijft maximaal 4K tokens en 32.768 bytes.
 
 | Meting | Betekenis |
 | --- | --- |
+| Nieuwe broncontext | `new_part_count`, `new_part_tokens`, `new_part_bytes` en `new_parts`: geordende lijst met ref/tokens/bytes per aangeboden part, uitsluitend de exacte brontekst |
+| Vorige state | `previous_state_tokens`: canonieke JSON van de state in het assignmentsnapshot, 0 zonder vorige state |
 | Assignment-startinput | Canoniek immutable snapshot: contracten, vorige state en nieuwe parts |
 | Recallcontext | Exacte gereconstrueerde brontekst, bytes/tokens per logische recall, op volgorde per attempt |
 | Outputstate | Canonieke compacte nieuwe state, afzonderlijk gemeten |
@@ -81,7 +90,7 @@ De experimentele basisstrategie wordt na de eerste echte run:
 - meet iedere aangeboden component afzonderlijk: nieuwe parts, rolling state,
   instructies en later iedere historical-recallresponse;
 - behoud een ruime technische context/fail-safegrens, maar gebruik 35K voorlopig
-  niet als economische of kwaliteitsdoelwaarde voor Leonardo;
+  niet als vaste cognitieve chunkinghypothese voor Leonardo;
 - houd de rolling state compact, zodat veel lezen niet automatisch veel blijvend
   geheugen betekent;
 - verwerk grotere oogsten nog steeds progressief wanneer dat inhoudelijk of
