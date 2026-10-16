@@ -12,7 +12,7 @@ zonder een langlevend modelproces nodig te hebben.
 | --- | --- |
 | Huidige geïmplementeerde runtime | Sherlock-specifieke runstart met atomaire topicrotatie, bronfiltering en source-audit; fiche-ingress naar SQLite; deterministische `daily`-materialisatie naar week/topic-parts met immutable revisies, bronarchief en lokale offer/seal-records. |
 | Geïmplementeerde fase-3-opslag | Lokale generieke jobs, afzonderlijke attempts, atomaire claims, vaste leases en fencing, conservatieve quarantaine en expliciete reconciliatie (schema 7); zonder workerintegratie; de aanvullende fase-4-control-plane staat hieronder. |
-| Huidig beschreven operationeel ritme | `Weekendkrant Executor 1` gebruikt de generieke executorinstructie; nieuwe Sherlock-jobs vallen onder de tijdelijke 30-uurs productierem. De bestaande Ariadne `daily` ondersteunt herhaalde kwartierstarts; de productiecron draait elke 15 minuten (`*/15 * * * * ... start_ariadne.sh daily ...`). De empirische evaluatie van die voorlopige cadence blijft open. |
+| Huidig beschreven operationeel ritme | `Weekendkrant Executor 1` gebruikt de generieke executorinstructie; nieuwe Sherlock-jobs vallen onder de tijdelijke 30-uurs productierem. De bestaande Ariadne `daily` ondersteunt herhaalde kwartierstarts; de productiecron draait sinds 16 oktober 2026 op :15/:45 (`15,45 * * * * ... start_ariadne.sh daily ...`). De empirische evaluatie van die voorlopige cadence blijft open. |
 | Gekozen doelrichting | Generieke scheduled executors krijgen per activatie maximaal één begrensde job met een door de backend gekozen rol. Persistente state draagt de redactionele continuïteit. Lokale Ariadne-materialisatie moet minstens uurlijk, mogelijk sneller, kunnen draaien. |
 | Geïmplementeerde fase-4-control-plane | Expliciete generieke claim/finish/abandon/validate-tools, persistente operatiebevestigingen (schema 8), aparte operatorrecovery; lokaal getest; productie-invoering en geslaagde deployment-smoke op 14 oktober 2026 door de operator bevestigd. |
 | Geïmplementeerde fase-5-adapter | Minimale Sherlock-jobproductie/topicrotatie, atomaire executorstart, contractsnapshots en gefencete bron-/fichewrites (schema 9); lokaal gevalideerd; backend/schema 9 en Sites-plugin op 15 oktober 2026 in productie ingevoerd/gepubliceerd. Actieve generieke instructies, UTC-slotadmission en een lege throttlebeslissing zijn bewezen; de eerste inhoudelijke job via de volledige keten blijft open. |
@@ -135,16 +135,18 @@ aan de slag moet, moet die oogst tijdig in lokale part/revision-state staan.
 
 De gekozen doelrichting is **minstens eenmaal per uur materialiseren, mogelijk
 duidelijk vaker**. Het onafhankelijke cadence-deel van fase 6 kiest voorlopig
-**elke 15 minuten via lokale cron**. Ingest, materialisatieduur en gewenste
+**elke 30 minuten op :15/:45 via lokale cron**. Ingest, materialisatieduur en gewenste
 inputversheid moeten later uitwijzen of dat ritme passend blijft. Deterministisch
 werk verbruikt geen intelligent scheduled slot. De productiecrontab is al handmatig
-ingevoerd met `*/15 * * * * ... start_ariadne.sh daily ...`; zie [invoering en rollback](daily-runtime.md#croncontract-na-merge).
+op 16 oktober 2026 gewijzigd naar `15,45 * * * * ... start_ariadne.sh daily ...`; zie [invoering en rollback](daily-runtime.md#croncontract-na-merge).
 
 Behoud het bestaande snapshot-, provenance-, runtime-slot- en partprotocol met
 korte transacties. Maak onderscheid tussen vaker materialiseren en een part
 aanbieden/sealen voor intelligent gebruik: niet iedere materialisatie hoeft een
-offer of Leonardo-job te veroorzaken. `PartStore.offer` bestaat al lokaal;
-het automatische aanbiedmoment en daadwerkelijke modelontvangst bestaan nog niet.
+offer of Leonardo-job te veroorzaken. Fase 6 voegt lokale automatische selectie
+via `PartStore.offer_ready` toe, voortbouwend op `PartStore.offer`; zie het
+[aanbiedcontract](daily-runtime.md#automatisch-lokaal-aanbiedmoment-fase-6).
+Een offer bewijst geen daadwerkelijke modelontvangst.
 
 ## Capaciteit, context en budget
 
@@ -201,7 +203,7 @@ Audit uitgevoerd op `main`-commit
 `0c0320e92acd34c2d9948506c069fd8c663abd18`. De onderstaande verschillen zijn
 migratiewerk; bestaande runtimebeschrijvingen worden niet vooruitlopend herschreven.
 Deze tabel bewaart de historische audit, inclusief het toenmalige dagelijkse
-croncontract. Het latere voorlopige kwartiercontract staat bij fase 6 en runtime.
+croncontract. Het actuele voorlopige halfuurcontract staat bij fase 6 en runtime.
 
 | Gecontroleerd document | Bevinding en latere aanpassing |
 | --- | --- |
@@ -461,17 +463,30 @@ passend operationeel bewijs.
 
 - [x] Bestaande queue→parts-verwerking voor herhaalde kwartierstarts valideren, inclusief lege runs en echte procesoverlap zonder dubbel materiaal.
 - [x] Bestaande snapshot-, flock-, provenance-, retry- en crashsafe implementatie behouden.
-- [x] 15 minuten als voorlopige operationele croncadence documenteren, met handmatige invoering en rollback.
-- [x] Productiecrontab handmatig invoeren: `*/15 * * * * ... start_ariadne.sh daily ...` draait al in productie.
-- [ ] De voorlopige cadence van 15 minuten empirisch evalueren.
-- [ ] Afzonderlijk bepalen wanneer open parts worden aangeboden/sealed voor intelligent gebruik.
+- [x] Halfuurcadans op :15/:45 als voorlopige operationele croncadence documenteren, met handmatige invoering en rollback.
+- [x] Productiecrontab handmatig invoeren: `15,45 * * * * ... start_ariadne.sh daily ...` draait sinds 16 oktober 2026 in productie.
+- [ ] De nieuwe halfuurcadans empirisch evalueren over voldoende productiegegevens.
+- [x] Lokaal aanbied-/sealmoment voor open parts bepalen en implementeren met exacte revisieprovenance, rustperiode en pending-/running-fences.
+- [ ] Automatische offer/seal-policy na deployment operationeel controleren; lokale tests zijn geen productiebewijs.
 
-Alleen dit onafhankelijke cadence-deel wordt vervroegd uitgevoerd, zonder de
-job-/dispatcherfasen af te wachten. De bestaande runtime volstaat; er komen geen
-nieuwe jobs, modelcalls of offers/sealing bij. De handmatige invoering van de
-productiecron is bevestigd; of 15 minuten empirisch de juiste cadence is, blijft
-open. Ook het aanbied-/sealmoment voor intelligent gebruik blijft open. Fase 6
-blijft dus deels open.
+De operator heeft de productiecron op 16 oktober 2026 van kwartierstarts naar
+:15/:45 gewijzigd. Onder de kwartiercadans waren 332 recente items gemeten:
+gemiddeld 8,2 minuten en maximaal 14,8 minuten materialisatielatency, geen boven
+15 minuten. Die cadence was stabiel maar onnodig snel. De nieuwe keuze halveert
+de wake-ups en ligt bewust uit fase met de uurlijkse executor rond :00.
+Bij tijdige, succesvolle runs is de theoretische wachttijd tot de volgende start
+kleiner dan 30 minuten; dit is geen garantie voor totale materialisatielatency.
+De nieuwe halfuurcadans is nog niet over voldoende productiegegevens geëvalueerd.
+
+Het onafhankelijke lokale aanbiedbeleid is geïmplementeerd, zonder dispatcher,
+Leonardo-job, modelcall of nieuwe rol. Open parts worden na minstens 25 minuten
+rust aangeboden, mits alle materialisatietijden bekend zijn, geen pending fiche
+voor dezelfde week/topic bestaat en geen Sherlock-run voor het topic running is.
+Overflow-gesloten parts worden bij de volgende dagelijkse verwerking aangeboden.
+De exacte actieve revisie wordt atomisch geregistreerd en sealed; bytes, hashes,
+tokenmetingen en bronmembership blijven intact. Het beleid is lokaal getest,
+geen bewezen productiedeployment. Fase 6 blijft voor empirische follow-up en
+operationele controle open.
 
 Deze fase moet vóór de eerste Sherlock/Leonardo-cyclus operationeel zijn; een
 dagelijkse materialisatie mag geen urenoude oogst achter een klaarstaande job houden.
@@ -553,7 +568,7 @@ Geen aparte permanente agents nodig; deadlinebeleid blijft een expliciete regel.
 - Blijft de voorlopige 15-minutencadence passend volgens de werkelijke materialisatietijden en ingest?
 - Hoe wordt het gekozen conservatieve lease-/fencing- en reconciliatiecontract
   door latere publicatieadapters voor externe effecten afgedwongen?
-- Wanneer moet een part aangeboden/sealed worden?
+- Blijft de voorlopige rustperiode van 25 minuten voor lokale offers passend?
 - Wanneer heeft een Leonardo-job voldoende nieuwe input en welke state krijgt hij?
 - Hoe verhoudt een eerste vaste proefcyclus zich tot volledig state-driven dispatch?
 - Welke leaseduur binnen het fase-3-bereik past per rol, en hoe wordt een executor

@@ -164,14 +164,66 @@ Open parts mogen groeien via nieuwe revisies. Gesloten parts mogen geen bronnen
 meer krijgen. Sealed/offered betekent gesloten plus één lokaal persistent offer
 voor de exacte actieve revisie; het bewijst geen verzending of ontvangst door
 Leonardo. Na sealing maakt normale `daily` de volgende part wanneer geen andere
-part open is. Er is geen automatische selectie, scheduler of modelcall.
+part open is. Automatische lokale selectie volgt hieronder; er is geen intelligente scheduler of modelcall.
+
+## Automatisch lokaal aanbiedmoment (fase 6)
+
+`daily` roept na de materialisatiecommit, ook bij een lege snapshot,
+`PartStore.offer_ready()` aan onder hetzelfde runtime-slot. Deze operatie kiest
+alle nog niet aangeboden parts met een geregistreerde actieve revisie.
+Overflow-gesloten parts zijn direct klaar. Een open part is klaar als:
+
+- alle bronnen in de actieve revisie een geldige timezone-aware `source_materializations`-tijd hebben;
+- de jongste materialisatie minstens 25 minuten oud is volgens de actuele UTC-hostklok;
+- geen pending fiche voor dezelfde ISO-week/topic bestaat (ook toekomstige fiches houden die combinatie open);
+- geen Sherlock-run voor hetzelfde topic `running` is, ook geen legacy-run.
+
+De rustperiode van 25 minuten is een voorlopige expliciete lokale policy, geen
+empirisch bewezen optimum. Zij ligt bewust vijf minuten onder de halfuurcadans:
+materialisatie om 08:15:03 kan bij de check rond 08:45:00 worden aangeboden,
+voordat nieuwe uurlijkse input rond 09:15 de bronleeftijd opnieuw doet beginnen.
+Zo veroorzaakt normale runtimejitter geen starvation door een exacte
+30-minutengrens. De marge dekt tot vijf minuten verschil tussen materialisatie-
+en volgende startvertraging; grotere vertragingen of aanhoudende pending/running
+input kunnen aanbieding nog uitstellen. Zij bundelt normaal één
+schrijfronde, zonder een langzame nog lopende run door tijd alleen af te snijden.
+Een achtergelaten running run houdt aanbieding conservatief tegen totdat de
+bestaande recovery die oplost. Onbekende, ongeldige of timezone-loze historische
+tijden worden niet gereconstrueerd; zulke open parts blijven open. Een toekomstig
+tijdstip maakt een part nog niet klaar. Er is geen minimumvolume of semantische
+relevantiedrempel. Een expliciete operatoroffer via `offer` blijft mogelijk.
+
+Selectie, pending-/running-controle en alle offer/seal-inserts gebeuren samen in
+één korte `BEGIN IMMEDIATE`. Daardoor kan ingress of een runstart niet tussen
+controle en sealing schrijven. Dezelfde interne offeroperatie als `offer`
+handhaaft de exacte actieve revisie en de bestaande immutable triggers. Er worden
+geen bestanden, hashes, tokenmetingen of memberships herschreven. Een gelijke
+retry doet niets; een fout rolt de hele offerbatch terug.
+
+Materialisatie is al afzonderlijk gecommit vóór deze stap: bij offerfout blijven
+processed/provenance en bestanden geldig. De CLI faalt zichtbaar en retry pakt de
+nog ontbrekende offers op, ook zonder nieuwe fiches. Lege runs zonder offers
+blijven stil op INFO; nieuwe offers worden als werkelijk werk gelogd. Het bestaande
+CLI-resultaat (`threads` telt nieuwe revisies) blijft gelijk. Een offer is lokale
+beschikbaarheid, geen job, verzending of bewijs van modelontvangst. Later materiaal
+krijgt de volgende part, ook bij vertraagde ontvangst voor een oude week.
 
 ## Nog niet geïmplementeerd
 
 Daadwerkelijke Leonardo-calls, rolling dossierstate, dossiers,
-Kuifje-missies, callbudgetten, aanbiedplanning en eindredactionele
-weekdeadline volgen later. Een overflow sluit alleen bronaanvulling; er gebeurt
-geen automatische aanbieding. Deze stap voegt geen cronjob toe.
+Kuifje-missies, callbudgetten en eindredactionele weekdeadline volgen later.
+Dit beleid introduceert geen dispatcher, modelcall of extra cronjob. De lokale
+tests bewijzen het contract; productiecontrole na deployment blijft open.
+
+Voor invoering volstaat de applicatie-update op bibib en de Python-suite inclusief
+systeemgate. Schema 9, Sites-plugin en executorinstructie veranderen niet; `daily`
+is een kortlevend CLI-proces en vraagt geen serviceherstart. Controleer bij een
+handmatige `daily` of volgende cronstart de nieuwe `part_offers`, de exacte actieve
+revisie, `is_open=0` en ongewijzigde revisie-/bronprovenance. Herhaal zonder nieuwe
+input en controleer dat geen extra offer verschijnt. De eerste run kan bestaande
+klaarstaande parts aanbieden; dit is werk, ook als `threads` nul blijft. Een latere
+fiche moet een volgende part krijgen. Leg werkelijk geobserveerde IDs vast voordat
+de operationele checklist wordt afgevinkt.
 
 ## Installeren en handmatig controleren op bibib
 
@@ -200,11 +252,11 @@ handmatige productierun; verander geen status om een dag opnieuw te openen.
 ## Croncontract na merge
 
 `daily` blijft de commandonaam; de selectiedatum sluit verdere runs op dezelfde
-dag niet uit. De voorlopige lokale cadence is iedere **15 minuten**, op :00,
-:15, :30 en :45. Dit onafhankelijke cadence-deel van fase 6 wordt vervroegd
-ingevoerd; het vereist geen generieke jobs of intelligente orchestratie.
-De PR wijzigt de productiecrontab niet. Na merge en applicatie-update moet de
-beheerder de crontab van gebruiker `weekendkrant` op bibib handmatig aanpassen.
+dag niet uit. De operator heeft op 16 oktober 2026 de productiecron handmatig
+van `*/15 * * * *` gewijzigd naar iedere **30 minuten**, op :15 en :45.
+Dit halveert de wake-ups en ligt bewust uit fase met de uurlijkse executor rond
+:00. De code wijzigt geen crontab. Dit onafhankelijke cadence-deel vereist geen
+generieke jobs of intelligente orchestratie.
 
 Verwijder **handmatig** de obsolete zondagregel uit de crontab op bibib:
 
@@ -212,11 +264,10 @@ Verwijder **handmatig** de obsolete zondagregel uit de crontab op bibib:
 0 22 * * 0 /home/weekendkrant/app/start_ariadne.sh prepare-week --next-week >/dev/null
 ```
 
-Vervang de oude regel `0 10 * * * ... start_ariadne.sh daily ...` door exact
-deze voorlopige regel, met de hosttijdzone `Europe/Brussels`:
+De al ingevoerde voorlopige productieregel, met hosttijdzone `Europe/Brussels`:
 
 ```cron
-*/15 * * * * /home/weekendkrant/app/start_ariadne.sh daily >/dev/null
+15,45 * * * * /home/weekendkrant/app/start_ariadne.sh daily >/dev/null
 ```
 
 `daily` is de enige huidige operationele Ariadne-taak. `prepare-week` bestaat niet
@@ -224,7 +275,7 @@ meer in de CLI. De code wijzigt geen crontab, verwijdert geen historische branch
 of worktrees en installeert geen nieuwe zondagjob.
 
 Controleer met `crontab -l` dat precies één `daily`-regel bestaat en de oude
-dagelijkse regel weg is. Controleer na een volgend kwartier de logfile
+dagelijkse regel weg is. Controleer na de volgende :15/:45-start de logfile
 `/home/weekendkrant/logs/ariadne.log` en `./start_ariadne.sh telemetry` voor
 nieuwe bevestigde materialisaties. Normale lege runs voegen geen INFO-records
 toe: stilte is op zichzelf geen bewijs van een fout. Gebruik voor expliciete
@@ -237,11 +288,16 @@ niet op de vorige run. Later ontvangen of na een fout pending gebleven fiches
 worden in een volgende vrije run verwerkt. De bestaande snapshot-, korte
 transactie-, orphan/retry- en crashsafe regels blijven ongewijzigd.
 
-15 minuten is een voorlopige keuze, geen gemeten optimum of gegarandeerde
-verwerkingslatency. Bij langere runs kunnen kwartierstarts worden geweigerd;
-pas later op basis van logging en echte materialisatietijden de cadence aan.
-Rollback van alleen het ritme: vervang de kwartierregel handmatig door
-`0 10 * * * /home/weekendkrant/app/start_ariadne.sh daily >/dev/null`.
+De operator mat onder de kwartiercadans 332 recente items met gemiddeld 8,2 en
+maximaal 14,8 minuten materialisatielatency; geen item boven 15 minuten.
+De kwartiercadans was stabiel maar onnodig snel. De nieuwe halfuurcadans is
+operationeel ingevoerd, nog niet empirisch geëvalueerd over voldoende data.
+De theoretische wachttijd tot de volgende start is <30 minuten bij tijdige starts;
+looptijd, lockconflicten en fouten kunnen totale latency verlengen. Meet na deze
+wijziging opnieuw aantallen, gemiddelde, maximum en overschrijdingen via echte
+materialisatietijden; vermeng die metingen niet met de oude kwartierperiode.
+Rollback van alleen deze cadencewijziging: herstel handmatig de vorige regel
+`*/15 * * * * /home/weekendkrant/app/start_ariadne.sh daily >/dev/null`.
 Verwijder of reset daarvoor geen queue-items, parts of provenance.
 
 ## Bewaarbeleid

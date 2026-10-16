@@ -42,8 +42,8 @@ en gefencete bron-/ficheadapters; zie [Sherlock-executor](docs/sherlock-executor
 De algemene/state-driven dispatcher volgt in fase 7. Productie-invoering en de
 actieve schedulerinstructies zijn afzonderlijke stappen; de bestaande productie-
 runtime wordt niet door een repositorywijziging omgeschakeld. De bestaande `daily` is
-geschikt voor herhaalde kwartierstarts; het voorlopige croncontract hieronder
-wordt na merge handmatig ingevoerd en bewijst geen reeds gewijzigde productiecrontab.
+geschikt voor herhaalde starts; de productiecron draait sinds 16 oktober 2026 op
+:15/:45. Empirische evaluatie van deze nieuwe halfuurcadans blijft open.
 
 `Sherlock -> MCP ingress -> ingress_queue.pending -> Ariadne daily -> lokale draden -> ingress_queue.processed`
 
@@ -76,7 +76,10 @@ blijft behouden; bestaande SQLite-rijen worden niet opgeruimd en er is geen
 automatische `VACUUM`. Het lokale offer/seal-mechanisme is geïmplementeerd:
 `PartStore.offer(part_id, revision)` registreert exact de actieve revisie en sluit
 de part atomisch; een identieke retry retourneert hetzelfde immutable offer.
-Ook overflow-gesloten parts zijn offerbaar. Dit bewijst geen ontvangst door een
+Ook overflow-gesloten parts zijn offerbaar. `daily` biedt ze automatisch aan;
+open parts volgen na 25 minuten rust zonder pending week/topic-input of running
+Sherlock-run, met volledige tijdprovenance. Zie het
+[aanbiedcontract](docs/daily-runtime.md#automatisch-lokaal-aanbiedmoment-fase-6). Dit bewijst geen ontvangst door een
 model. Nieuwe fiches gaan naar de volgende part. Dossiers, rolling state, Kuifje, modelcalls,
 budgetten en eindredactionele planning volgen in afzonderlijke stappen.
 
@@ -118,11 +121,10 @@ Verwijder na merge handmatig de obsolete zondagregel op bibib:
 0 22 * * 0 /home/weekendkrant/app/start_ariadne.sh prepare-week --next-week >/dev/null
 ```
 
-Vervang de oude dagelijkse `daily`-regel door de voorlopige kwartierregel;
-laat niet beide regels bestaan:
+De op 16 oktober 2026 handmatig ingevoerde productieregel (één `daily`-regel):
 
 ```cron
-*/15 * * * * /home/weekendkrant/app/start_ariadne.sh daily >/dev/null
+15,45 * * * * /home/weekendkrant/app/start_ariadne.sh daily >/dev/null
 ```
 
 De code wijzigt geen crontab en verwijdert geen bestaande worktrees of branches.
