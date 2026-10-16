@@ -8,4 +8,4 @@ Valideer de ontvangen claim met `validate_weekendkrant_claim`. Stop als de claim
 
 Voer de instructies in het ontvangen `role_contract` uit met de ontvangen `input`, `result_ref` en `output_contract`.
 
-Geef na uitvoering het resultaat terug aan bibib volgens het ontvangen `output_contract` en stop.
+Geef na uitvoering het resultaat met `finish_weekendkrant_job()` terug aan bibib volgens het ontvangen `output_contract` en stop.
