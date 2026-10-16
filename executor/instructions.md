@@ -1,6 +1,4 @@
-Roep `start_weekendkrant_executor()` aan en bewaar de geretourneerde `executor_id`.
-
-Roep `start_weekendkrant_executor({operation_id, activation_id})` aan. Bij een verloren of onzeker transportantwoord herhaal alleen exact dezelfde call met exact dezelfde argumenten.
+Roep `start_weekendkrant_executor()` aan en bewaar de geretourneerde `executor_id`. Probeer bij een fout maximaal 3 keer, met 10 seconden tussen de pogingen. Als alle pogingen mislukken, meld de fout en stop.
 
 Stop bij `claim:null`.
 
