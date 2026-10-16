@@ -4,6 +4,33 @@ Compact log van incidenten, verkeerde aannames en blijvende ontwikkelregels.
 Voeg bij een nieuw incident een concrete observatie en afdwingingsplek toe;
 onderscheid waargenomen gedrag van een nog onbewezen oorzaak.
 
+## Fast-track is een blijvend PR-contract (16 oktober 2026)
+
+- **Incident:** na merge/pull op een schone main selecteerde de automatische
+  Git/AST-impactrunner nul tests; dat valideerde de juist ingevoerde wijziging niet.
+- **Les:** de implementerende ontwikkelaar kent de impact tijdens de PR en legt
+  zijn regressieset expliciet en persistent vast in `tests/fast_track.txt`.
+- **Blijvende ontwikkelregel, verplicht voor iedere functionele PR:**
+  - Beoordeel de fast-tracklijst expliciet; pas hem aan wanneer de wijziging
+    impact heeft op tests.
+  - Nieuwe tests van de PR horen normaal in de fast-track, samen met bestaande
+    regressie-, integratie- en systeemtests die redelijkerwijs geraakt worden.
+  - De lijst representeert bewust de regressieset van de **laatst gemergede
+    functionele wijziging**; de volgende PR mag en moet de lijst opnieuw aan zijn
+    eigen impact aanpassen. Neem oude entries dus niet blind blijvend over.
+  - Een PR is niet klaar voor review zolang de fast-trackimpact niet bewust is
+    beoordeeld. Beschrijf de selectie en de reden in de PR; leg de selectie zelf
+    vast in de repo, niet alleen in het gesprek of de PR-beschrijving.
+  - Gebruik `./start_tests.sh` voor ontwikkeling en normale post-pull/deployment-
+    tests. `--all` blijft beschikbaar voor expliciete volledige regressietests,
+    maar is niet de normale post-pull/deploymenttest.
+- **Afgedwongen/aangewezen in:** [AGENTS.md](../AGENTS.md) als instapinstructie voor
+  nieuwe ontwikkelsessies, [lijst](../tests/fast_track.txt),
+  [runner](../test_runner.py), [regressietests](../tests/test_test_runner.py) en
+  [formaat en validatie](test-fast-track.md). De runner weigert lege en ongeldige
+  lijsten; de inhoudelijke volledigheid van een impactbeoordeling blijft een
+  expliciete ontwikkel- en reviewverantwoordelijkheid.
+
 ## Groene tests, kapotte echte keten (13 oktober 2026)
 
 - **Incident:** unit- en integratietests waren groen terwijl de echte Sherlock →

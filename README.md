@@ -1,5 +1,9 @@
 # Weekendkrant
 
+Voor ontwikkelwerk: lees [AGENTS.md](AGENTS.md) en de
+[blijvende ontwikkelregels](docs/lessons-learned.md). Iedere functionele PR
+beoordeelt en onderhoudt de expliciete [fast-tracklijst](tests/fast_track.txt).
+
 Weekendkrant is een experimentele, grotendeels geautomatiseerde nieuwsredactie voor een persoonlijk weekendmagazine.
 
 Het systeem is bewust opgesplitst in een reeks smalle rollen:
@@ -144,6 +148,7 @@ conservatieve claim-/herstel- en operation-retrycontract
 staan in [docs/jobs.md](docs/jobs.md) en [Sherlock-executor](docs/sherlock-executor.md);
 operationele invoering volgt afzonderlijk.
 
-Tests: `./start_tests.sh` kiest [impacttests](docs/test-fast-track.md);
-`./start_tests.sh --all` draait de volledige suite.
+Tests: `./start_tests.sh` draait de [expliciete fast-track](docs/test-fast-track.md),
+ook na pull op schone main. `./start_tests.sh --all` vraagt expliciet de volledige
+suite aan; dat is niet de normale post-pull/deploymenttest.
 De eerste [Leonardo-backendslice](docs/leonardo-state.md) gebruikt schema 11.

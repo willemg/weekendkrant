@@ -8,4 +8,4 @@ if [[ -x .venv/bin/python ]]; then
 else
     python=python3
 fi
-exec "$python" test_impact.py "$@"
+exec "$python" test_runner.py "$@"
