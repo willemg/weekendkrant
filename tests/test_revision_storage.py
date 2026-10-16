@@ -121,7 +121,7 @@ class RevisionStorageTests(PartFixture):
                 cleanup(db, self.output, True)
             self.assertEqual(path.read_bytes(), b'corrupt')
             path.write_bytes(before)
-            with patch('daily.token_count', return_value=-1), self.assertRaisesRegex(ValueError, 'hash/tokenaudit'):
+            with patch('part_format_v1.token_count', return_value=-1), self.assertRaisesRegex(ValueError, 'hash/tokenaudit'):
                 cleanup(db, self.output, True)
         self.assertTrue(path.exists())
 
@@ -185,7 +185,12 @@ class RevisionStorageTests(PartFixture):
             self.assertFalse(Path(db.execute(
                 'SELECT path FROM part_revisions WHERE revision=1').fetchone()[0]).exists())
             with patch('parts.render', side_effect=AssertionError('future active renderer')), \
-                    patch('parts.TOKENIZER', 'future-tokenizer'):
+                    patch('parts.TOKENIZER', 'future-tokenizer'), \
+                    patch('daily.TOKENIZER', 'future-current-tokenizer'), \
+                    patch('daily.token_count', side_effect=AssertionError('future active token audit')):
                 self.assertEqual(reconstruct(db, 1, 1), expected)
+                from part_format_v1 import token_count
+                self.assertEqual(token_count(expected.decode('utf-8')), db.execute(
+                    'SELECT tokens FROM part_revisions WHERE revision=1').fetchone()[0])
                 self.assertEqual(hashlib.sha256(expected).hexdigest(), db.execute(
                     'SELECT sha256 FROM part_revisions WHERE revision=1').fetchone()[0])

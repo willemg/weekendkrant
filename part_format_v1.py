@@ -7,6 +7,12 @@ explicit version dispatch/migration before its files may be retired.
 TOKENIZER = 'cl100k_base'
 
 
+def token_count(text):
+    """Frozen v1 token audit; independent of the current writer's tokenizer."""
+    import tiktoken
+    return len(tiktoken.get_encoding('cl100k_base').encode(text, disallowed_special=()))
+
+
 def render(items, week, topic, part, revision, reserve):
     head = (f'WEEKENDKRANT-PART-1\nweek: {week}\ntopic: {topic}\npart: {part}\n'
             f'revision: {revision}\ntokenizer: {TOKENIZER}\nreserved_tokens: {reserve}\n\n')

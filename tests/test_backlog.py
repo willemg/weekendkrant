@@ -156,15 +156,15 @@ class BacklogTests(unittest.TestCase):
     def test_overflow_retry_uses_registered_parts_not_orphan_names(self):
         self.add(content='a' * 100)
         self.add(content='b' * 100)
-        with patch.object(daily, 'token_count', side_effect=len), patch.object(daily, 'LIMIT', 5400):
+        with patch.object(daily, 'token_count', side_effect=len), patch('part_format_v1.token_count', side_effect=len), patch.object(daily, 'LIMIT', 5400):
             self.run_day(5)
         self.assertEqual(self.rows('SELECT part FROM parts ORDER BY part'), [(1,), (2,)])
         before = {p: p.read_bytes() for p in self.output.rglob('*.txt')}
         self.add(content='late')
-        with patch.object(daily, 'token_count', side_effect=len):
+        with patch.object(daily, 'token_count', side_effect=len), patch('part_format_v1.token_count', side_effect=len):
             self.run_day()
         self.assertEqual(self.rows('SELECT part,active_revision FROM parts ORDER BY part'), [(1, 1), (2, 2)])
-        with patch.object(daily, 'token_count', side_effect=len):
+        with patch.object(daily, 'token_count', side_effect=len), patch('part_format_v1.token_count', side_effect=len):
             for path, data in before.items():
                 self.assertEqual(self.revision_bytes(path), data)
 

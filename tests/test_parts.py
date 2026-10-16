@@ -99,7 +99,7 @@ class PartTests(PartFixture):
         budget = len(render([f], '2026_W41', 2, 1, 1, 5000)) + 10
         a = self.add(content='x' * 100)
         b = self.add(content='y' * 100)
-        with patch.object(daily, 'token_count', side_effect=len), patch.object(daily, 'LIMIT', budget + 5000):
+        with patch.object(daily, 'token_count', side_effect=len), patch('part_format_v1.token_count', side_effect=len), patch.object(daily, 'LIMIT', budget + 5000):
             self.run_day(5)
             self.assertEqual(self.active(), [('2026_W41', 2, 1, 0, 1), ('2026_W41', 2, 2, 1, 1)])
             self.add(content='z' * 100)
@@ -108,7 +108,7 @@ class PartTests(PartFixture):
         self.assertEqual(self.rows('SELECT queue_id FROM revision_sources WHERE part_id=1'), [(a,)])
         self.assertEqual(self.rows('SELECT queue_id FROM revision_sources WHERE part_id=2'), [(b,)])
         self.add(content='tiny')
-        with patch.object(daily, 'token_count', side_effect=len):
+        with patch.object(daily, 'token_count', side_effect=len), patch('part_format_v1.token_count', side_effect=len):
             self.run_day(7)
         self.assertEqual(self.active()[-1], ('2026_W41', 2, 3, 1, 2))
 
@@ -280,7 +280,7 @@ class PartTests(PartFixture):
     def closed_part_from_runtime(self):
         for content in ('x' * 100, 'y' * 100, 'z' * 100):
             self.add(content=content)
-        with patch.object(daily, 'token_count', side_effect=len), patch.object(daily, 'LIMIT', 5400):
+        with patch.object(daily, 'token_count', side_effect=len), patch('part_format_v1.token_count', side_effect=len), patch.object(daily, 'LIMIT', 5400):
             self.run_day(5)
         self.assertEqual(self.active(), [('2026_W41', 2, 1, 0, 1),
                                          ('2026_W41', 2, 2, 0, 1),

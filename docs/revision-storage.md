@@ -41,9 +41,9 @@ tokenizer en tokenmeting met de gepinde tokenizer. Ontbrekende of afwijkende aud
 onbekende tokenizer/serialization en corrupte bytes geven een fout; ze geven
 nooit toestemming om een file te verwijderen.
 
-`part_format_v1.py` bevriest het v1-serialisatiecontract en zijn tokenizernaam.
+`part_format_v1.py` bevriest het v1-serialisatiecontract en zijn tokenizernaam en tokenmeting (`cl100k_base`).
 Historische reconstructie gebruikt deze renderer rechtstreeks, onafhankelijk van
-`parts.render` en de actieve `parts.TOKENIZER`. De huidige schrijver delegeert
+`parts.render`, de actieve `parts.TOKENIZER` en `daily.token_count`. De huidige schrijver delegeert
 voorlopig naar dezelfde v1-renderer; wijzigingen aan een toekomstig actief formaat
 mogen het bevroren v1-contract niet aanpassen. Alle bestaande revisies zijn v1,
 dus nu is geen schemawijziging nodig. Een nieuw partformaat vereist expliciete
