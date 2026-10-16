@@ -1,7 +1,7 @@
-# Fase 8.5: runtimecontracten, immutable snapshots en lazy dispatch.
+# Fase 9: operatorgrens en actueel Leonardo-runtimecontract.
+# Behouden: operator snapshot actuele role bij enqueue; bind/replay/recovery
+# gebruiken uitsluitend immutable contracten. Geen extra runtime/schema-impact.
+test_leonardo_operator
 test_role_contracts
-test_dispatcher
-test_sherlock_executor
-test_leonardo
-test_job_control
-test_system_e2e
+test_leonardo.LeonardoTests.test_assignment_dispatch_finish_replay_and_next_snapshot
+test_offers.OfferTests.test_existing_offer_never_becomes_a_leonardo_job

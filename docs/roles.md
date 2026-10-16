@@ -225,11 +225,24 @@ dossierstate en eventueel de oorspronkelijke Kuifje-missie met resultaten.
 Elke call wordt expliciet samengesteld; continuïteit zit in de opgeslagen state
 en bronnen. Dit is doelontwerp, geen bestaande modelruntime.
 
+Leonardo onderzoekt primair de inhoudelijke/structurele ruimte: welke informatie
+samenhangt, welke onafhankelijke sporen binnen een topic bestaan, welke claims en
+hypotheses elkaar ondersteunen of tegenspreken, waar bron- of perspectieflacunes
+zitten en welke dossierverbanden of begrensde onderzoeksvragen relevant zijn.
+Een topic is niet automatisch een dossier.
+
+Een langlevend of bijgewerkt dossier en rolling dossierstate bewaren continuïteit.
+Leonardo mag een vorige state als compacte context voor zijn volgende structurele
+analyse gebruiken. `previous_version` en opeenvolgende stateversies maken hem niet
+verantwoordelijk voor longitudinale trend- of evolutieanalyse; die hoort later
+bij Einstein. Datums, volgorde, causaliteit en andere temporele bronfeiten mag
+Leonardo wel gebruiken om het aangeboden materiaal correct te begrijpen.
+
 ### Verantwoordelijkheden
 
 - verbanden leggen;
 - gebeurtenissen in context plaatsen;
-- patronen herkennen;
+- inhoudelijke en structurele patronen herkennen;
 - tegenstrijdigheden zichtbaar maken;
 - op dossier-/verhaalniveau de breedte en onafhankelijkheid van bronnen en perspectieven bewaken;
 - bij ontbrekende relevante spreiding of onafhankelijke bevestiging een begrensde Kuifje-missie voorstellen om het concrete gat gericht te onderzoeken;
@@ -246,6 +259,19 @@ het samengestelde dossier of verhaal. Ariadne beoordeelt die lacunes nooit zelf;
 zij valideert alleen de expliciete missie, koppelingen en technische budgetgrenzen.
 
 De standaardkandidaat voor Leonardo is een middenmodel zoals Terra, om kwaliteit en kost in balans te houden.
+
+## Einstein: geplande rol voor de tijdsdimensie
+
+Einstein onderzoekt later persistente redactionele state in de tijd: wat doorheen
+opeenvolgende observaties of states groeit of verzwakt, welke signalen terugkeren,
+versnellen of uitdoven, wat van karakter verandert en welke oude signalen achteraf
+betekenis krijgen. Langetermijnontwikkelingen en andere longitudinale patronen
+zijn zijn primaire analytische verantwoordelijkheid.
+
+Einstein is uitsluitend gepland: deze PR voegt geen `roles/einstein.md`, job,
+producer/adapter, scheduler, schema of runtimecode toe. Ariadne verricht noch
+Leonardo's structurele analyse, noch Einsteins temporele analyse; zij blijft de
+deterministische opslag-, validatie-, budget- en routinglaag.
 
 ## Kuifje — de onderzoeksreporter (gepland)
 
