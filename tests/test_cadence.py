@@ -11,9 +11,12 @@ from unittest.mock import patch
 
 import daily
 from ingress_queue import IngressQueue
+from test_parts import PartFixture
 
 
 class QuarterHourTests(unittest.TestCase):
+    revision_bytes = PartFixture.revision_bytes
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
@@ -47,7 +50,7 @@ class QuarterHourTests(unittest.TestCase):
             ON p.id=m.part_id AND p.active_revision=m.revision ORDER BY m.queue_id'''), expected)
         self.assertEqual(self.rows('SELECT status FROM ingress_queue ORDER BY id'), [('processed',)] * len(identities))
 
-    def test_quarter_hour_growth_and_empty_ticks_preserve_registered_files(self):
+    def test_quarter_hour_growth_and_empty_ticks_preserve_revision_history(self):
         a = self.add('A')
         self.assertEqual(self.tick(0)['threads'], 1)
         first = {p: (p.read_bytes(), p.stat().st_mtime_ns) for p in self.output.rglob('*.txt')}
@@ -56,7 +59,9 @@ class QuarterHourTests(unittest.TestCase):
         self.assert_sources_once([a, b])
         self.assertEqual(self.rows('SELECT revision FROM part_revisions ORDER BY revision'), [(1,), (2,)])
         for p, value in first.items():
-            self.assertEqual((p.read_bytes(), p.stat().st_mtime_ns), value)
+            self.assertEqual(self.revision_bytes(p), value[0])
+            if p.exists():
+                self.assertEqual(p.stat().st_mtime_ns, value[1])
         before = self.snapshot()
         files = {p: (p.read_bytes(), p.stat().st_mtime_ns) for p in self.output.rglob('*.txt')}
         with patch.object(daily, 'write_thread', side_effect=AssertionError('Empty tick must not write')):

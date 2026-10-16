@@ -51,7 +51,7 @@ of heropening. De volgende run vult alleen de nog open part. Een weekwissel
 maakt een andere identiteit; een oude week kan nog late fiches ontvangen in
 haar open part. Backlog van meerdere weken kan in één snapshot worden verwerkt.
 
-Outputlayout:
+Canonieke renderpaden (historische kopieën mogen na fase 6.5 ontbreken):
 
 ```text
 /home/weekendkrant/draden/2026_W41/topic_2/part_0001/rev_0001.txt
@@ -128,8 +128,10 @@ DB-staat geeft dezelfde geplande revision/path/bytes.
 
 De fout wordt gelogd en de CLI stopt niet-nul. Bij een onbeschrijfbare DB kan ook
 de foutregistratie mislukken; logging blijft zichtbaar. Bewaar database en
-succesvolle revisiebestanden samen. Verwijderde succesvolle files worden niet
-automatisch gereconstrueerd.
+behouden actieve/offered revisiebestanden samen. Historische files mogen vanaf
+fase 6.5 ontbreken; hun exacte bytes zijn reconstrueerbaar. Zie het
+[opslag- en reconstructiecontract](revision-storage.md). Ontbrekende actieve files
+worden niet automatisch gerepareerd.
 
 ## Materialisatietijdprovenance vanaf schema 6
 
@@ -304,8 +306,11 @@ Verwijder of reset daarvoor geen queue-items, parts of provenance.
 
 De automatische achtwekenretentie, `prune_history()`, `week_report()` en `VACUUM`
 zijn verwijderd. Startup/migratie verwijdert geen bestaande SQLite-rijen.
-Alle bestaande data blijft behouden; er is voorlopig geen automatische opruiming.
-Een toekomstig beleid wordt apart ontworpen rond bronarchief, partrevisies,
+Alle logische data blijft behouden. Fase 6.5 verwijdert uitsluitend verifieerbare
+fysieke kopieën van superseded revisies na nieuwe groei; bestaande historische
+kopieën krijgen een afzonderlijke expliciete dry-run/apply-cleanup. Actieve en
+offered files blijven behouden. Zie [retentie en crashgedrag](revision-storage.md).
+Een toekomstig inhoudelijk retentiebeleid wordt apart ontworpen rond bronarchief, partrevisies,
 Leonardo-state, actieve dossiers, missies en callaudit.
 
 ## Systeemtest en operationele gate
