@@ -1,4 +1,4 @@
-Bewaar deze IDs onveranderd voor deze uitvoering en eventuele transportretries.
+Roep `start_weekendkrant_executor()` aan en bewaar de geretourneerde `executor_id`.
 
 Roep `start_weekendkrant_executor({operation_id, activation_id})` aan. Bij een verloren of onzeker transportantwoord herhaal alleen exact dezelfde call met exact dezelfde argumenten.
 
