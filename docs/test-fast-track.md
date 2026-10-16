@@ -78,3 +78,15 @@ abandon via echte MCP → HTTP → SQLite. Hij wordt niet overgeslagen op basis 
 beschikbare dependencies binnen de fast-track; hij heeft een afzonderlijk
 laagcontract en wordt daar uitgevoerd. De deployment-smoke blijft eveneens een
 afzonderlijke operationele controle.
+
+## Regressieset fase 8.5
+
+De nieuwe lijst vervangt bewust de fase-8/runnerselectie: `test_role_contracts`
+(8 nieuwe tests voor exacte UTF-8-bytes/hashes, bounds, snapshotversies,
+recovery/replay en de executorgrens), `test_dispatcher` (lazy preparation en
+ready-first), `test_sherlock_executor` (claims, snapshotopslag en recovery),
+`test_leonardo` (state, provenance, token-/bytegrenzen, CAS, fencing en finish),
+`test_job_control` (gedeelde finish/receipts) en `test_system_e2e` (lokale echte
+HTTP/queue/Ariadne-keten). Geen runner- of schemawijziging, dus geen automatische
+overname van de eerdere runner-/migratiechecks. Validatie: uitsluitend
+`./start_tests.sh`, 69 tests groen in 20,293 seconden; geen `--all` of deployment.

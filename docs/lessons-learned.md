@@ -69,7 +69,7 @@ onderscheid waargenomen gedrag van een nog onbewezen oorzaak.
 - **Afgedwongen in:** [toolmetadata/descriptions](../plugin/weekendkrant_ingress/worker/index.js),
   [exacte metadata-contracttests](../plugin/weekendkrant_ingress/tests/bridge.test.js),
   [metadata-audit](../plugin/weekendkrant_ingress/README.md#generieke-control-plane-fase-4)
-  en [Sherlocks begrensde retry- en bewijsbeleid](agents/sherlock.md#experimentele-retries-bij-platform-safety-blocks).
+  en [Sherlocks begrensde retry- en bewijsbeleid](../roles/sherlock.md#experimentele-retries-bij-platform-safety-blocks).
 
 ## Code Mode: maximaal 20 toolcalls per executie (12 oktober 2026)
 
@@ -82,8 +82,9 @@ onderscheid waargenomen gedrag van een nog onbewezen oorzaak.
 - **Blijvende regel:** maximaal 15 toolcalls per Code Mode-executie, inclusief
   alle andere calls. Zet een volgende batch voort met dezelfde run-ID/topic en
   bevestigde voortgang; verlaag de vereiste brondekking niet.
-- **Afgedwongen in:** [Sherlocks Code Mode-batching](agents/sherlock.md#code-mode-batching).
-  Dit is een executorinstructie; de backend kan het platformbudget niet afdwingen.
+- **Afgedwongen in:** [Sherlocks Code Mode-batching](../roles/sherlock.md#code-mode-batching).
+  Dit is een rolinstructie in Sherlocks runtimecontract; de backend kan het
+  platformbudget niet afdwingen.
 
 ## Node bijna een impliciete bibib-dependency (14 oktober 2026, PR #48)
 

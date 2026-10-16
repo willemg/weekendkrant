@@ -6,27 +6,15 @@ All source reconstruction/tokenization happens before the short enqueue lock.
 
 import hashlib
 import json
+from pathlib import Path
+
+import role_contracts
 
 from jobs import JobStore, _id, _text, _stamp
 from part_format_v1 import token_count
 from revision_storage import reconstruct
 
-ROLE = (
-    "Leonardo v1. Read the supplied immutable state and source revisions. "
-    "Write rolling dossier state; summaries are not primary evidence. "
-    "Keep source facts, inferences, hypotheses, uncertainties and questions distinct. "
-    "Do not execute missions. Return only the output state. "
-)
-OUTPUT = (
-    "leonardo-state-v1: exact keys schema_version=1, dossier_id, version, "
-    "previous_version, hypotheses, claims, uncertainties, open_questions, processed_refs. "
-    "version is previous_version+1. hypotheses/uncertainties/open_questions are lists of "
-    "{id,text,refs}; claims are {id,kind,text,support,counterevidence}, "
-    "kind is source_fact or inference. References are supplied part:<id>:<revision> "
-    "identifiers. Preserve all prior processed_refs and include all supplied parts. "
-    "At most 64 items per list, 256 processed_refs, 4000 cl100k_base tokens, 32768 UTF-8 bytes."
-)
-CONTRACT_REF = "sha256:" + hashlib.sha256(OUTPUT.encode()).hexdigest()
+ROOT = Path(__file__).resolve().parent
 
 
 def canonical(value):
@@ -184,6 +172,10 @@ class LeonardoStore:
                     content=reconstruct(self.db, part, revision).decode("utf-8"),
                 )
             )
+        (_, role_contract), (output_ref, output_contract) = [
+            role_contracts.load_contract(ROOT / "roles" / name)
+            for name in ("leonardo.md", "leonardo-output.md")
+        ]
         snapshot = canonical(
             dict(
                 schema_version=1,
@@ -191,8 +183,8 @@ class LeonardoStore:
                 base_version=base_version,
                 state=state,
                 parts=parts,
-                role_contract=ROLE,
-                output_contract=OUTPUT,
+                role_contract=role_contract,
+                output_contract=output_contract,
             )
         )
         tokens = token_count(snapshot)
@@ -220,7 +212,7 @@ class LeonardoStore:
             ).fetchone():
                 raise ValueError("Dossier already has pending work")
             atomic.transaction_now = now
-            job = atomic.create("Leonardo", ["sha256:" + digest], CONTRACT_REF)
+            job = atomic.create("Leonardo", ["sha256:" + digest], output_ref)
             self.db.execute(
                 "INSERT INTO leonardo_assignments VALUES (?,?,?,?,?,?,?,?)",
                 (job, operation_id, request, dossier_id, base_version, snapshot, digest, tokens),

@@ -10,6 +10,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from jobs import _stamp, _text
+import role_contracts
 
 # Temporary development policy, not a schema or dispatcher invariant.
 SHERLOCK_NEW_JOB_COOLDOWN = timedelta(hours=30)
@@ -52,11 +53,8 @@ class SherlockProducer:
         self.control = dispatcher.control
 
     def prepare(self):
-        contents = [p.read_text(encoding='utf-8') for p in
-                    (ROOT / 'docs/agents/sherlock.md', ROOT / 'docs/agents/sherlock-output.md')]
-        for content in contents:
-            _text(content, 65536)
-        return [('sha256:' + hashlib.sha256(c.encode('utf-8')).hexdigest(), c) for c in contents]
+        return [role_contracts.load_contract(ROOT / 'roles' / name)
+                for name in ('sherlock.md', 'sherlock-output.md')]
 
     def ready(self, job_id):
         return self.db.execute('SELECT 1 FROM sherlock_assignments WHERE job_id=?', (job_id,)).fetchone() is not None
