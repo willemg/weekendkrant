@@ -1,11 +1,14 @@
 """Small storage and deterministic planning layer for immutable week/topic parts."""
 from dataclasses import dataclass
 import hashlib
+import json
+from datetime import date, datetime, timedelta, timezone
 import sqlite3
 
 from database import SCHEMA_VERSION, migrate  # Public compatibility exports.
 
 TOKENIZER = 'cl100k_base'
+OFFER_QUIET_PERIOD = timedelta(minutes=30)
 
 
 @dataclass(frozen=True)
@@ -93,22 +96,81 @@ class PartStore:
             raise ValueError('Offer vereist integer part-ID en positieve revision')
         self.db.execute('BEGIN IMMEDIATE')
         try:
-            active = self.db.execute('''SELECT p.active_revision FROM parts p
-                JOIN part_revisions r ON r.part_id=p.id AND r.revision=p.active_revision
-                WHERE p.id=?''', (part_id,)).fetchone()
-            if active != (revision,):
-                raise ValueError('Offer vereist de geregistreerde actieve revision')
+            result = self._offer(part_id, revision)
+            self.db.commit()
+            return result
+        except Exception:
+            self.db.rollback()
+            raise
+
+    def _offer(self, part_id, revision):
+        active = self.db.execute('''SELECT p.active_revision FROM parts p
+            JOIN part_revisions r ON r.part_id=p.id AND r.revision=p.active_revision
+            WHERE p.id=?''', (part_id,)).fetchone()
+        if active != (revision,):
+            raise ValueError('Offer vereist de geregistreerde actieve revision')
+        row = self.db.execute('''SELECT id,part_id,revision,created_at
+            FROM part_offers WHERE part_id=?''', (part_id,)).fetchone()
+        if row is None:
+            self.db.execute('INSERT INTO part_offers(part_id,revision) VALUES (?,?)',
+                            (part_id, revision))
             row = self.db.execute('''SELECT id,part_id,revision,created_at
                 FROM part_offers WHERE part_id=?''', (part_id,)).fetchone()
-            if row is None:
-                self.db.execute('INSERT INTO part_offers(part_id,revision) VALUES (?,?)',
-                                (part_id, revision))
-                row = self.db.execute('''SELECT id,part_id,revision,created_at
-                    FROM part_offers WHERE part_id=?''', (part_id,)).fetchone()
-            elif row[2] != revision:
-                raise ValueError('Part werd reeds onder een andere revision aangeboden')
+        elif row[2] != revision:
+            raise ValueError('Part werd reeds onder een andere revision aangeboden')
+        return PartOffer(*row)
+
+    def offer_ready(self, now=None):
+        """Offer closed parts or quiescent open parts, atomically with selection.
+
+        No job/model dispatch. Unknown age never seals an open legacy part.
+        Caller holds daily's runtime lock; the short DB lock also fences ingress.
+        """
+        from ariadne import week_name
+        if self.db.in_transaction:
+            raise ValueError('Offer vereist een connection zonder actieve transactie')
+        if now is not None and (now.tzinfo is None or now.utcoffset() is None):
+            raise ValueError('Offerklok moet een timezone bevatten')
+        self.db.execute('BEGIN IMMEDIATE')
+        try:
+            now = datetime.now(timezone.utc) if now is None else now
+            cutoff = now - OFFER_QUIET_PERIOD
+            pending = set()
+            for raw, in self.db.execute("SELECT payload FROM ingress_queue WHERE status='pending'"):
+                payload = json.loads(raw)
+                pending.add((week_name(date.fromisoformat(payload['date'])), payload['topic']))
+            running = {row[0] for row in self.db.execute(
+                "SELECT topic FROM sherlock_runs WHERE status='running'")}
+            candidates = self.db.execute('''SELECT p.id,p.active_revision,p.week,p.topic,p.is_open
+                FROM parts p JOIN part_revisions r
+                ON r.part_id=p.id AND r.revision=p.active_revision
+                LEFT JOIN part_offers o ON o.part_id=p.id
+                WHERE o.id IS NULL ORDER BY p.week,p.topic,p.part''').fetchall()
+            offers = []
+            for identity, revision, week, topic, is_open in candidates:
+                if is_open:
+                    if (week, topic) in pending or topic in running:
+                        continue
+                    stamps = self.db.execute('''SELECT m.materialized_at
+                        FROM revision_sources s LEFT JOIN source_materializations m
+                        ON m.queue_id=s.queue_id WHERE s.part_id=? AND s.revision=?''',
+                        (identity, revision)).fetchall()
+                    if not stamps:
+                        continue
+                    times = []
+                    for stamp, in stamps:
+                        try:
+                            value = datetime.fromisoformat(stamp.replace('Z', '+00:00'))
+                            if value.tzinfo is None or value.utcoffset() is None:
+                                break
+                            times.append(value)
+                        except (AttributeError, ValueError):
+                            break
+                    if len(times) != len(stamps) or max(times) > cutoff:
+                        continue
+                offers.append(self._offer(identity, revision))
             self.db.commit()
-            return PartOffer(*row)
+            return tuple(offers)
         except Exception:
             self.db.rollback()
             raise

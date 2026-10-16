@@ -129,6 +129,9 @@ def run_daily(root, db_path=DB_PATH, output=OUTPUT_PATH, now=None, lock_path=LOC
                 grouped.setdefault((week_name(original_day), fiche.topic), []).append(fiche)
                 new_sources.append(fiche)
             if not items:
+                offers = PartStore(db).offer_ready()
+                if offers:
+                    logger.info('Parts aangeboden: aantal=%s', len(offers))
                 return {'date': str(day), 'week': week, 'status': 'success', 'threads': 0}
             store = PartStore(db)
             snapshots, existing = {}, {}
@@ -168,6 +171,9 @@ def run_daily(root, db_path=DB_PATH, output=OUTPUT_PATH, now=None, lock_path=LOC
             db.executemany('INSERT INTO source_materializations(queue_id,materialized_at) VALUES (?,?)',
                            [(identity, stamp) for identity, _ in items])
             db.commit()
+            offers = store.offer_ready()
+            if offers:
+                logger.info('Parts aangeboden: aantal=%s', len(offers))
             logger.info('Dagverwerking geslaagd: datum=%s fiches=%s draden=%s', day, len(items), len(plans))
             return {'date': str(day), 'week': week, 'status': 'success', 'threads': len(plans)}
         except Exception as error:
