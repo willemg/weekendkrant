@@ -1,5 +1,9 @@
 # Intelligente workers, rollen en persistente redactie
 
+Zie de [runtimecontractgrens en begrippen](roles.md#runtimecontracten-fase-85):
+`roles/*.md` zijn de canonieke versioned runtime-artifacts voor nieuwe jobs;
+bestaande jobs gebruiken uitsluitend hun immutable contractsnapshot.
+
 Vóór iedere volgende fase/PR gelden [AGENTS.md](../AGENTS.md) en de
 [blijvende ontwikkelregels](lessons-learned.md): beoordeel en actualiseer
 `tests/fast_track.txt` voor de impact van die PR voordat hij reviewklaar is.
@@ -21,7 +25,8 @@ zonder een langlevend modelproces nodig te hebben.
 | Geïmplementeerde fase-4-control-plane | Expliciete generieke claim/finish/abandon/validate-tools, persistente operatiebevestigingen (schema 8), aparte operatorrecovery; lokaal getest; productie-invoering en geslaagde deployment-smoke op 14 oktober 2026 door de operator bevestigd. |
 | Geïmplementeerde fase-5-adapter | Minimale Sherlock-jobproductie/topicrotatie, atomaire executorstart, contractsnapshots en gefencete bron-/fichewrites (schema 9); lokaal gevalideerd; backend/schema 9 en Sites-plugin op 15 oktober 2026 in productie ingevoerd/gepubliceerd. Actieve generieke instructies, UTC-slotadmission en een lege throttlebeslissing zijn bewezen; de eerste inhoudelijke job via de volledige keten blijft open. |
 | Geïmplementeerde fase-7-dispatcher | Ready-first selectie, Sherlock als concrete producer, generieke activationreceipts (schema 10), persistente pause en globale/rolconcurrency; lokaal getest, niet gedeployd. |
-| Nog niet geïmplementeerd | Leonardo-state en -jobs, dossiers, missies, drafts, verificatie- en correctiejobs, capaciteitsbeleid en automatische eindredactie. |
+| Geïmplementeerde fase 8 en 8.5 | Expliciete Leonardo-dossiers/state/jobs (schema 11); Sherlock- en Leonardo-contracten onder `roles/`, immutable snapshots bij nieuwe jobs, geen automatische Leonardo-productie. |
+| Nog niet geïmplementeerd | Missies, drafts, verificatie- en correctiejobs, capaciteitsbeleid en automatische eindredactie. |
 
 Fase 3 voegt uitsluitend lokale jobopslag en schema 7 toe, zonder plugin, actieve
 taakinstructies, cron, systemd of deployment te wijzigen. De bestaande runtimecontracten
@@ -222,7 +227,7 @@ croncontract. Het actuele voorlopige halfuurcontract staat bij fase 6 en runtime
 | [Audit trail](audit-trail.md) | Bron-/revisieprovenance bestaat; claim-, dossier- en callaudit zijn gepland. Later job/attempt-identiteit, daadwerkelijke inputs/resultaten en ficheproducent toevoegen. |
 | [Ingress-runtime](ingress-runtime.md) | Vier Sherlock-state endpoints en fiche-ingress bestaan; atomaire topicrotatie is geen generieke claim. De uitspraak over iedere herhaalde POST die een nieuw item maakt betreft `/ingress`, niet filter/finish/bronregistratie. Later generieke control-plane en retrycontracten per operatie verduidelijken. |
 | [Redactionele principes](editorial-principles.md) | Bronvastheid, scheiding feit/inferentie, klein beginnen en eindige controle blijven geldig; later jobartefacten aan menselijke inspectie koppelen. |
-| [Canonieke Sherlock-instructies](agents/sherlock.md) | Eén topic per uurrun, backendrotatie, source-audit, fichepublicatie, batching en experimentele safety-retries behouden. Later bootstrap naar generieke claim/rolcontract migreren; deze PR verandert de actieve instructies niet. |
+| [Canonieke Sherlock-instructies](../roles/sherlock.md) | Eén topic per uurrun, backendrotatie, source-audit, fichepublicatie, batching en experimentele safety-retries behouden. Later bootstrap naar generieke claim/rolcontract migreren; deze PR verandert de actieve instructies niet. |
 | [Plugin-README](../plugin/weekendkrant_ingress/README.md) | Vijf bestaande tools en afzonderlijke GitHub→Sites-sync/publicatie behouden. Later generieke tools, concurrency en outputkoppeling beschrijven; broncode is geen deploymentbewijs. |
 
 De code-audit van `ingress_api.py` bevestigt bovendien compacte requestlogging

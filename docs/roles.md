@@ -1,19 +1,63 @@
 # Rollen
 
+## Runtimecontracten (fase 8.5)
+
+Er is momenteel één echte scheduled intelligente worker: de generieke executor.
+Sherlock, Leonardo, Kuifje, Striktland, Minos en Einstein zijn rollen, geen
+aparte agents of scheduled workers. De executor kent uitsluitend het generieke
+claim-, validate- en finishprotocol; inhoudelijke workflow en toolgebruik komen
+uit de contractsnapshot van de geclaimde job.
+
+| Begrip | Betekenis |
+| --- | --- |
+| Executor | De enige generieke scheduled intelligente worker |
+| Role | Inhoudelijke runtime-instructies voor één type werk |
+| Producer/adapter | Backendcomponent die jobs produceert en/of bindt |
+| Role contract | Versioned repository-artifact voor nieuwe jobs |
+| Contractsnapshot | Immutable exacte contractinhoud van een concrete job |
+| Ariadne/backendregie | Deterministische laag die jobs/state beheert en contractsnapshots aan jobs bindt |
+
+`roles/*.md` zijn runtime-artifacts, niet alleen documentatie. De canonieke
+bestanden voor nieuwe jobs zijn [Sherlock](../roles/sherlock.md),
+[Sherlock-output](../roles/sherlock-output.md), [Leonardo](../roles/leonardo.md)
+en [Leonardo-output](../roles/leonardo-output.md). `docs/agents/` bevat de echte
+agent/deploymentinstructie [executor](agents/executor.md).
+
+Nieuwe Sherlock-productie leest via `SherlockProducer.prepare()` de actuele
+bestanden buiten de schrijflock; Leonardo leest ze bij nieuwe
+`LeonardoStore.enqueue()` vóór de schrijflock. De gedeelde loader leest maximaal
+65.537 bytes en accepteert niet-lege UTF-8 van maximaal 65.536 bytes per contract.
+SHA-256 beschrijft exact de gelezen bytes, zonder newlineconversie of trimmen.
+Sherlock bewaart content-addressed contracten; Leonardo bewaart beide teksten
+in zijn immutable assignment en de outputref in de job. De rolref wordt bij
+bind uit uitsluitend de persistente snapshot berekend.
+
+Wijzigingen aan een role file beïnvloeden uitsluitend toekomstige jobs. Vanaf
+jobaanmaak is de contractsnapshot autoritatief, ook na wijziging, verwijdering
+of beschadiging van deploymentbestanden. `bind()`, ready/recovery en activation
+replay lezen geen actuele role files. Ook directe pause-, concurrency- en
+blocked-weigering heeft geen role-file-I/O nodig. Alleen wanneer nieuwe
+Sherlock-productie werkelijk wordt overwogen, vindt lazy preparation plaats.
+De executor leest zelf nooit rolbestanden uit de repository.
+
+Deze wijziging verandert geen schema, dispatchpolicy, offer-/dossierkeuze of
+live scheduled task en voert geen fase-9-proef of deployment uit.
+
 ## Sherlock — de speurneus
 
-Sherlock is een actieve ChatGPT-taak.
+Sherlock is een inhoudelijke rol van de generieke executor.
 
 Sherlock levert fiches via de Weekendkrant Ingress MCP-plugin aan de HTTPS-API.
 SQLite bewaart de transportqueue; GitHub is geen transportqueue. Het dagelijkse
 consumentencontract heeft exact `schema_version: 1`, `topic: 1|2|3`, een Belgische
 ISO-kalenderdatum en niet-lege Markdown in `content`. De oude Git-header en
-`closed`-melding worden niet meer gebruikt. Sherlock behandelt per scheduled
-uurrun precies één door de backend toegewezen topic via `start_sherlock_run`.
-Zie de [canonieke Sherlock-instructies](agents/sherlock.md). Ariadne verwerkt de
+`closed`-melding worden niet meer gebruikt. Sherlock behandelt per geclaimde
+job precies één door de backend toegewezen topic, met de reeds gebonden run
+en claim.
+Zie de [canonieke Sherlock-instructies](../roles/sherlock.md). Ariadne verwerkt de
 ontvangen fiches via de bestaande deterministische `daily`. Het voorlopige lokale
 croncontract is elke 15 minuten in `Europe/Brussels`, na handmatige invoering;
-de repository wijzigt geen actieve Sherlock-taak of productiecrontab.
+de repository wijzigt geen actieve scheduled taak of productiecrontab.
 
 ### Voorlopige verantwoordelijkheden
 
@@ -29,8 +73,8 @@ de repository wijzigt geen actieve Sherlock-taak of productiecrontab.
 De producer-API en Ariadne-consument zijn beschikbaar. Het lokale
 [queuecontract](daily-runtime.md) bepaalt validatie en lege oogst. De
 [oude instructieaanvulling](sherlock-dagafsluiting.md) is historische referentie;
-het Git-afsluitcontract is niet meer operationeel. Deze PR past Sherlocks actieve
-taak niet aan.
+het Git-afsluitcontract is niet meer operationeel. De runtimecontracten wijzigen
+geen actieve scheduled taak.
 
 ### Onderzoeksgebieden
 

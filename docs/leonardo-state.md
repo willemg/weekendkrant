@@ -1,5 +1,9 @@
 # Leonardo-state v1, fase-8-slice
 
+Zie de [runtimecontractgrens en begrippen](roles.md#runtimecontracten-fase-85):
+`roles/*.md` zijn de canonieke versioned runtime-artifacts voor nieuwe jobs;
+bestaande jobs gebruiken uitsluitend hun immutable contractsnapshot.
+
 Deze slice implementeert expliciete dossier- en jobaanmaak in de Python-backend,
 ready-dispatch via de bestaande dispatcher en statefinish via de bestaande
 HTTP/MCP-tool. Geen permanente worker, nieuwe scheduler, automatische
@@ -29,6 +33,12 @@ worden geweigerd. Dit is een lokale backendinterface, geen nieuwe publieke
 automatische producer of MCP-aanmaaktool.
 
 ## Begrensde inputsnapshot
+
+Nieuwe enqueue leest `roles/leonardo.md` en `roles/leonardo-output.md` als
+begrensde exacte UTF-8-contracten. Een identieke enqueue-retry retourneert de
+bestaande job zonder role-file-I/O. De job-outputref hasht de exacte opgeslagen
+outputtekst, de rolref hasht bij bind uitsluitend de persistente roltekst.
+Historische assignments en refs worden niet gemigreerd of herschreven.
 
 De assignment bevriest de vorige state, 1–32 expliciet gekozen revisies,
 exact gereconstrueerde brontekst en hashes, rolcontract en outputcontract in

@@ -1,5 +1,9 @@
 # Algemene dispatcher (fase 7)
 
+Zie de [runtimecontractgrens en begrippen](roles.md#runtimecontracten-fase-85):
+`roles/*.md` zijn de canonieke versioned runtime-artifacts voor nieuwe jobs;
+bestaande jobs gebruiken uitsluitend hun immutable contractsnapshot.
+
 `Dispatcher.start` is de enige workselector achter `start_weekendkrant_executor`.
 Er blijft één scheduled executor en één tool. De canonieke backendroute is
 `POST /executor/start`; `/executor/sherlock/start` blijft een compatibiliteitsalias
