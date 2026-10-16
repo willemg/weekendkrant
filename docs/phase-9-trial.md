@@ -23,10 +23,34 @@ geen opdracht tot longitudinale trendanalyse. Temporele bronfeiten mag hij wel
 gebruiken. Analyse van evolutie doorheen states hoort later bij Einstein, die
 hier geen runtime krijgt.
 
-Deze PR levert een reproduceerbaar lokaal bewijs van operatorbrug → dispatcher
-→ statefinish. De eerste **echte** Sherlock → Ariadne → offer → scheduled
-Leonardo → state-cyclus moet daarna operationeel worden uitgevoerd en vastgelegd;
-lokale tests bewijzen geen modeluitvoering of productiepublicatie.
+Deze oorspronkelijke PR leverde een reproduceerbaar lokaal bewijs van
+operatorbrug → dispatcher → statefinish. De eerste **echte** Sherlock → Ariadne →
+offer → scheduled Leonardo → state-cyclus is op 16 oktober 2026 daarna
+operationeel uitgevoerd en vastgelegd.
+
+## Resultaat van de eerste productieproef
+
+De eerste Leonardo-job schreef succesvol dossierstate v1. Een eerdere attempt
+expireerde; attempt 2 voltooide via de bestaande generieke executor en fenced
+finish. De immutable assignment mat lokaal 23.665 `cl100k_base`-inputtokens en
+de opgeslagen state 1.844 tokens. De state bevatte 6 hypotheses, 13 claims,
+6 onzekerheden en 6 open vragen voor één verwerkte partrevisie. Deze aantallen en
+tokenmetingen zijn karakteriseringsdata, geen inhoudelijke kwaliteitsscore en
+evenmin providerusage of productkost.
+
+De belangrijkste architecturale bevinding is dat rolling state bruikbaar is als
+compacte structurele kenniskaart, maar bewust verliesgevend moet kunnen blijven.
+De bronlaag bewaart de oudere informatie lossless; de huidige Leonardo-job kan
+eerder verwerkte refs echter nog niet tijdens een latere iteratie opnieuw
+opvragen. Zonder zo'n historical-recallbrug zou opeenvolgende compressie een
+oud detail uit de actieve context kunnen laten verdwijnen terwijl de bron zelf
+nog wel veilig opgeslagen is.
+
+Daarom volgt vóór fase 10 eerst fase 9.6: selectieve read-only historical recall,
+recalltelemetrie en Leonardo-karakterisering met een verruimde technische
+contextgrens. Kuifje blijft buiten deze stap. Pas nadat Leonardo betrouwbaar kan
+vergeten én terugvinden, krijgt hij later een actiepad om een concrete lacune als
+persistente Kuifje-missie via Ariadne/backend te laten ontstaan.
 
 ## Voorwaarden en stopgrenzen
 
@@ -136,5 +160,8 @@ de aangeboden refs bevatten. Inspecteer inhoudelijk de nieuwe/veranderde
 hypotheses, claims, onzekerheden en vragen met hun bronondersteuning. Itemwijziging
 of tokenaantal is geen bewezen informatiewinst. Er bestaat geen verzonnen score.
 Leg gebruikte IDs, tijden, rapporten, inhoudelijke bevindingen en beperkingen vast
-als proefbewijs. Pas daarna beslissen we welke automatische offer-to-jobpolicy
-zinvol is. Kuifje, missies, Striktland, Minos en eindredactie vallen buiten deze slice.
+als proefbewijs. De eerste inhoudelijke beoordeling is inmiddels uitgevoerd en leidde nog niet tot
+een automatische offer-to-jobpolicy. Eerst wordt de historical-recallgrens
+geïmplementeerd en over meerdere Leonardo-iteraties gekarakteriseerd. Kuifje,
+missies, Striktland, Minos en eindredactie blijven buiten deze oorspronkelijke
+proefslice.
