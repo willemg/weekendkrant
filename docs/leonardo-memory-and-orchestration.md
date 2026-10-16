@@ -9,6 +9,12 @@ part-, revisie- en offercontracten blijven geldig.
 
 ## Status en besluit van 8 oktober 2026
 
+Update fase 8: [Leonardo-state v1](leonardo-state.md) implementeert nu expliciete
+dossiers, immutable rolling-stateversies, begrensde jobs en statefinish via de
+algemene dispatcher en HTTP/MCP. Automatische offerconsumptie, modelcalls en
+missies blijven doelontwerp; de oudere statusbeschrijving hieronder beschrijft
+de situatie vóór deze backend-slice.
+
 Dit document bevat zowel huidig runtimegedrag als toekomstig doelontwerp.
 Nu geïmplementeerd: persistente backlog, cross-day week/topic-parts, maximaal
 één open part per week/topic, immutable revisions, exact bronarchief,

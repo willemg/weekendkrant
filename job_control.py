@@ -26,7 +26,7 @@ class _AtomicStore(JobStore):
 class JobControl:
     fields = {
         'claim': ({'operation_id', 'job_id', 'activation_id'}, set()),
-        'finish': ({'operation_id', 'job_id', 'attempt_id', 'token', 'status', 'output_refs'}, {'error'}),
+        'finish': ({'operation_id', 'job_id', 'attempt_id', 'token', 'status', 'output_refs'}, {'error', 'leonardo_state'}),
         'abandon': ({'operation_id', 'job_id', 'attempt_id', 'token', 'error'}, set()),
         'reconcile': ({'operation_id', 'job_id', 'attempt_id', 'decision', 'evidence_ref'}, {'output_refs'}),
     }
@@ -87,6 +87,10 @@ class JobControl:
                 raise ValueError('Invalid recovery decision')
             _text(args['evidence_ref'])
             _refs(args.get('output_refs', []))
+        encoded = None
+        if 'leonardo_state' in args:
+            from leonardo import encoded_state
+            encoded = encoded_state(args['leonardo_state'])
         canonical = json.dumps([operation, args], sort_keys=True, ensure_ascii=False,
                                separators=(',', ':'), allow_nan=False)
         digest = hashlib.sha256(canonical.encode('utf-8')).hexdigest()
@@ -113,7 +117,7 @@ class JobControl:
                 self.atomic.transaction_now = now
                 self.db.execute('SAVEPOINT control_mutation')
                 try:
-                    response = self._apply(operation, args)
+                    response = self._apply(operation, args, encoded)
                     audit = dict(response)
                     audit.pop('token', None)
                     self.db.execute('''INSERT INTO job_operations
@@ -131,10 +135,10 @@ class JobControl:
             raise ControlConflict(conflict)
         return response
 
-    def _apply(self, operation, args):
+    def _apply(self, operation, args, encoded=None):
         if operation == 'claim':
-            if self.db.execute('SELECT 1 FROM sherlock_assignments WHERE job_id=?', (args['job_id'],)).fetchone():
-                raise ControlConflict('Sherlock claims require atomic executor start')
+            if self.db.execute('SELECT 1 FROM sherlock_assignments WHERE job_id=? UNION ALL SELECT 1 FROM leonardo_assignments WHERE job_id=?', (args['job_id'], args['job_id'])).fetchone():
+                raise ControlConflict('Role assignments require atomic executor start')
             if self.db.execute('SELECT 1 FROM executor_activations WHERE activation_id=?', (args['activation_id'],)).fetchone():
                 raise ControlConflict('Activation already used by executor start')
             from dispatcher import admission
@@ -156,6 +160,9 @@ class JobControl:
                 raise ControlConflict('Sherlock finish requires its concrete run result')
             self.atomic.finish(args, status, [] if operation == 'abandon' else args['output_refs'],
                                args.get('error'))
+            if operation == 'finish':
+                from leonardo import commit_state
+                commit_state(self, args, encoded)
             if run:
                 self.db.execute("UPDATE sherlock_runs SET status=?,finished_at=? WHERE id=? AND status='running'",
                     ('completed' if status == 'succeeded' else 'failed', _stamp(self.atomic.transaction_now), run[0]))
@@ -166,6 +173,9 @@ class JobControl:
         if (run and args['decision'] == 'succeeded'
                 and args.get('output_refs') != ['sherlock-run:'+str(run[0])]):
             raise ControlConflict('Sherlock recovery requires its concrete run result')
+        if args['decision'] == 'succeeded' and self.db.execute(
+                'SELECT 1 FROM leonardo_assignments WHERE job_id=?', (args['job_id'],)).fetchone():
+            raise ControlConflict('Leonardo state and success must commit atomically; recover with retry or failed')
         self.atomic.reconcile(args['job_id'], args['attempt_id'], args['decision'],
                               args['evidence_ref'], args.get('output_refs'))
         self.db.execute("""UPDATE sherlock_runs SET status=?,finished_at=COALESCE(finished_at,?)

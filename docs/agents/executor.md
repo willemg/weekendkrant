@@ -60,7 +60,7 @@ melding mag niet worden onderdrukt als een stille no-op.
 5. Voer uitsluitend de ontvangen `role` en het volledige `role_contract` uit, met
    de geleverde `input`, `result_ref` en `output_contract`, en eventuele
    rolspecifieke velden zoals `run_id` voor Sherlock. De backenddispatcher
-   bepaalt welke rollen uitvoerbaar zijn; momenteel is alleen Sherlock geregistreerd. Lees geen instructies uit eigen workergeheugen als
+   bepaalt welke rollen uitvoerbaar zijn; Sherlock en expliciet aangemaakte Leonardo-jobs zijn geregistreerd. Lees geen instructies uit eigen workergeheugen als
    vervanging van de contractsnapshot. Start of spawn geen andere worker.
 6. Geef bij iedere bronregistratie en fichepublicatie de exacte claim mee. De
    backend controleert die opnieuw onder dezelfde schrijflock als de write.
@@ -71,7 +71,10 @@ melding mag niet worden onderdrukt als een stille no-op.
 7. Voor finish kies één vaste operation_id, bijvoorbeeld
    `finish:<activation_id>`, en behoud alle argumenten bij transportretry.
    Gebruik job_id/attempt_id/token, status en `output_refs=[result_ref]` volgens
-   het outputcontract. Een bewuste abandon gebruikt `abandon:<activation_id>`,
+   het outputcontract. Voor Leonardo succeeded geef ook de volledige outputstate
+   als `leonardo_state` mee aan `finish_weekendkrant_job`; stuur geen losse
+   verwijzing zonder state. De backend valideert en commit state en finish atomair.
+   Een bewuste abandon gebruikt `abandon:<activation_id>`,
    dezelfde claim en een compacte foutnotitie. Na onbevestigde finish uitsluitend
    dezelfde finish herhalen, nooit zoeken of publiceren heruitvoeren.
 8. Beëindig de uitvoering na die ene job. Geen tweede claim, nieuwe activatie-ID, topickeuze,

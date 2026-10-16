@@ -1,5 +1,9 @@
 # SQLite-database
 
+Schema 11 voegt append-only Leonardo-dossiers, assignments, partreferenties en
+stateversies toe, zonder backfill of automatische jobproductie. Zie het
+[Leonardo-statecontract](leonardo-state.md).
+
 Schema 10 voegt `executor_activations` en `dispatcher_policy` toe. Bestaande
 schema-9-startreceipts worden met hun immutable contractteksten gekopieerd;
 oude audit blijft behouden. Zie [migratie en policy](dispatcher.md).
@@ -13,7 +17,7 @@ Schema en migraties staan wel in Git; er worden geen productiegegevens meegeleve
 
 ## Eén migratieketen
 
-`database.py` beheert alle DDL en `PRAGMA user_version`. De actuele versie is **9**.
+`database.py` beheert alle DDL en `PRAGMA user_version`. De actuele versie is **11**.
 De genummerde SQL-bestanden in `migrations/` zijn de bron van waarheid:
 
 | Versie | Migratie | Verantwoordelijkheid |
@@ -27,6 +31,8 @@ De genummerde SQL-bestanden in `migrations/` zijn de bron van waarheid:
 | 7 | `007_jobs.sql` | Generieke jobs, afzonderlijke attempts/claims en reconciliatieaudit |
 | 8 | `008_job_operations.sql` | Immutable control-plane-operation receipts |
 | 9 | `009_sherlock_executor.sql` | Immutable Sherlock-opdrachten, contractsnapshots, run/job/attempt-binding en activatiereceipts |
+| 10 | `010_dispatcher.sql` | Generieke activatiereceipts en dispatcherpolicy |
+| 11 | `011_leonardo.sql` | Immutable dossieridentiteit, inputsnapshots, revisiebindingen en stateversies |
 
 De historische nummering blijft behouden. Versie 0 kan een lege database zijn,
 maar ook reeds de voorheen ongeversioneerde runtime-tabellen bevatten.
