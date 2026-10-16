@@ -34,5 +34,3 @@ korte startretries vallen binnen één occurrence behalve bij een grensoverschri
 job/attempt per logisch slot, geen exactly-once inhoudelijke uitvoering.
 Receipts verlenen geen actuele machtiging: leases, validate, fencing en expliciet
 herstel blijven autoritatief.
-
-Deze PR wijzigt geen live scheduled taak en voert geen deployment uit.
