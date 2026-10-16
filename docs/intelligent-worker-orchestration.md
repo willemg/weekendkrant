@@ -12,10 +12,10 @@ zonder een langlevend modelproces nodig te hebben.
 | --- | --- |
 | Huidige geïmplementeerde runtime | Sherlock-specifieke runstart met atomaire topicrotatie, bronfiltering en source-audit; fiche-ingress naar SQLite; deterministische `daily`-materialisatie naar week/topic-parts met immutable revisies, bronarchief en lokale offer/seal-records. |
 | Geïmplementeerde fase-3-opslag | Lokale generieke jobs, afzonderlijke attempts, atomaire claims, vaste leases en fencing, conservatieve quarantaine en expliciete reconciliatie (schema 7); zonder workerintegratie; de aanvullende fase-4-control-plane staat hieronder. |
-| Huidig beschreven operationeel ritme | Sherlock behandelt volgens zijn canonieke instructies één toegewezen topic per uurrun. De bestaande Ariadne `daily` ondersteunt herhaalde kwartierstarts; het voorlopige lokale croncontract is elke 15 minuten in `Europe/Brussels`, na handmatige invoering. Repository-instructies bewijzen op zichzelf geen actieve schedulerconfiguratie of deployment. |
+| Huidig beschreven operationeel ritme | `Weekendkrant Executor 1` gebruikt de generieke executorinstructie; nieuwe Sherlock-jobs vallen onder de tijdelijke 30-uurs productierem. De bestaande Ariadne `daily` ondersteunt herhaalde kwartierstarts; de productiecron draait elke 15 minuten (`*/15 * * * * ... start_ariadne.sh daily ...`). De empirische evaluatie van die voorlopige cadence blijft open. |
 | Gekozen doelrichting | Generieke scheduled executors krijgen per activatie maximaal één begrensde job met een door de backend gekozen rol. Persistente state draagt de redactionele continuïteit. Lokale Ariadne-materialisatie moet minstens uurlijk, mogelijk sneller, kunnen draaien. |
 | Geïmplementeerde fase-4-control-plane | Expliciete generieke claim/finish/abandon/validate-tools, persistente operatiebevestigingen (schema 8), aparte operatorrecovery; lokaal getest; productie-invoering en geslaagde deployment-smoke op 14 oktober 2026 door de operator bevestigd. |
-| Geïmplementeerde fase-5-adapter | Minimale Sherlock-jobproductie/topicrotatie, atomaire executorstart, contractsnapshots en gefencete bron-/fichewrites (schema 9); lokale validatie, operationele invoering nog open. |
+| Geïmplementeerde fase-5-adapter | Minimale Sherlock-jobproductie/topicrotatie, atomaire executorstart, contractsnapshots en gefencete bron-/fichewrites (schema 9); lokaal gevalideerd; backend/schema 9 en Sites-plugin op 15 oktober 2026 in productie ingevoerd/gepubliceerd. Actieve generieke instructies, UTC-slotadmission en een lege throttlebeslissing zijn bewezen; de eerste inhoudelijke job via de volledige keten blijft open. |
 | Nog niet geïmplementeerd | Dispatcher, Leonardo-state en -jobs, dossiers, missies, drafts, verificatie- en correctiejobs, capaciteitsbeleid en automatische eindredactie. |
 
 Fase 3 voegt uitsluitend lokale jobopslag en schema 7 toe, zonder plugin, actieve
@@ -137,8 +137,8 @@ De gekozen doelrichting is **minstens eenmaal per uur materialiseren, mogelijk
 duidelijk vaker**. Het onafhankelijke cadence-deel van fase 6 kiest voorlopig
 **elke 15 minuten via lokale cron**. Ingest, materialisatieduur en gewenste
 inputversheid moeten later uitwijzen of dat ritme passend blijft. Deterministisch
-werk verbruikt geen intelligent scheduled slot. Deze PR wijzigt de productiecrontab
-niet; zie [invoering en rollback](daily-runtime.md#croncontract-na-merge).
+werk verbruikt geen intelligent scheduled slot. De productiecrontab is al handmatig
+ingevoerd met `*/15 * * * * ... start_ariadne.sh daily ...`; zie [invoering en rollback](daily-runtime.md#croncontract-na-merge).
 
 Behoud het bestaande snapshot-, provenance-, runtime-slot- en partprotocol met
 korte transacties. Maak onderscheid tussen vaker materialiseren en een part
@@ -383,12 +383,14 @@ bestaande deployment-smoke. Zie [testlagen](jobs.md#testlagen-en-bewijsgrenzen).
 - [x] Drie topics, zoekworkflow, filtering, source-audit en fichepublicatie behouden.
 - [x] Batching en bestaand experimenteel safety-retrybeleid behouden in de nieuwe rol-/executorcontracten.
 - [x] Source-audit en queue-output via run/attempt aan job_id koppelen en herstelgedrag lokaal bewijzen.
-- [ ] Backend/schema 9 en Sites-plugin operationeel invoeren en nieuwe deployment-smoke vastleggen.
-- [ ] Logische UTC-slotadmission met betrouwbare klok controleren en actieve instructies bewust naar de generieke executor omschakelen; pas daarna één begeleide echte job bewijzen.
+- [x] Backend/schema 9 en Sites-plugin operationeel invoeren/publiceren (15 oktober 2026); succesvolle executorstart via het productiepad vastleggen (16 oktober 2026, HTTP 200).
+- [x] Logische UTC-slotadmission operationeel bewijzen en actieve taak naar de generieke executorinstructie omschakelen; na PR #51 opnieuw met de repo-copy synchroniseren.
+- [ ] Eén echte inhoudelijke Sherlock-job via claim → validate → role execution → fiche/source writes → finish en persistente output bewijzen.
 
 Zie [Sherlock-executor](sherlock-executor.md) voor protocol, invarianten, tests en
-invoervolgorde. De bestaande scheduler blijft gepauzeerd; de PR voert geen
-productie-upgrade, Sites-publicatie, taakwijziging of heractivering uit. De backend
+invoervolgorde. Backend/schema 9 en Sites-plugin zijn in productie ingevoerd;
+de bestaande taak `Weekendkrant Executor 1` gebruikt de generieke executorinstructie
+en is na PR #51 opnieuw met de repo-copy gesynchroniseerd. De backend
 bindt caller-supplied occurrencecontext persistent; native platforminjectie is
 niet vereist. De executor gebruikt de eigen logische UTC-slots met admission
 een inclusieve tolerantie van ±15 minuten rond het dichtstbijzijnde UTC-uur
@@ -410,14 +412,19 @@ Fase 4 blijft de generieke expliciet-job-ID-control-plane. Fase 5 voegt daarnaas
 één specifieke startadapter toe en wacht niet op de algemene dispatcher van
 fase 7. Andere rollen volgen pas nadat dit pad operationeel bewezen stabiel is.
 
-Operationele controle op 15 oktober 2026: dezelfde bestaande taak is hernoemd
-naar `Weekendkrant Executor 1`, met de volledige generieke executorinstructie
-en behoud van de pauze. Backend/schema 9 en Sites-publicatie zijn door de
-operator bevestigd. De nieuwe logische UTC-slotinstructie moet na merge nog
-worden gesynchroniseerd;
-de begeleide job/persistente deployment-smoke is nog niet bewezen; beide
-operationele checkboxes blijven open. Zie het
-[concrete bewijs en het logische slotcontract](sherlock-executor.md#eigen-logische-slots-en-resterende-operationele-gate).
+Operationeel bewijs, aangeleverd door de operator: backend/schema 9 en de actuele
+Weekendkrant Ingress Sites-plugin zijn op 15 oktober 2026 ingevoerd en gepubliceerd.
+Op 16 oktober 2026 rond 08:59 CEST deed `Weekendkrant Executor 1` effectief
+`start_weekendkrant_executor`; de backend antwoordde HTTP 200. Daarmee zijn de
+actieve instructies en logische UTC-slotadmission operationeel bewezen.
+Replay van exact dezelfde logische activatie
+`weekendkrant:executor-1:2026-10-16T07:00:00Z` gaf persistent
+`{"status":"success","claim":null}`. Voor dat slot werd geen job/run/topicrotatie
+gestart: dit bewijst de 30-uurs throttlebeslissing, geen inhoudelijke jobuitvoering.
+De volledige claim → validate → role execution → fiche/source writes → finish-keten
+blijft operationeel onbewezen en open. Dit is aangeleverd productiebewijs, geen
+nieuwe productietest vanuit deze documentatieactualisering. Zie ook het
+[logische slotcontract](sherlock-executor.md#eigen-logische-slots-en-resterende-operationele-gate).
 
 ### Fase 5.5 — vroege operationele begrenzing
 
@@ -427,7 +434,7 @@ Voorlopige ontwikkelingspolicy vóór de operationele voortzetting van fase 6:
 - [x] Expliciet gereconcilieerde ready jobs herstelbaar houden en lege activationreceipts duurzaam vastleggen.
 - [x] Normale lege Ariadne-daily-runs stil maken op INFO, met behoud van CLI-JSON, succeslogging bij werk en zichtbare fouten.
 - [x] Grens-, replay-, concurrency-, recovery- en runtime-loggingtests toevoegen.
-- [ ] Backend op bibib invoeren en één echte toegelaten executoractivatie met de juiste throttlebeslissing bewijzen.
+- [x] Backend op bibib invoeren en één echte toegelaten executoractivatie met de juiste throttlebeslissing bewijzen (16 oktober 2026; HTTP 200 en persistente replay met `claim:null`, zonder job/run/topicrotatie).
 - [ ] Stille normale lege productie-run en zichtbaar werkelijk werk/fouten operationeel controleren.
 
 `SHERLOCK_NEW_JOB_COOLDOWN = timedelta(hours=30)` is een tijdelijke expliciete
@@ -440,30 +447,31 @@ geen topic en blijft ook na cooldown bij replay leeg. Een nieuw slot wordt opnie
 beoordeeld. Zie [het throttlecontract](sherlock-executor.md#tijdelijke-30-uurs-productierem).
 Fase 7 blijft algemene workselectie; fase 13 blijft empirisch capaciteitsbeleid.
 
-Na merge: backend op bibib bijwerken en suite/systeemgate draaien, daarna de nieuwe
-prompt naar dezelfde gepauzeerde executor synchroniseren. Houd de taak uit totdat
-backend en prompt overeenkomen. Doe vervolgens één begeleide activatie binnen
-UTC-admission. Leg logical slot, activation-ID en de throttlebeslissing vast.
-Bij `claim:null`: bevestig persistent geen job/run/topicrotatie, geen bypass voor
-smoke. Dit bewijst de throttle, maar sluit fase 5 zonder echte job niet af.
-Na natuurlijke cooldown kan één inhoudelijke job de claim/validate/role/finish-
-keten en persistente output bewijzen. Leg dan job/attempt/run/topic/resultref,
-queue-IDs en bevestigde finish vast zonder token. Sluit fases 5 en 5.5 alleen op
-passend operationeel bewijs; daarna fase 6 verderzetten. Geen cronwijziging in
-deze PR en geen fictieve productiewaarnemingen.
+Backendinvoering en synchronisatie van de generieke executorinstructie zijn
+uitgevoerd. De toegelaten activatie en persistente lege replay hierboven bewijzen
+de throttle zonder bypass voor smoke; zij sluiten fase 5 zonder echte job niet af.
+Na natuurlijke cooldown blijft één inhoudelijke job nodig om de volledige
+claim/validate/role/fiche/source/finish-keten en persistente output te bewijzen.
+Leg dan job/attempt/run/topic/resultref, queue-IDs en bevestigde finish vast zonder
+token. De stille normale lege productie-run en zichtbaar werkelijk werk/fouten
+blijven afzonderlijk operationeel te controleren. Sluit fases 5 en 5.5 alleen op
+passend operationeel bewijs.
 
 ### Fase 6 — Ariadne frequenter materialiseren
 
 - [x] Bestaande queue→parts-verwerking voor herhaalde kwartierstarts valideren, inclusief lege runs en echte procesoverlap zonder dubbel materiaal.
 - [x] Bestaande snapshot-, flock-, provenance-, retry- en crashsafe implementatie behouden.
 - [x] 15 minuten als voorlopige operationele croncadence documenteren, met handmatige invoering en rollback.
-- [ ] Productiecrontab handmatig invoeren en de voorlopige cadence empirisch evalueren.
+- [x] Productiecrontab handmatig invoeren: `*/15 * * * * ... start_ariadne.sh daily ...` draait al in productie.
+- [ ] De voorlopige cadence van 15 minuten empirisch evalueren.
 - [ ] Afzonderlijk bepalen wanneer open parts worden aangeboden/sealed voor intelligent gebruik.
 
 Alleen dit onafhankelijke cadence-deel wordt vervroegd uitgevoerd, zonder de
 job-/dispatcherfasen af te wachten. De bestaande runtime volstaat; er komen geen
-nieuwe jobs, modelcalls of offers/sealing bij. Tests en documentatie bewijzen
-geschiktheid, niet een al uitgevoerde productie-installatie. Fase 6 blijft deels open.
+nieuwe jobs, modelcalls of offers/sealing bij. De handmatige invoering van de
+productiecron is bevestigd; of 15 minuten empirisch de juiste cadence is, blijft
+open. Ook het aanbied-/sealmoment voor intelligent gebruik blijft open. Fase 6
+blijft dus deels open.
 
 Deze fase moet vóór de eerste Sherlock/Leonardo-cyclus operationeel zijn; een
 dagelijkse materialisatie mag geen urenoude oogst achter een klaarstaande job houden.
