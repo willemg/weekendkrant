@@ -71,6 +71,22 @@ Daarom bewaken we naast bronprovenance ook de herkomst van framing. Runtimepromp
 bevatten alleen operationele instructies voor de huidige job; architectuur,
 motivatie en historische lessen blijven in `docs/`.
 
+
+Een bijkomend risico is **statuspromotie**. Informatie die bij de eerste worker
+slechts ruis, bijkomstige formulering of impliciete architectuurcontext was, kan
+na één transformatie in een state of missie voor de volgende worker de status van
+legitieme taakcontext krijgen. De oorsprong en oorspronkelijke onzekerheidsstatus
+zijn dan niet meer zichtbaar. Zo kan een keten ontstaan als:
+
+`ruis in instructie → inferentie in state → onderzoekscontext → gerichte bronselectie → nieuw bewijsachtig materiaal`
+
+Daarbij vervormt niet alleen de inhoud, maar ook het soort informatie dat een zin
+geacht wordt te zijn. Wat begon als niet-inhoudelijke context kan onderweg als
+premisse, onderzoeksvraag of quasi-bewijs worden behandeld. Daarom is het niet
+voldoende om alleen bronrefs technisch correct te bewaren: ook framing die geen
+inhoudelijke provenance heeft, moet uit persistente inhoudelijke artifacts en
+missies geweerd worden.
+
 Deze wijziging verandert geen schema, dispatchpolicy, offer-/dossierkeuze of
 live scheduled task en voert geen fase-9-proef of deployment uit.
 
