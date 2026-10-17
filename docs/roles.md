@@ -355,16 +355,26 @@ bronvolgorde en eerdere geregistreerde revisies blijven intact. Overflow sluit
 een part definitief. Er is geen dagafsluit-gating, zondagjob,
 weekrapport of automatische retentie. Bestaande data blijft behouden.
 
-### Gepland geheugen- en budgetbeheer
+### Geheugenbeheer en gepland budgetbeheer
 
-Volgens het [doelontwerp van 8 oktober 2026](leonardo-memory-and-orchestration.md)
-wordt Ariadne ook beheerder van Leonardo's persistente state en contextaanbieding:
-state letterlijk opslaan en versioneren, omvang meten, concrete revisies
-aanbieden, budget reserveren en werkelijk gebruik afrekenen. Het vullen van open
-bronparts over daggrenzen is al geïmplementeerd.
-Kuifje-resultaten volgen expliciete missie- en dossieridentifiers. Dit is nog
-niet geïmplementeerd. Leonardo beslist over betekenis, compressie en inhoudelijke
-verbanden; Ariadne controleert formaat, omvang, koppelingen en toegestane acties.
+Ariadne/backend beheert Leonardo's persistente dossierstate en contextaanbieding:
+state letterlijk opslaan en versioneren, omvang meten, concrete immutable
+partrevisies aanbieden en claimgebonden historical recall auditen. Ook het
+vullen van open bronparts over daggrenzen is geïmplementeerd. Het
+[geheugenontwerp](leonardo-memory-and-orchestration.md) blijft richtinggevend
+voor verdere uitbreiding; providerusage, kostenafrekening en capaciteitsbeleid
+zijn nog gepland.
+
+De fase-12-keten bewaart afzonderlijke immutable Kuifje-missies en hun
+job-/attemptbinding. Kuifjes bronfiches doorlopen de bestaande ingress- en
+partketen. Daarnaast levert expliciete selectie van één terminale Kuifje-job en
+attempt alle missie-uitkomsten als aanvullende `research_results` aan Leonardo,
+ook bij lege oogst of een terminale mislukking. Deze context verruimt
+`processed_refs` niet. Automatische resultaatselectie en dossierroutering zijn
+niet geïmplementeerd. Zie het [fase-12-contract](phase-12-kuifje.md).
+
+Leonardo beslist over betekenis, compressie en inhoudelijke verbanden; Ariadne
+controleert formaat, omvang, koppelingen en toegestane acties.
 
 ### Niet doen
 
@@ -381,13 +391,20 @@ Ariadne vlecht draden; ze denkt niet.
 
 ## Leonardo — de schrijver en synthesizer
 
-Leonardo krijgt context met nieuwe bronparts en de geldige compacte dossierstate;
-gerichte historical recall is binnen dezelfde job beschikbaar; Kuifje-missiecontext
-volgt later. Elke
-uitvoering wordt expliciet samengesteld; continuïteit zit in de opgeslagen state
-en bronnen. Dossierstate/jobs en de eerste echte scheduled statecyclus zijn
-inmiddels operationeel bewezen. Historical recall is lokaal getest; productie-invoering blijft open. Kuifje-acties
-zijn nog niet geïmplementeerd.
+Leonardo krijgt expliciet samengestelde context met nieuwe bronparts en de
+geldige compacte dossierstate, of een reevaluation-opdracht zonder nieuwe parts.
+Gerichte historical recall is binnen dezelfde job beschikbaar. Optioneel bevat
+zijn assignment expliciet geselecteerde Kuifje-uitkomsten in `research_results`;
+die zijn aanvullende onderzoekscontext, geen primair bronbewijs. Continuïteit
+zit in de opgeslagen state en bronnen.
+
+Leonardo kan naast een succesvolle state maximaal vier afzonderlijke
+Kuifje-missies voorstellen. De backend valideert en bewaart die atomair als
+immutable artifacts en bundelt ze binnen hetzelfde topic tot één Kuifje-job/run.
+Missies en operationele administratie horen niet in Leonardo's dossierstate.
+Dossierstate, recall, missievoorstellen en expliciete resultaatretour zijn
+geïmplementeerd; automatische Leonardo-productie en resultaatroutering blijven
+buiten dit contract.
 
 Leonardo onderzoekt primair de inhoudelijke/structurele ruimte: welke informatie
 samenhangt, welke onafhankelijke sporen binnen een topic bestaan, welke claims en
