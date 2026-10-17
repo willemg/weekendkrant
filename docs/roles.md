@@ -41,6 +41,36 @@ blocked-weigering heeft geen role-file-I/O nodig. Alleen wanneer nieuwe
 Sherlock-productie werkelijk wordt overwogen, vindt lazy preparation plaats.
 De executor leest zelf nooit rolbestanden uit de repository.
 
+
+### Runtimecontracthygiëne en contextisolatie
+
+De role- en outputcontracten zijn productie-input voor een worker, geen verkorte
+architectuurdocumentatie. Daarom staan alle natuurlijke-taalinstructies in deze
+contracten in het Nederlands. Exacte technische identifiers, toolnamen,
+veldnamen, enumwaarden en letterlijke externe foutmeldingen blijven in hun
+contractuele vorm staan.
+
+Een rolecontract moet epistemisch gesloten zijn. Een worker krijgt alleen
+verwijzingen naar context die hij werkelijk kan waarnemen: aangeleverde input,
+expliciet beschikbare tools en velden, en de grenzen van zijn eigen opdracht.
+Uitleg over waarom een regel bestaat, welke andere rol later iets zal doen,
+backendtopologie, historische incidenten en ontwikkelmotivatie horen hier in de
+documentatie en niet in de runtimeprompt.
+
+Dit voorkomt niet alleen lokale promptvervuiling maar ook contaminatie doorheen
+de keten. Het risico lijkt op het fluisterspel uit een jeugdbeweging: één
+oorspronkelijke zin wordt van persoon tot persoon doorgegeven en komt vervormd
+terug. In een agentketen is dat gevaarlijker omdat iedere tussenstap de ontvangen
+context als legitieme taakinput kan behandelen. Een architectuurhint in een
+rolecontract kan zo eerst een inferentie in state worden, daarna een
+onderzoeksmissie sturen, vervolgens de bronselectie beïnvloeden en uiteindelijk
+als nieuwe inhoud terugkeren. Tegen dan is de oorspronkelijke herkomst van het
+frame moeilijk zichtbaar.
+
+Daarom bewaken we naast bronprovenance ook de herkomst van framing. Runtimeprompts
+bevatten alleen operationele instructies voor de huidige job; architectuur,
+motivatie en historische lessen blijven in `docs/`.
+
 Deze wijziging verandert geen schema, dispatchpolicy, offer-/dossierkeuze of
 live scheduled task en voert geen fase-9-proef of deployment uit.
 
