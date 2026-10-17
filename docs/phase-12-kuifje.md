@@ -29,7 +29,7 @@ Nieuwe Leonardo-jobs bevriezen de actuele `roles/leonardo.md` en
 `roles/leonardo-output.md` in een machineleesbaar assignmentsnapshot met
 `schema_version=2`. Die machineversie ondersteunt queueprovenance en missies,
 onafhankelijk van natuurlijke prompttekst. Alleen historische schema-1-assignments
-behouden hun frozen prefixsemantiek. Een nieuwe finish kan naast `leonardo_state` een aparte
+behouden hun historische contractsemantiek. Een nieuwe finish kan naast `leonardo_state` een aparte
 `kuifje_missions`-lijst bevatten, maximaal vier voorstellen met exact:
 
 | Veld | Betekenis |
@@ -59,6 +59,13 @@ items mogen worden samengevoegd/verwijderd. Historische schema-1-assignments beh
 `leonardo-output-v1:` staat alleen parts toe, `leonardo-output-v2:` ook queueprovenance,
 en `leonardo-output-v3:` ook missievoorstellen. Deze labels worden uitsluitend voor
 legacycompatibiliteit geïnterpreteerd en keren niet terug in actuele rolefiles.
+Daarnaast herkent de backend exact de gearchiveerde unversioned
+schema-1-outputcontractbytes die vóór machine-schema 2 zijn uitgegeven. Die
+variant ondersteunt zowel queueprovenance als missies. Dit is een gesloten
+compatibiliteitsuitzondering in `legacy_contracts.py`, geen herkenning aan losse
+woorden, titel, actuele rolefile of actuele filehash. Onbekende unversioned
+schema-1-contracten krijgen geen aanvullende capabilities. De bestaande
+snapshotbytes worden bij upgrade niet gewijzigd.
 
 ## Atomiciteit en uitvoering
 
@@ -80,6 +87,14 @@ seriële rolgrens, pause, claims, attempts en executorreceipts. Geen nieuwe tool
 rollenlijst in de executor of scheduler. Het jobpakket bevat het frozen algemene
 rolcontract, de ordered `input.missions`-lijst en outputcontract. Recovery hergebruikt dezelfde
 missieset/assignment en maakt uitsluitend een nieuwe attempt na operatorbewijs.
+Nieuwe schema-2-assignments bevatten bovendien `input.date`: de kalenderdatum
+van opdrachtvoorbereiding op de backend in `Europe/Brussels`. Deze datum is
+onderdeel van dezelfde immutable snapshot en wordt bij replay of recovery niet
+opnieuw afgeleid. Iedere fiche moet exact die datum gebruiken; ingress weigert
+een afwijkende datum. Dit bepaalt krantweek en ordening. Een bronpublicatiedatum,
+ook van veel ouder onderzoek, hoort uitsluitend als bronfeit in `content`.
+Frozen schema-1-jobs behouden hun oorspronkelijke input en datumcontract.
+
 Losse claims omzeilen deze binding niet; recovery naar succeeded zonder atomair
 gevalideerde output wordt geweigerd.
 

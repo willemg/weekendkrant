@@ -10,6 +10,7 @@ import re
 from pathlib import Path
 
 import role_contracts
+from legacy_contracts import LEONARDO_SCHEMA1_UNVERSIONED_OUTPUT
 
 from jobs import JobStore, _id, _text, _stamp
 from ariadne_tokens import token_count, TOKENIZER
@@ -23,13 +24,15 @@ LEGACY_OUTPUT_PREFIXES = {
 
 
 def supports_capability(snapshot, capability):
-    """Only legacy frozen assignments interpret historical text prefixes."""
+    """Recognize frozen schema-1 contracts; new assignments use machine semantics."""
     version = snapshot.get('schema_version')
     if type(version) is not int:
         return False
     if version == 2:
         return capability in LEGACY_OUTPUT_PREFIXES
     if version == 1:
+        if snapshot['output_contract'] == LEONARDO_SCHEMA1_UNVERSIONED_OUTPUT:
+            return capability in LEGACY_OUTPUT_PREFIXES
         prefixes = LEGACY_OUTPUT_PREFIXES.get(capability, ())
         return snapshot['output_contract'].startswith(prefixes)
     return False

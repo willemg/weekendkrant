@@ -270,7 +270,7 @@ const start=await call('start_weekendkrant_executor',{});
 const k=await call('get_weekendkrant_job',{executor_id:start.executor_id});
 assert.equal(k.role,'Kuifje');
 const authority={job_id:k.claim.job_id,attempt_id:k.claim.attempt_id,token:k.claim.token};
-const fiche={schema_version:1,date:'2026-10-06',topic:k.input.missions[0].topic,content:'Independent primary source',
+const fiche={schema_version:1,date:k.input.date,topic:k.input.missions[0].topic,content:'Independent primary source',
  mission_id:k.input.missions[0].mission_id,fiche_id:'primary:1',claim:authority};
 lose=true;
 assert.equal((await call('submit_weekendkrant_fiche',fiche)).code,'backend_unreachable');
@@ -292,7 +292,8 @@ console.log(published.queue_item_id);
             self.assertEqual(self.conn.execute('SELECT count(*) FROM kuifje_missions').fetchone()[0], 3)
             self.assertEqual(self.conn.execute('SELECT count(*) FROM kuifje_assignments').fetchone()[0], 1)
             self.assertEqual(self.conn.execute('SELECT count(*) FROM kuifje_fiches').fetchone()[0], 1)
-            self.run_day()
+            snapshot, = self.conn.execute('SELECT snapshot FROM kuifje_assignments').fetchone()
+            self.run_job_day(dict(input=json.loads(snapshot)))
             self.assertEqual(self.conn.execute('SELECT status FROM ingress_queue WHERE id=?', (queue_id,)).fetchone()[0], 'processed')
             self.assertEqual(self.conn.execute('PRAGMA foreign_key_check').fetchall(), [])
         finally:

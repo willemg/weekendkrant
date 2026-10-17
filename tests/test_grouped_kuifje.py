@@ -42,7 +42,7 @@ class GroupedTests(LeonardoFixture):
         k = self.start('k')
         auth = {key:k[key] for key in ('job_id', 'attempt_id', 'token')}
         ids = [m['mission_id'] for m in k['input']['missions']]
-        fiche = dict(schema_version=1, date='2026-10-17', topic=2, content='Primary report')
+        fiche = dict(schema_version=1, date=k['input']['date'], topic=2, content='Primary report')
         for mission in ids:
             for i in range(5):
                 q = self.queue.add(fiche, mission_id=mission, fiche_id=str(i), claim=auth)
@@ -208,6 +208,9 @@ class MigrationTests(LeonardoFixture):
         self.assertEqual(claim['result_ref'],'kuifje-result:'+mission['mission_id'])
         auth={k:claim[k] for k in ('job_id','attempt_id','token')}
         control=JobControl(self.conn,lambda:self.now)
+        # No new date field or restriction may be imposed on frozen schema-1 jobs.
+        self.queue.add(dict(schema_version=1, date='2026-04-30', topic=2, content='Legacy source'),
+                       mission_id=mission['mission_id'], fiche_id='legacy', claim=auth)
         with self.assertRaises(ValueError):
             control.scheduled('finish',dict(auth,status='succeeded',output_refs=[claim['result_ref']],kuifje_result=dict(mission_results=[dict(mission_id=mission['mission_id'],summary='x',limitations='x')])))
         control.scheduled('finish',dict(auth,status='succeeded',output_refs=[claim['result_ref']],kuifje_result=dict(summary='Legacy harvest',limitations='No more sources')))

@@ -2,6 +2,7 @@
 import hashlib
 import json
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from ariadne_tokens import measure
 from jobs import _text, _stamp
@@ -37,7 +38,7 @@ def encoded_result(value):
     return content, measure(content)
 
 
-def prepare_missions(db, args):
+def prepare_missions(db, args, now):
     """Bounded IO/token audit before finish's write lock; no effects here.
 
     Replay uses stored artifacts and does not reopen deployment contracts.
@@ -90,7 +91,8 @@ def prepare_missions(db, args):
     else:
         (_, role), (output_ref, output) = [role_contracts.load_contract(ROOT / 'roles' / name)
                                          for name in ('kuifje.md', 'kuifje-output.md')]
-        snapshot = canonical(dict(schema_version=2, missions=[p['mission'] for p in prepared],
+        snapshot = canonical(dict(schema_version=2, date=now.astimezone(ZoneInfo('Europe/Brussels')).date().isoformat(),
+                                  missions=[p['mission'] for p in prepared],
                                   role_contract=role, output_contract=output,
                                   tokenizer=prepared[0]['metrics']['tokenizer']))
         audit = measure(snapshot)
@@ -156,7 +158,7 @@ def require_authority(db, mission_id, claim, now):
         raise ValueError('Kuifje requires claim')
     JobControl._schema(claim, {'job_id', 'attempt_id', 'token'}, {'lease_until'})
     JobControl._claim_fields(claim)
-    row = db.execute('''SELECT a.job_id,m.content FROM kuifje_assignments a
+    row = db.execute('''SELECT a.job_id,m.content,a.snapshot FROM kuifje_assignments a
         JOIN kuifje_assignment_missions x USING(job_id) JOIN kuifje_missions m USING(mission_id)
         JOIN jobs j ON j.id=a.job_id JOIN job_attempts t ON t.job_id=j.id
         WHERE x.mission_id=? AND j.id=? AND t.id=? AND t.token=? AND j.role='Kuifje'
@@ -166,7 +168,8 @@ def require_authority(db, mission_id, claim, now):
         (mission_id, claim['job_id'], claim['attempt_id'], claim['token'], now)).fetchone()
     if row is None:
         raise ValueError('Kuifje requires current mission authority')
-    return row[0], json.loads(row[1])
+    data = json.loads(row[2])
+    return row[0], json.loads(row[1]), data['date'] if data['schema_version'] == 2 else None
 
 
 def commit_result(control, args, encoded):

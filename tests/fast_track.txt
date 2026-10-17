@@ -4,3 +4,5 @@ test_phase12
 test_phase12_corrections
 test_leonardo_provenance
 test_database.DatabaseTests.test_scratch_matches_full_legacy_schema_and_idempotence
+# Review: stable job calendar and actual pre-upgrade unversioned snapshot.
+test_review77

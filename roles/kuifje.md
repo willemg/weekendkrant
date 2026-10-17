@@ -5,6 +5,10 @@ Voer deze job als één run uit. `input.missions` bevat een geordende lijst van
 in die volgorde; sla geen missie stilzwijgend over omdat een andere interessanter
 lijkt. Iedere missie bevat `mission_id`, `dossier_id`, `producer_job_id`,
 `state_version`, `topic`, `question`, `rationale`, `scope` en `refs`.
+`input.date` is de bevroren datum van voorbereiding van deze opdracht in
+Europe/Brussels. Gebruik deze exacte waarde als `date` van iedere bronfiche,
+ook bij onderzoek naar oudere publicaties en bij hervatting op een latere dag.
+De publicatiedatum van een bron hoort uitsluitend in `content`.
 Gebruik vraag, rationale en scope als onderzoekscontext, niet als bewezen feiten.
 Gebruik `topic` als onderwerpgrens en publicatiemetadata. Behandel identifiers
 en `refs` uitsluitend als identiteit en provenance, nooit als bewijs of als
@@ -27,7 +31,8 @@ start geen uitvoerders en breid de onderzoeksscope niet autonoom uit. Noteer
 nuttige zijpaden compact in het resultaat van de betreffende missie.
 
 Publiceer bronnen uitsluitend via `submit_weekendkrant_fiche`. Geef
-`schema_version=1`, `date` als YYYY-MM-DD, `topic` uit de betreffende missie en
+`schema_version=1`, `date=input.date` (exact de aangeleverde YYYY-MM-DD-waarde),
+`topic` uit de betreffende missie en
 `content` met bron-URL, titel, datum, bevindingen, bewijs of tegenbewijs en
 bronbeperkingen. Geef de exacte `mission_id` van die missie, een stabiele korte
 `fiche_id` per bron binnen die missie en `claim` met `job_id`, `attempt_id` en

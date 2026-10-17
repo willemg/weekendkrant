@@ -177,7 +177,12 @@ dus consistent, maar mag bij latere refactors nooit twee verschillende
 contractinhouden opleveren.
 
 **Kuifje:** `input.missions` is de ordered lijst van 1..4 zelfstandige missies
-binnen één job/run en één topic. Het rolecontract noemt exact de missionvelden die werkelijk worden
+binnen één job/run en één topic. `input.date` geeft expliciet de bevroren
+datum van opdrachtvoorbereiding in Europe/Brussels; iedere fiche gebruikt exact
+die waarde. De publicatiedatum van de bron is uitsluitend inhoud in `content`.
+De datum die routing of ordening bepaalt mag nooit door de worker uit
+bronmetadata of een eigen klok worden geraden.
+Het rolecontract noemt exact de missionvelden die werkelijk worden
 aangeleverd. `question`, `rationale` en `scope` sturen het onderzoek;
 `topic` begrenst onderwerp en publicatiemetadata; de overige identifiers en
 refs zijn uitsluitend identiteit/provenance. Het outputcontract verklaart de

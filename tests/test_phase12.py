@@ -117,7 +117,7 @@ class Phase12Tests(LeonardoFixture):
         claim = self.start('kuifje')
         authority = {k: claim[k] for k in ('job_id', 'attempt_id', 'token')}
         mission = claim['input']['missions'][0]['mission_id']
-        fiche = dict(schema_version=1, date='2026-10-06', topic=2, content='Independent primary report é')
+        fiche = dict(schema_version=1, date=claim['input']['date'], topic=2, content='Independent primary report é')
         queue_id = self.queue.add(fiche, mission_id=mission, fiche_id='source:1', claim=authority)
         self.assertEqual(queue_id, self.queue.add(fiche, mission_id=mission, fiche_id='source:1', claim=authority))
         with self.assertRaises(ValueError):
@@ -128,7 +128,7 @@ class Phase12Tests(LeonardoFixture):
         self.assertEqual(control.scheduled('finish', args), control.scheduled('finish', args))
         with self.assertRaises(ValueError):
             self.queue.add(fiche, mission_id=mission, fiche_id='source:2', claim=authority)
-        self.run_day()
+        self.run_job_day(claim)
         self.assertEqual(self.conn.execute('SELECT status FROM ingress_queue WHERE id=?', (queue_id,)).fetchone()[0], 'processed')
         part, revision = self.conn.execute('SELECT part_id,revision FROM revision_sources WHERE queue_id=? ORDER BY revision DESC LIMIT 1', (queue_id,)).fetchone()
         self.store.enqueue('feedback', 'dossier:reproduction', 2, [[part, revision]])
@@ -166,7 +166,7 @@ class Phase12Tests(LeonardoFixture):
         self.assertEqual(status, 200)
         self.assertEqual(package['role'], 'Kuifje')
         self.assertEqual(package['input'], k['input'])
-        fiche = dict(schema_version=1, date='2026-10-06', topic=2, content='Primary source https://example.org/report',
+        fiche = dict(schema_version=1, date=k['input']['date'], topic=2, content='Primary source https://example.org/report',
                      mission_id=k['input']['missions'][0]['mission_id'], fiche_id='report', claim=package['claim'])
         first = post('/ingress', fiche)
         self.assertEqual(first[0], 201)
@@ -279,7 +279,7 @@ class Phase12Tests(LeonardoFixture):
         claim = self.start('kuifje')
         authority = {k: claim[k] for k in ('job_id', 'attempt_id', 'token')}
         mission = claim['input']['missions'][0]['mission_id']
-        fiche = dict(schema_version=1, date='2026-10-06', topic=2, content='report')
+        fiche = dict(schema_version=1, date=claim['input']['date'], topic=2, content='report')
         for bad_claim in (dict(authority, token='wrong'), dict(authority, attempt_id=999)):
             with self.assertRaises(ValueError):
                 self.queue.add(fiche, mission_id=mission, fiche_id='one', claim=bad_claim)

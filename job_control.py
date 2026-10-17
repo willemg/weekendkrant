@@ -108,7 +108,7 @@ class JobControl:
             from leonardo import encoded_state
             encoded = encoded_state(args['leonardo_state'])
         from kuifje import prepare_missions, encoded_result
-        missions = prepare_missions(self.db, args) if operation == 'finish' else []
+        missions = prepare_missions(self.db, args, self.store.clock()) if operation == 'finish' else []
         result = encoded_result(args['kuifje_result']) if 'kuifje_result' in args else None
         canonical = json.dumps([operation, args], sort_keys=True, ensure_ascii=False,
                                separators=(',', ':'), allow_nan=False)

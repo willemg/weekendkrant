@@ -111,11 +111,13 @@ class IngressQueue:
                 from kuifje import require_authority, digest
                 from leonardo import canonical
                 try:
-                    job, mission = require_authority(db, mission_id, claim, received_at)
+                    job, mission, job_date = require_authority(db, mission_id, claim, received_at)
                 except ValueError as error:
                     raise FicheRunConflict(str(error)) from error
                 if mission['topic'] != payload['topic']:
                     raise FicheRunConflict('Wrong mission topic')
+                if job_date is not None and payload['date'] != job_date:
+                    raise FicheRunConflict('Fiche date must match immutable job date')
                 payload_sha = digest(canonical(payload))
                 prior = db.execute('SELECT queue_item_id,payload_sha256 FROM kuifje_fiches WHERE job_id=? AND mission_id=? AND fiche_id=?',
                                    (job, mission_id, fiche_id)).fetchone()
