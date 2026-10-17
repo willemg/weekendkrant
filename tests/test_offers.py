@@ -14,6 +14,26 @@ from test_parts import PartFixture
 TABLES = ('parts', 'part_revisions', 'revision_sources', 'source_archive', 'part_offers')
 
 
+class V1StorageAudit:
+    """Observe SQLite operations, not SQL text or words in trigger declarations."""
+    def __init__(self):
+        self.mutations = []
+        self.dropped_tables = set()
+
+    def __call__(self, action, table, column, database, trigger):
+        if action == sqlite3.SQLITE_DROP_TABLE:
+            self.dropped_tables.add((database, table))
+        if (action in (sqlite3.SQLITE_INSERT, sqlite3.SQLITE_UPDATE,
+                       sqlite3.SQLITE_DELETE, sqlite3.SQLITE_DROP_TABLE) and
+                database == 'main' and table.lower() in TABLES[:-1]):
+            self.mutations.append((action, table, column))
+        # VACUUM attaches a temporary database internally. Migration should
+        # neither rewrite the whole DB nor attach another database.
+        if action == sqlite3.SQLITE_ATTACH:
+            self.mutations.append((action, table, column))
+        return sqlite3.SQLITE_OK
+
+
 class OfferTests(PartFixture):
     def prepare(self, revisions=1):
         for day in range(5, 5 + revisions):
@@ -232,15 +252,21 @@ class OfferMigrationTests(unittest.TestCase):
         before = {t: db.execute('SELECT * FROM ' + t).fetchall() for t in TABLES[:-1]}
         schema = db.execute('SELECT * FROM sqlite_master ORDER BY name').fetchall()
         files = {Path(row[2]): Path(row[2]).read_bytes() for row in before['part_revisions']}
-        statements = []
-        db.set_trace_callback(statements.append)
-        migrate(db)
+        audit = V1StorageAudit()
+        db.set_authorizer(audit)
+        try:
+            migrate(db)
+        finally:
+            db.set_authorizer(None)
         self.assertEqual(db.execute('PRAGMA user_version').fetchone(), (SCHEMA_VERSION,))
         for t, rows in before.items():
             self.assertEqual(db.execute('SELECT * FROM ' + t).fetchall(), rows)
         for row in schema:
             self.assertIn(row, db.execute('SELECT * FROM sqlite_master').fetchall())
-        self.assertFalse(any(s.lstrip().upper().startswith(('UPDATE', 'DELETE', 'DROP', 'VACUUM')) for s in statements))
+        self.assertEqual(audit.mutations, [])
+        self.assertTrue({('main', table) for table in (
+            'leonardo_states', 'leonardo_assignment_parts', 'leonardo_assignments'
+        )}.issubset(audit.dropped_tables))
         offer = PartStore(db).offer(1, 2)
         after = list(db.iterdump())
         migrate(db)
@@ -249,6 +275,45 @@ class OfferMigrationTests(unittest.TestCase):
         for path, data in files.items():
             self.assertEqual(path.read_bytes(), data)
         self.assertEqual(db.execute('PRAGMA foreign_key_check').fetchall(), [])
+
+    def test_audit_detects_writes_and_drop_on_each_original_v1_table(self):
+        for table in TABLES[:-1]:
+            for sql in (
+                f'/* migration */ UPDATE main."{table.upper()}" SET id=id WHERE 0',
+                f'DELETE FROM main.[{table}] WHERE 0',
+                f'DROP TABLE main."{table}"',
+                f'INSERT INTO main."{table}" VALUES (1)',
+            ):
+                with self.subTest(table=table, sql=sql):
+                    db = sqlite3.connect(':memory:')
+                    try:
+                        db.execute(f'CREATE TABLE "{table}" (id INTEGER)')
+                        audit = V1StorageAudit()
+                        db.set_authorizer(audit)
+                        db.execute(sql)
+                        self.assertTrue(audit.mutations, sql)
+                    finally:
+                        db.close()
+
+    def test_audit_allows_trigger_ddl_but_detects_its_executed_update(self):
+        db = sqlite3.connect(':memory:')
+        self.addCleanup(db.close)
+        db.executescript('CREATE TABLE parts(id); CREATE TABLE later_table(id);')
+        audit = V1StorageAudit()
+        db.set_authorizer(audit)
+        db.execute("""CREATE TRIGGER later_update AFTER INSERT ON later_table
+            BEGIN UPDATE parts SET id=id WHERE 0; END""")
+        self.assertEqual(audit.mutations, [])
+        db.execute('INSERT INTO later_table VALUES (1)')
+        self.assertTrue(audit.mutations)
+
+    def test_audit_detects_vacuum_globally(self):
+        db = sqlite3.connect(':memory:')
+        self.addCleanup(db.close)
+        audit = V1StorageAudit()
+        db.set_authorizer(audit)
+        db.execute('/* maintenance */ VACUUM')
+        self.assertTrue(audit.mutations)
 
     def test_migration_failure_is_transactional(self):
         db = self.v1()
