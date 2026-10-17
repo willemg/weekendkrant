@@ -210,12 +210,23 @@ CLI-resultaat (`threads` telt nieuwe revisies) blijft gelijk. Een offer is lokal
 beschikbaarheid, geen job, verzending of bewijs van modelontvangst. Later materiaal
 krijgt de volgende part, ook bij vertraagde ontvangst voor een oude week.
 
-## Nog niet geïmplementeerd
+## Grens tussen lokale offers en intelligente uitvoering
 
-Daadwerkelijke Leonardo-calls, rolling dossierstate, dossiers,
-Kuifje-missies, callbudgetten en eindredactionele weekdeadline volgen later.
-Dit beleid introduceert geen dispatcher, modelcall of extra cronjob. De lokale
-tests bewijzen het contract; productiecontrole na deployment blijft open.
+Scheduled Leonardo-uitvoering, dossiers, rolling state en de Kuifje-missieketen
+zijn inmiddels geïmplementeerd. De generieke executor en dispatcher voeren die
+jobs uit; `daily` blijft de deterministische materialisatie- en offerlaag en
+start zelf geen intelligente run. Zie [dispatcher](dispatcher.md),
+[Leonardo-state](leonardo-state.md) en [fase 12](phase-12-kuifje.md).
+
+Automatische offer-to-jobplanning, betrouwbare providerusage-/kostenboekhouding
+en eindredactionele weekafsluiting zijn nog niet geïmplementeerd. Een lokaal
+offer bewijst geen modelontvangst of uitvoering.
+
+### Historische invoering van het fase-6-offerbeleid
+
+Onderstaande invoeringsnotities beschrijven uitsluitend de oorspronkelijke
+fase-6-wijziging op schema 9, niet de actuele databaseversie of de latere
+Leonardo-/Kuifje-upgrades. Voor huidige upgrades geldt [databasebeheer](database.md).
 
 Voor invoering volstaat de applicatie-update op bibib en de Python-suite inclusief
 systeemgate. Schema 9, Sites-plugin en executorinstructie veranderen niet; `daily`

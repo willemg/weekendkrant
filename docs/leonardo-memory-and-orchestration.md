@@ -2,8 +2,8 @@
 
 Het [ontwerpbesluit van 13 oktober 2026](intelligent-worker-orchestration.md)
 generaliseert continuïteit via persistente state naar alle intelligente rollen.
-Voor toekomstige execution identity en orchestratie is dat nieuwe document
-leidend: Leonardo wordt een rol binnen generieke scheduled jobs. De API-kosten-
+Voor execution identity en orchestratie is dat document leidend:
+Leonardo draait als rol binnen generieke scheduled jobs. De API-kosten-
 en modelkeuzevoorstellen hieronder zijn het eerdere doelontwerp; huidige
 part-, revisie- en offercontracten blijven geldig.
 
@@ -11,9 +11,10 @@ part-, revisie- en offercontracten blijven geldig.
 
 Update fase 8: [Leonardo-state v1](leonardo-state.md) implementeert nu expliciete
 dossiers, immutable rolling-stateversies, begrensde jobs en statefinish via de
-algemene dispatcher en HTTP/MCP. Automatische offerconsumptie, modelcalls en
-missies blijven doelontwerp; de oudere statusbeschrijving hieronder beschrijft
-de situatie vóór deze backend-slice.
+algemene dispatcher en HTTP/MCP. In die fase waren automatische offerconsumptie,
+modelcalls en missies nog doelontwerp. De latere scheduled uitvoering en fase-12-
+missieketen staan hieronder als actuele aanvullingen; automatische
+offerconsumptie blijft gepland.
 
 Dit document bevat zowel huidig runtimegedrag als toekomstig doelontwerp.
 Nu geïmplementeerd: persistente backlog, cross-day week/topic-parts, maximaal
@@ -56,8 +57,11 @@ om fiches te ordenen, state samen te vatten of onderzoeksvragen te kiezen.
 | Striktland | Controleert claims tegen oorspronkelijke bronfragmenten. |
 | Minos | Treedt na de zaterdagse freeze op als eindredacteur: beoordeelt en combineert Leonardo- en Einsteinmateriaal tegen Striktlands verificatie, corrigeert of schrapt waar nodig en maakt de definitieve krant. |
 
-Kuifje is een toekomstige onderzoeksrol. Sherlock blijft de brede reporter:
-dit ontwerp schuift geen missieadministratie of extra synthese naar hem door.
+Kuifje is als onderzoeksrol geïmplementeerd. De 1..4 immutable missies van één
+succesvolle Leonardo-finish vormen binnen hetzelfde topic één Kuifje-job/run;
+expliciete selectie van de terminale job/attempt levert alle missie-uitkomsten
+terug. Sherlock blijft de brede reporter en krijgt geen missieadministratie
+of extra synthese. Zie het [fase-12-contract](phase-12-kuifje.md).
 
 ## Inhoudelijke ruimte en tijdsdimensie
 

@@ -3,10 +3,12 @@
 De context-/tokenbudgetprincipes en bestaande bundelmetingen blijven relevant.
 Leonardo als aparte voornaamste betaalde API-laag, de genoemde modelrollen en
 API-dollarbudgettering zijn het oudere doelontwerp, geen huidige runtime.
-Voor toekomstige execution identity, scheduled capaciteit en gedeelde allowance
+Voor execution identity, scheduled capaciteit en gedeelde allowance
 is het [ontwerpbesluit van 13 oktober 2026](intelligent-worker-orchestration.md)
-leidend. Generieke jobopslag (fase 3) en de MCP/control-plane (fase 4) zijn geïmplementeerd;
-geïntegreerde jobproductie, executor en dispatcher volgen nog.
+leidend. Generieke jobopslag, MCP/control-plane, geïntegreerde jobproductie,
+executor en dispatcher zijn geïmplementeerd. Alleen Sherlock produceert
+momenteel automatisch nieuw werk; Leonardo en Kuifje gebruiken ready-only
+adapters. Capaciteits- en kostenbeleid blijft verdere uitwerking vragen.
 
 ## Uitgangspunt
 
@@ -25,15 +27,18 @@ API-kostenontwerpen zijn geen metingen van verbruik of resterende allowance.
 
 De bundelmeting, Leonardo-state/jobs en de eerste echte scheduled Leonardo-
 statecyclus zijn inmiddels geïmplementeerd. Historical recall en lokale audit per attempt zijn in fase 9.6 geïmplementeerd;
-productiekarakterisering blijft open. Kuifje-missies en betrouwbare providerusage-/
-kostenadministratie zijn nog doelontwerp. Zie
+productiekarakterisering blijft een afzonderlijke operationele stap. Fase 12
+implementeert immutable Kuifje-missies, uitvoering via de generieke dispatcher
+en expliciete resultaatretour. Betrouwbare providerusage-/kostenadministratie
+blijft gepland. Zie
 [het geheugen- en orchestratieontwerp](leonardo-memory-and-orchestration.md).
 De huidige bundels groeien over daggrenzen heen per ISO-week/topic via nieuwe
 immutable revisies, totdat overflow of een expliciet lokaal offer de part sluit.
 Een offer bevriest exact de actieve revisie en verwijst naar bestaande tokenmeting
 en provenance, zonder bytes opnieuw te renderen. Offered/sealed is geen bewijs
-van een Leonardo-call en veroorzaakt geen modelkosten. Aanbiedplanning en de
-callbouwer volgen later; logisch dossiergeheugen blijft daarvan onafhankelijk.
+van een Leonardo-call en veroorzaakt geen modelkosten. Automatische
+offer-to-jobplanning volgt later; expliciete Leonardo-enqueue
+bevriest nu al de complete context en contracten in een immutable assignment.
 
 De oorspronkelijke 35K-grens was een arbitraire eerste cognitieve
 chunkinghypothese: geef Leonardo niet zoveel nieuw, onbekend bronmateriaal
@@ -88,7 +93,7 @@ tokenmetingen blijven daarom capaciteits- en auditmetingen, geen factuur.
 De experimentele basisstrategie wordt na de eerste echte run:
 
 - meet iedere aangeboden component afzonderlijk: nieuwe parts, rolling state,
-  instructies en later iedere historical-recallresponse;
+  instructies en iedere historical-recallresponse;
 - behoud een ruime technische context/fail-safegrens, maar gebruik 35K voorlopig
   niet als vaste cognitieve chunkinghypothese voor Leonardo;
 - houd de rolling state compact, zodat veel lezen niet automatisch veel blijvend
@@ -102,12 +107,20 @@ Zij is niet langer bedoeld als afleiding van een vaste 35K totale Leonardo-input
 
 De tussenoutput moet compact blijven. Leonardo hoeft na elke draad geen afgewerkt artikel te schrijven; hij kan een compacte research state bijwerken. Pas aan het einde volgt een langere synthese.
 
-## Kuifje (gepland)
+## Kuifje
 
-Een missie krijgt alleen de vraag en relevante context. Resultaten keren met
-missie- en dossieridentiteit terug naar Leonardo: geldige state + oorspronkelijke
-missie + nieuwe bronnen. Oude broncontext wordt alleen gericht opnieuw opgehaald.
-Missies, herlezing, retries en compressie vallen onder dezelfde budgetboekhouding.
+Eén succesvolle Leonardo-finish kan 1..4 afzonderlijke immutable missies voor
+hetzelfde topic opleveren. Die vormen samen één Kuifje-job/run met een ordered
+missielijst en frozen context/contracten. De grenzen van 20 beoordeelde bronnen
+en vijf fiches gelden per missie. De backend meet assignment en resultaten
+lokaal; capaciteit wordt in jobstarts/runs geteld, niet in mission-count.
+
+Bronfiches doorlopen de bestaande ingress-/partketen. Eén expliciet geselecteerde
+terminale job/attempt levert daarnaast één `research_results`-item per missie
+aan Leonardo, ook bij lege oogst of mislukking. Deze context is geen primair
+bronbewijs en verruimt `processed_refs` niet. Zie [fase 12](phase-12-kuifje.md).
+Missies, herlezing, retries en compressie moeten later onder dezelfde betrouwbare
+providerusage-/budgetboekhouding vallen; die boekhouding is nog niet beschikbaar.
 
 ## Streaming synthese
 
