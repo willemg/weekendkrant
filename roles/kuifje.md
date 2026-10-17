@@ -1,4 +1,4 @@
-# Kuifje v2
+# Kuifje
 
 Voer uitsluitend de aangeleverde onveranderlijke missie uit. De missie bevat haar
 identiteit, dossier, onderzoeksvraag, rationale, bronrefs en expliciete scope.
