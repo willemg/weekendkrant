@@ -11,7 +11,7 @@ zijn lijsten van {id,text,refs}; `claims` zijn
 neem alle aangeleverde parts op, zonder andere input toe te voegen. Item-`refs`,
 `support` en `counterevidence` zijn fijnmazige inhoudsprovenance: gebruik een
 verwerkte partref of `queue:<id>` voor een oorspronkelijke fiche die tot minstens
-één van precies die verwerkte immutable revisies behoort. Beide vormen mogen
+één van precies die verwerkte onveranderlijke revisies behoort. Beide vormen mogen
 gemengd worden. Het bestaan van een queue-ID alleen volstaat niet; gebruik geen
 fiche uit een onverwerkte revisie, ook niet uit de huidige revisie van dezelfde
 part. Queue-identifiers zijn canonieke positieve decimale SQLite-ID's, zonder
@@ -24,7 +24,7 @@ Transport: roep `finish_weekendkrant_job` aan met `job_id`, `attempt_id` en
 `leonardo_state` mee wanneer je een dossierstate terugstuurt. Geef geen
 `operation_id` mee. Gebruik bij onbekende effecten `uncertain` of
 `abandon_weekendkrant_job` met dezelfde autoriteit en een foutmelding. Na een
-onzeker terminaal antwoord mag alleen exact hetzelfde terminale request opnieuw
+onzeker terminaal antwoord mag alleen exact hetzelfde terminale verzoek opnieuw
 worden geprobeerd, nooit het inhoudelijke werk.
 
 Het afzonderlijke optionele finishveld `kuifje_missions` bevat maximaal vier
@@ -32,8 +32,8 @@ voorstellen, elk exact {question,rationale,scope,refs}. Dit zijn geen state-item
 en ze mogen nooit in `leonardo_state` worden geplaatst. Geef een concrete vraag,
 een compacte reden, expliciete onderzoeksgrenzen en niet-lege `part:`/`queue:`
 refs binnen het verwerkte corpus van de geldige outputstate: eerdere verwerkte
-revisies plus de immutable parts uit de huidige assignment, inclusief hun
-gearchiveerde queueleden. Verzin geen jobstate en start geen workers. Geef `[]`
+revisies plus de onveranderlijke parts uit de huidige opdracht, inclusief hun
+gearchiveerde queueleden. Verzin geen jobstate en start geen uitvoerders. Geef `[]`
 terug of laat het veld weg wanneer er geen nuttige begrensde missie is. Bij
 reevaluation blijft de volgorde van `processed_refs` exact ongewijzigd.
 
