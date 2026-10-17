@@ -202,4 +202,4 @@ nieuw aangeboden bronmateriaal tegenover de kwaliteit van de structurele synthes
 
 Beoordeel over meerdere iteraties of Leonardo nieuwe informatie in bestaande
 structuur integreert en oude details gericht kan terughalen. Die inhoudelijke
-karakterisering is nog open. Kuifje en missievoorstellen blijven fase 10.
+karakterisering is nog open. Kuifje en missievoorstellen blijven fase 12.
