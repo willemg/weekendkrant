@@ -380,9 +380,9 @@ granulariteit vandaag al; fase 11 maakt ze beschikbaar in Leonardo's eigen
 structurele output zonder historische states achteraf rijker voor te stellen
 dan ze waren.
 
-Pas daarna volgt het action-/missieprotocol: Leonardo kan een gerichte lacune als
-missievoorstel afleveren, Ariadne valideert en persisteert die aanvraag en de
-generieke dispatcher kan er een Kuifje-job van maken. Kostenadministratie hoort
+Pas daarna volgt in fase 12 het action-/missieprotocol: Leonardo kan een gerichte
+lacune als missievoorstel afleveren, Ariadne valideert en persisteert die aanvraag
+en de generieke dispatcher kan er een Kuifje-job van maken. Kostenadministratie hoort
 bij diezelfde regielaag en moet starts, attempts, recalls en toekomstige missies
 kunnen onderscheiden. Werkelijke providerusage is momenteel onbekend.
 
