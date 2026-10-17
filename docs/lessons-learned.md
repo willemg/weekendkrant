@@ -119,3 +119,17 @@ onderscheid waargenomen gedrag van een nog onbewezen oorzaak.
 - **Afgedwongen in:** [runner](../ci_runner.py), [gerichte tests](../tests/test_ci_runner.py)
   en [canoniek CI-contract/runbook](ci.md). Alleen de CI-runtime draait bewust het
   bestaande `--all`-pad; deze uitzondering verandert het PR-ontwikkelcontract niet.
+
+
+## Cwd-onafhankelijke padfixtures (17 oktober 2026)
+
+- **Incident:** zeven CI-tests gebruikten de relatieve sentinel `unused`. Vanuit
+  bibib resolveerde die naar `/home/weekendkrant/app/unused`, terecht geweigerd
+  door de live-checkoutgrens; een andere ontwikkel-cwd verborg de fout.
+- **Les:** een neutrale pad-/URL-fixture mag niet impliciet van de cwd afhangen
+  wanneer productiecode absolute checkoutgrenzen valideert. Gebruik een expliciete
+  neutrale URL waar de source niet wordt gebruikt, zonder de beveiliging af te zwakken.
+- **Regressie:** een directe test bewijst dat de oude relatieve sentinel onder
+  bibibs cwd binnen de live checkout resolveert en wordt geweigerd, terwijl de
+  nieuwe HTTPS-sentinel onder dezelfde omstandigheden wordt geaccepteerd. De
+  afzonderlijke live-checkout-rejectietest blijft behouden.
