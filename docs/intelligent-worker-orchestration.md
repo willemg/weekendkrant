@@ -688,17 +688,17 @@ Geïmplementeerde backend-slice: [fase-12-contract](phase-12-kuifje.md), inclusi
 expliciete reevaluation, aparte immutable missies en generieke Kuifje-jobs.
 Een echte productierun en automatische dossierrouter blijven afzonderlijk.
 
-- [ ] Laat Leonardo een expliciet missievoorstel kunnen opleveren wanneer bestaande
+- [x] Laat Leonardo een expliciet missievoorstel kunnen opleveren wanneer bestaande
   state, nieuwe input en eventuele historical recall een concrete informatielacune
   laten zien. Dit is semantisch een opdracht van Leonardo, maar geen directe
   worker-spawn of toolcall naar Kuifje.
-- [ ] Laat Ariadne/backend zo'n voorstel atomair valideren en als duurzame missie
+- [x] Laat Ariadne/backend zo'n voorstel atomair valideren en als duurzame missie
   opslaan met `mission_id`, dossier, vraag, context/referenties, status en begrensd
   uitvoeringsbudget.
-- [ ] Maak een open gevalideerde missie beschikbaar als begrensde Kuifje-job via
+- [x] Maak een open gevalideerde missie beschikbaar als begrensde Kuifje-job via
   dezelfde generieke dispatcher. De missie ontstaat on demand uit agentwerk; haar
   uitvoering hoeft niet in dezelfde scheduled activatie plaats te vinden.
-- [ ] Routeer Kuifjes bronvaste resultaat mechanisch naar hetzelfde dossier,
+- [x] Routeer Kuifjes bronvaste resultaat mechanisch naar hetzelfde dossier,
   inclusief lege oogst/fouten. Kuifje wijzigt de Leonardo-state niet rechtstreeks;
   een volgende Leonardo-iteratie verwerkt missie + resultaat in een nieuwe state.
 
