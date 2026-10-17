@@ -87,9 +87,6 @@ voldoende om alleen bronrefs technisch correct te bewaren: ook framing die geen
 inhoudelijke provenance heeft, moet uit persistente inhoudelijke artifacts en
 missies geweerd worden.
 
-Deze wijziging verandert geen schema, dispatchpolicy, offer-/dossierkeuze of
-live scheduled task en voert geen fase-9-proef of deployment uit.
-
 ## Sherlock — de speurneus
 
 Sherlock is een inhoudelijke rol van de generieke executor.
