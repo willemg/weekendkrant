@@ -4,6 +4,22 @@ Compact log van incidenten, verkeerde aannames en blijvende ontwikkelregels.
 Voeg bij een nieuw incident een concrete observatie en afdwingingsplek toe;
 onderscheid waargenomen gedrag van een nog onbewezen oorzaak.
 
+## Relatieve testfixture botste met productiepad (17 oktober 2026)
+
+- **Incident:** de nieuwe fase-10-CI-tests waren lokaal groen maar zeven tests
+  faalden op bibib. De fixture gebruikte het relatieve nepbronpad `unused`;
+  vanuit de echte checkout `/home/weekendkrant/app` resolveerde dat naar
+  `/home/weekendkrant/app/unused`, waarna de productiebeveiliging het terecht
+  als live-checkoutbron weigerde.
+- **Les:** testfixtures voor paden/URL's mogen niet onbedoeld van de actuele
+  working directory afhangen wanneer runtimevalidatie absolute grenzen bewaakt.
+  Gebruik voor niet-uitgevoerde bronargumenten een expliciete cwd-onafhankelijke
+  placeholder en behoud een afzonderlijke test die de echte verboden live
+  checkout expliciet controleert.
+- **Afgedwongen in:** `tests/test_ci_runner.py`; de neutrale ongebruikte bron is
+  een HTTPS-placeholder, terwijl `test_source_live_checkout_is_rejected_before_git`
+  de veiligheidsgrens rechtstreeks blijft bewijzen.
+
 ## Fast-track is een blijvend PR-contract (16 oktober 2026)
 
 - **Incident:** na merge/pull op een schone main selecteerde de automatische
