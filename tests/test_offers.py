@@ -17,10 +17,13 @@ TABLES = ('parts', 'part_revisions', 'revision_sources', 'source_archive', 'part
 class V1StorageAudit:
     """Observe SQLite operations, not SQL text or words in trigger declarations."""
     def __init__(self):
+        self.active = True
         self.mutations = []
         self.dropped_tables = set()
 
     def __call__(self, action, table, column, database, trigger):
+        if not self.active:
+            return sqlite3.SQLITE_OK
         if action == sqlite3.SQLITE_DROP_TABLE:
             self.dropped_tables.add((database, table))
         if (action in (sqlite3.SQLITE_INSERT, sqlite3.SQLITE_UPDATE,
@@ -257,7 +260,7 @@ class OfferMigrationTests(unittest.TestCase):
         try:
             migrate(db)
         finally:
-            db.set_authorizer(None)
+            audit.active = False
         self.assertEqual(db.execute('PRAGMA user_version').fetchone(), (SCHEMA_VERSION,))
         for t, rows in before.items():
             self.assertEqual(db.execute('SELECT * FROM ' + t).fetchall(), rows)
@@ -306,6 +309,25 @@ class OfferMigrationTests(unittest.TestCase):
         self.assertEqual(audit.mutations, [])
         db.execute('INSERT INTO later_table VALUES (1)')
         self.assertTrue(audit.mutations)
+
+    def test_passive_audit_allows_operations_without_recording(self):
+        db = sqlite3.connect(':memory:')
+        self.addCleanup(db.close)
+        db.execute('CREATE TABLE parts(id INTEGER)')
+        audit = V1StorageAudit()
+        db.set_authorizer(audit)
+        db.execute('INSERT INTO parts VALUES (1)')
+        self.assertTrue(audit.mutations)
+        before = (list(audit.mutations), set(audit.dropped_tables))
+
+        # Keep the callable installed: disabling it with None needs Python 3.11.
+        audit.active = False
+        self.assertEqual(db.execute('PRAGMA user_version').fetchone(), (0,))
+        db.execute('UPDATE parts SET id=2')
+        self.assertEqual(db.execute('SELECT id FROM parts').fetchall(), [(2,)])
+        db.execute('DELETE FROM parts')
+        db.execute('DROP TABLE parts')
+        self.assertEqual((audit.mutations, audit.dropped_tables), before)
 
     def test_audit_detects_vacuum_globally(self):
         db = sqlite3.connect(':memory:')
