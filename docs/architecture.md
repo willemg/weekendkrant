@@ -173,5 +173,8 @@ Bestaande Leonardo-state → expliciete reevaluation zonder nieuwe parts → apa
 immutable Kuifje-missie/assignment → generieke Kuifje-job → bestaande fiche-ingress
 → Ariadne → immutable partrevision → latere gewone Leonardo-run.
 Missies horen nooit in Leonardo-state. Ariadne bezit één canonieke tokenizer in
-ariadne_tokens.py, gedeeld door verwerking, historische reconstructie en agents.
+ariadne_tokens.py, gedeeld door actuele verwerking en agents. Historische
+WEEKENDKRANT-PART-1-reconstructie behoudt haar onafhankelijke frozen v1-tokenaudit.
+Ook lege of mislukte Kuifje-onderzoeken kunnen expliciet als aanvullende frozen
+Leonardo-assignmentcontext worden geselecteerd, zonder synthetische bronnen.
 Zie [opslag, fencing, tokenaudit en grenzen](phase-12-kuifje.md).

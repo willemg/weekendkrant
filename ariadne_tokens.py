@@ -1,7 +1,8 @@
 """Ariadne's canonical deterministic context measure, never provider usage.
 
-cl100k_base is the frozen audit vocabulary, not a claim about model billing.
-Changing it requires an explicit versioned storage/format contract.
+cl100k_base is the current audit vocabulary, not a claim about model billing.
+Changing it requires explicit versioned runtime audit metadata. Historical
+WEEKENDKRANT-PART-1 audit remains self-contained in part_format_v1.py.
 """
 TOKENIZER = 'cl100k_base'
 

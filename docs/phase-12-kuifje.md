@@ -34,7 +34,7 @@ Nieuwe Leonardo-jobs bevriezen `roles/leonardo.md` v4 en
 | question | Concrete onderzoeksvraag, maximaal 8192 tekens |
 | rationale | Aanleiding in de bestaande analyse, maximaal 8192 tekens |
 | scope | Expliciete begrenzing, maximaal 8192 tekens |
-| refs | 1–256 unieke part-/queue-referenties binnen het eerder verwerkte corpus |
+| refs | 1–256 unieke part-/queue-referenties binnen het succesvol gevalideerde processed corpus |
 
 De backend geeft iedere missie `kuifje:<Leonardo-job-id>:<ordinal>` en bindt haar
 aan dossier, topic, producerende job en de tegelijk opgeslagen stateversie.
@@ -44,11 +44,14 @@ bestaande SQLite-assignmentpatroon; geen veld in leonardo_states en geen mutable
 current mission text. `roles/kuifje.md` is het algemene rolcontract. Het
 missie-artifact is de concrete opdracht, geen wijziging aan dat rolcontract.
 
-Provenance mag uitsluitend verwijzen naar processed_refs uit de **vorige frozen
-state**, of queuefiches waarvan membership in die exacte revisies bewezen is via
+Provenance mag uitsluitend verwijzen naar het processed corpus dat de nieuwe
+Leonardo-outputstate in dezelfde succesvolle finish heeft: vorige frozen
+processed_refs plus de immutable parts van de huidige assignment. Queuefiches
+zijn geldig wanneer membership in één van die exacte revisies bewezen is via
 revision_sources en source_archive. Geen lookup in actuele queue/active_revision,
-geen fuzzy tekstkoppeling. Nieuwe input van een gewone Leonardo-run vergroot
-niet onmiddellijk de missieautoriteit. Item-ID's worden niet gebruikt: rolling
+geen fuzzy tekstkoppeling. Een lacune uit nieuwe input kan onmiddellijk een
+missie opleveren. Reevaluation heeft geen nieuwe parts en behoudt dus precies
+de vorige corpusgrens. Item-ID's worden niet gebruikt: rolling
 items mogen worden samengevoegd/verwijderd. Historische v1/v2-outputcontracten
 blijven frozen en verlenen geen missiecapability; fase-11-v2-queueprovenance blijft
 wel geldig.
@@ -106,13 +109,52 @@ revisies voor het bestaande dossier; fase 12 introduceert geen automatische
 inhoudelijke dossierrouter of offerselectie. Kuifje schrijft nooit rechtstreeks
 in parts of Leonardo-state.
 
+## Resultaatretour zonder bronfiche
+
+Een operator kan aan gewone enqueue of reevaluate optioneel kuifje_results
+meegeven: maximaal zestien expliciete [job_id,attempt_id]-paren. De backend
+accepteert uitsluitend de huidige terminale succeeded/failed attempt van een
+Kuifje-job uit hetzelfde dossier. De missie moet reeds uit een voor deze
+Leonardo-basisversie bestaande state voortkomen. Onbekende, vreemde, lopende,
+expired, uncertain of door recovery vervangen attempts worden geweigerd.
+Er is geen automatische selectie en geen mutable latest-result-pointer.
+
+Voor succeeded wordt het immutable kuifje_results-record met exact dezelfde
+job/attemptbinding gelezen, ook als er nul fiches zijn. Voor een terminale
+failed attempt worden status/error uit de bestaande immutable attemptaudit
+gebruikt; er wordt geen succesvolle resulttekst verzonnen. De algemene
+jobstatus en gesloten attemptstatus moeten overeenkomen. Een via recovery
+beëindigde uncertain/expired attempt wordt dus niet als direct failed resultaat
+aangeboden.
+
+Het Leonardo-snapshot bevat research_results: concrete missie, missiehash,
+job/attempt, outcome-ref, status, fout, eventueel resultaat/resultref/hash en
+oorspronkelijke tokenaudit. Die volledige aanvullende context wordt samen met
+het overige assignment door Ariadne's actuele tokenizer gemeten en immutable
+opgeslagen. De selectie maakt deel uit van de enqueue-requestidentiteit; exact
+retry replayt hetzelfde snapshot, een gewijzigde selectie conflicteert.
+Bestaande enqueue-receipts zonder resultaatselectie behouden hun identiteit.
+Geen nieuwe tabel, tool, recallroute of scheduler is nodig.
+
+Deze context is geen primaire bron en verruimt processed_refs of itembronrefs
+niet. Leonardo mag de betekenis van lege oogst/beperkingen redactioneel
+evalueren in zijn normale geheugen, maar kopieert geen missie-/resultaatobjecten
+of operationele administratie naar leonardo_states. De herleidbare keten is:
+missie → Kuifje-assignment/job → exact terminal resultaat/attempt → frozen
+research_results in de latere Leonardo-assignment. Er ontstaan geen dummy-fiches,
+queue-items of partrevisions.
+
 ## Eén meetinstrument van Ariadne
 
-ariadne_tokens.py bevat de canonieke cl100k_base-primitive. daily,
-part_format_v1 (historische reconstructie), Leonardo en Kuifje gebruiken haar;
-de dubbele encode-implementatie is verwijderd zonder wijziging van de
-historische tokenberekening. Dit is Ariadne's gedeelde lokale meetlat, geen
-agent-eigen tokenizer en geen providerusage, verborgen modeltokens of geldkost.
+ariadne_tokens.py bevat Ariadne's canonieke actuele tokenizerprimitive voor
+daily, Leonardo, Kuifje en nieuwe runtimecontext. Dit is een gedeelde lokale
+meetlat, geen agent-eigen tokenizer en geen providerusage, verborgen modeltokens
+of geldkost. Het historische WEEKENDKRANT-PART-1-contract blijft onafhankelijk:
+part_format_v1.py heeft zijn eigen frozen TOKENIZER='cl100k_base' en expliciete
+v1-tokenberekening. revision_storage.reconstruct gebruikt uitsluitend die
+historische implementatie voor oude bytes/hashes/tokens. Zelfs vervanging van
+Ariadne's actuele primitive en herladen van de historische module verandert die
+reconstructie niet. Een actuele tokenizerwijziging mag nooit v1 herschrijven.
 
 Reevaluation bewaart tokens in het bestaande assignment en tokenizer-identiteit
 in de frozen snapshot; UTF-8 bytes zijn exact uit die immutable tekst afleidbaar.
@@ -139,23 +181,29 @@ Voor een bewust gekozen bestaand dossier (geen kunstmatig bronmateriaal):
   inspect --job JOB_ID --compact
 .venv/bin/python leonardo_operator.py --db /home/weekendkrant/weekendkrant.sqlite3 \
   inspect-mission --mission kuifje:JOB_ID:1
+# De inspectie levert Kuifje-job en attempt; selecteer bewust het concrete paar:
+.venv/bin/python leonardo_operator.py --db /home/weekendkrant/weekendkrant.sqlite3 \
+  reevaluate --dossier DOSSIER --base-version VERSIE --operation-id NIEUWE_OPDRACHT \
+  --kuifje-result KUIFJE_JOB:KUIFJE_ATTEMPT
 ```
 
 De Leonardo-inspectie toont dossier, basisversie, mode, new_part_count=0,
 previous_state_tokens, recallaudit per attempt, outputstate-tokens en
 mission_count. Missie-inspectie toont identiteit, producerende Leonardo-job,
 dossier/stateversie, provenance, bytes/tokens/tokenizer, gekoppelde Kuifje-job,
-status, assignmentomvang en ficheaantal. Status leeft op de generieke job,
+status, attempt_id, assignmentomvang en ficheaantal. Leonardo-contextinspectie
+toont ook research_result_count, research_result_refs en contexttokens/-bytes. Status leeft op de generieke job,
 nooit als mutable tekst in de missie.
 
 ## Gerichte validatie
 
-De fast-track bevat uitsluitend test_phase12 en drie bestaande grensregressies:
-de gewone Leonardo-statecyclus, gemengde part-/queueprovenance en frozen
-historische reconstructie bij een gewijzigde actieve tokenizer. De nieuwe
-integratietests dekken ook HTTP, foutrollback, immutable opslag, frozen context,
-zero-input recall, terminale retries, fencing/recovery, additive migratie,
-canonieke tokenaudit en de lokale ingress → Ariadne → volgende Leonardo-inputlus.
+De correctie-fast-track bevat test_phase12_corrections (current-run part- en
+queueprovenance, weigering van latere input, immutable lege oogst, expliciete
+retour in gewone/reevaluation-snapshots en CLI, dossier-/attemptbinding en failed
+onderzoek), drie specifieke bestaande fase-12-regressies voor zero-input,
+atomiciteit en terminale idempotentie, plus de versterkte frozen-v1-regressie.
+Die laatste vervangt Ariadne's actuele primitive en herlaadt part_format_v1.
+Geen brede moduulregressiesets worden automatisch overgenomen.
 De pluginlaag heeft een eigen transporttest en echte MCP → HTTP → SQLite →
 Ariadne-test met verloren antwoorden na missie-, fiche- en finishcommit.
 Validatie gebruikt uitsluitend ./start_tests.sh en ./start_tests.sh --plugin.

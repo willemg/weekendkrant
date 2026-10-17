@@ -186,8 +186,15 @@ class RevisionStorageTests(PartFixture):
                 'SELECT path FROM part_revisions WHERE revision=1').fetchone()[0]).exists())
             with patch('parts.render', side_effect=AssertionError('future active renderer')), \
                     patch('parts.TOKENIZER', 'future-tokenizer'), \
+                    patch('ariadne_tokens.TOKENIZER', 'future-ariadne-tokenizer'), \
+                    patch('ariadne_tokens.token_count', side_effect=AssertionError('future Ariadne audit')), \
+                    patch('ariadne_tokens.measure', side_effect=AssertionError('future Ariadne measure')), \
                     patch('daily.TOKENIZER', 'future-current-tokenizer'), \
                     patch('daily.token_count', side_effect=AssertionError('future active token audit')):
+                import importlib
+                import part_format_v1
+                self.addCleanup(importlib.reload, part_format_v1)
+                importlib.reload(part_format_v1)
                 self.assertEqual(reconstruct(db, 1, 1), expected)
                 from part_format_v1 import token_count
                 self.assertEqual(token_count(expected.decode('utf-8')), db.execute(

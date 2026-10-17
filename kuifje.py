@@ -105,8 +105,9 @@ def commit_missions(control, args, prepared, state_created):
         raise ValueError('Cannot append missions to an already confirmed state')
     snapshot, = db.execute('SELECT snapshot FROM leonardo_assignments WHERE job_id=?', (args['job_id'],)).fetchone()
     data = json.loads(snapshot)
-    # A mission can cite only material already processed in its frozen prior state.
+    # commit_state already validated the exact union of prior and current input.
     corpus = set(data['state']['processed_refs']) if data['state'] else set()
+    corpus.update(part['ref'] for part in data['parts'])
     allowed = set(corpus)
     for ref in corpus:
         _, part, revision = ref.split(':')
@@ -179,7 +180,9 @@ def inspect_mission(db, mission_id):
     if row is None:
         raise ValueError('Unknown mission')
     mission = json.loads(row[0])
-    return dict(mission, tokens=row[1], bytes=row[2], tokenizer=row[3], job_id=row[4],
+    attempt = db.execute('SELECT id FROM job_attempts WHERE job_id=? ORDER BY id DESC LIMIT 1',
+                         (row[4],)).fetchone()
+    return dict(mission, attempt_id=attempt[0] if attempt else None, tokens=row[1], bytes=row[2], tokenizer=row[3], job_id=row[4],
                 status=row[5], assignment_tokens=row[6], assignment_bytes=row[7],
                 fiche_count=db.execute('SELECT count(*) FROM kuifje_fiches WHERE job_id=?', (row[4],)).fetchone()[0])
 
@@ -206,3 +209,54 @@ class KuifjeProducer:
                     role_contract=data['role_contract'], role_contract_ref='sha256:' + digest(data['role_contract']),
                     output_contract=data['output_contract'], output_contract_ref=self.db.execute('SELECT output_contract_ref FROM jobs WHERE id=?', (job_id,)).fetchone()[0],
                     result_ref='kuifje-result:' + mission_id)
+
+
+def result_selection(values):
+    """Explicit bounded immutable identities, not a latest-result selector."""
+    from job_control import _identity
+    if values is None:
+        return []
+    if not isinstance(values, list) or len(values) > 16:
+        raise ValueError('Expected at most sixteen explicit Kuifje job/attempt pairs')
+    for pair in values:
+        if not isinstance(pair, list) or len(pair) != 2:
+            raise ValueError('Expected [Kuifje job_id, attempt_id]')
+        for identity in pair:
+            _identity(identity)
+    if len({pair[0] for pair in values}) != len(values):
+        raise ValueError('Duplicate Kuifje job selection')
+    return values
+
+
+def selected_results(db, dossier_id, base_version, selections):
+    """Freeze finished research as context, never as processed source evidence.
+
+    Exact terminal job/attempt identities and append-only mission/result bytes
+    cannot change between this unlocked read and Leonardo's enqueue CAS. The
+    subsequent assignment measures and hashes the complete delivered context.
+    """
+    feedback = []
+    for job, attempt in selections:
+        row = db.execute('''SELECT m.content,m.sha256,m.state_version,t.status,t.error,
+                r.content,r.bytes,r.tokens,r.tokenizer
+            FROM kuifje_assignments k JOIN kuifje_missions m USING(mission_id)
+            JOIN jobs j ON j.id=k.job_id JOIN job_attempts t ON t.job_id=j.id
+            LEFT JOIN kuifje_results r ON r.job_id=j.id AND r.attempt_id=t.id
+            WHERE j.id=? AND t.id=? AND m.dossier_id=? AND j.role='Kuifje'
+              AND j.status=t.status AND t.status IN ('succeeded','failed')
+              AND t.id=(SELECT max(id) FROM job_attempts WHERE job_id=j.id)''',
+            (job, attempt, dossier_id)).fetchone()
+        if row is None or row[2] > base_version:
+            raise ValueError('Foreign, unfinished or superseded Kuifje result binding')
+        mission, mission_sha, _, status, error, content, size, tokens, tokenizer = row
+        if status == 'succeeded' and content is None:
+            raise ValueError('Successful Kuifje outcome requires its immutable result')
+        feedback.append(dict(
+            ref='kuifje-outcome:%s:%s' % (job, attempt), job_id=job, attempt_id=attempt,
+            mission=json.loads(mission), mission_sha256=mission_sha, status=status, error=error,
+            result=json.loads(content) if content else None,
+            result_ref='kuifje-result:' + json.loads(mission)['mission_id'] if content else None,
+            result_sha256=digest(content) if content else None,
+            result_audit=dict(bytes=size, tokens=tokens, tokenizer=tokenizer) if content else None,
+        ))
+    return feedback

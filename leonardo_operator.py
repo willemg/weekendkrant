@@ -10,7 +10,7 @@ from leonardo import LeonardoStore, canonical, item_refs
 from ariadne_tokens import token_count
 
 
-def enqueue_offers(db, operation_id, dossier_id, base_version, offer_ids):
+def enqueue_offers(db, operation_id, dossier_id, base_version, offer_ids, kuifje_results=None):
     # Offers are immutable and seal their part. Resolve IDs, never active revisions.
     if not isinstance(offer_ids, list) or not 1 <= len(offer_ids) <= 32:
         raise ValueError('Expected 1..32 explicit offers')
@@ -26,7 +26,8 @@ def enqueue_offers(db, operation_id, dossier_id, base_version, offer_ids):
         if row is None:
             raise ValueError('Unknown or unsealed offer')
         revisions.append(list(row))
-    return LeonardoStore(db).enqueue(operation_id, dossier_id, base_version, revisions)
+    return LeonardoStore(db).enqueue(operation_id, dossier_id, base_version, revisions,
+                                     kuifje_results=kuifje_results)
 
 
 def rows(db, sql, args=()):
@@ -65,7 +66,12 @@ def context_usage(db, job):
         refs = set(item_refs(json.loads(state_row[0])))
         provenance = dict(part_ref_count=sum(r.startswith('part:') for r in refs),
                           queue_ref_count=sum(r.startswith('queue:') for r in refs))
-    return dict(tokenizer='cl100k_base', state_provenance=provenance, new_part_count=len(new_parts),
+    research = snapshot.get('research_results', [])
+    return dict(research_result_count=len(research),
+                research_result_refs=[r['ref'] for r in research],
+                research_result_tokens=sum(token_count(canonical(r)) for r in research),
+                research_result_bytes=sum(len(canonical(r).encode('utf-8')) for r in research),
+                tokenizer='cl100k_base', state_provenance=provenance, new_part_count=len(new_parts),
                 new_part_tokens=sum(part['tokens'] for part in new_parts),
                 new_part_bytes=sum(part['bytes'] for part in new_parts),
                 new_parts=new_parts, previous_state_tokens=previous_state_tokens,
@@ -144,6 +150,13 @@ def _inspect_job(db, job):
     return report
 
 
+def result_pair(value):
+    import re
+    if re.fullmatch(r'[1-9][0-9]*:[1-9][0-9]*', value) is None:
+        raise argparse.ArgumentTypeError('Expected JOB:ATTEMPT')
+    return list(map(int, value.split(':')))
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--db', required=True, type=Path)
@@ -164,6 +177,9 @@ def main(argv=None):
     reevaluate.add_argument('--operation-id', required=True)
     mission = sub.add_parser('inspect-mission')
     mission.add_argument('--mission', required=True)
+    for command in (enqueue, reevaluate):
+        command.add_argument('--kuifje-result', action='append', type=result_pair,
+                             help='Exact completed Kuifje JOB:ATTEMPT, repeatable (max 16)')
     inspect = sub.add_parser('inspect')
     inspect.add_argument('--job', required=True, type=int)
     inspect.add_argument('--compact', action='store_true', help='Only local context usage per attempt')
@@ -180,13 +196,14 @@ def main(argv=None):
         elif args.command == 'create-dossier':
             result = dict(dossier_id=LeonardoStore(db).create_dossier(args.dossier, args.topic))
         elif args.command == 'reevaluate':
-            result = dict(job_id=LeonardoStore(db).reevaluate(args.operation_id, args.dossier, args.base_version))
+            result = dict(job_id=LeonardoStore(db).reevaluate(args.operation_id, args.dossier, args.base_version,
+                                                                    kuifje_results=args.kuifje_result))
         elif args.command == 'inspect-mission':
             from kuifje import inspect_mission
             result = inspect_mission(db, args.mission)
         elif args.command == 'enqueue':
             result = dict(job_id=enqueue_offers(db, args.operation_id, args.dossier,
-                                              args.base_version, args.offer))
+                                              args.base_version, args.offer, args.kuifje_result))
         else:
             result = inspect_job(db, args.job, compact=args.compact)
         print(json.dumps(result, ensure_ascii=False, indent=2))

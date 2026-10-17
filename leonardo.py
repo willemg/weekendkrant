@@ -222,11 +222,13 @@ class LeonardoStore:
         ).fetchone()
         return json.loads(row[0]) if row else None
 
-    def reevaluate(self, operation_id, dossier_id, base_version):
+    def reevaluate(self, operation_id, dossier_id, base_version, kuifje_results=None):
         """New editorial work over existing state, never replayed source input."""
-        return self.enqueue(operation_id, dossier_id, base_version, [], mode='reevaluation')
+        return self.enqueue(operation_id, dossier_id, base_version, [], mode='reevaluation',
+                            kuifje_results=kuifje_results)
 
-    def enqueue(self, operation_id, dossier_id, base_version, revisions, mode='new_material'):
+    def enqueue(self, operation_id, dossier_id, base_version, revisions, mode='new_material',
+                kuifje_results=None):
         _text(operation_id, 128)
         _text(dossier_id, 128)
         if type(base_version) is not int or base_version < 0:
@@ -244,9 +246,12 @@ class LeonardoStore:
                 _id(v)
         if len({tuple(p) for p in revisions}) != len(revisions):
             raise ValueError("Duplicate revision")
-        # Preserve historical enqueue receipt identity for ordinary assignments.
+        from kuifje import result_selection, selected_results
+        selections = result_selection(kuifje_results)
+        # Preserve historical enqueue receipt identity when no feedback is selected.
         request = canonical([dossier_id, base_version, revisions] +
-                            (['reevaluation'] if mode == 'reevaluation' else []))
+                            (['reevaluation'] if mode == 'reevaluation' else []) +
+                            ([{'kuifje_results': selections}] if selections else []))
         self.store._idle()
         prior = self.db.execute(
             "SELECT job_id,request FROM leonardo_assignments WHERE operation_id=?", (operation_id,)
@@ -263,6 +268,9 @@ class LeonardoStore:
         state = self.latest(dossier_id)
         if (state["version"] if state else 0) != base_version:
             raise ValueError("Stale dossier state")
+        # Terminal immutable outcomes are resolved from exact job/attempt pairs,
+        # never from worker-supplied result text or a mutable latest pointer.
+        feedback = selected_results(self.db, dossier_id, base_version, selections)
         parts = []
         for part, revision in revisions:
             row = self.db.execute(
@@ -291,6 +299,7 @@ class LeonardoStore:
                 base_version=base_version,
                 state=state,
                 parts=parts,
+                research_results=feedback,
                 role_contract=role_contract,
                 output_contract=output_contract,
             )

@@ -4,8 +4,13 @@ Never alter this renderer to evolve the current format. A new format requires
 explicit version dispatch/migration before its files may be retired.
 """
 
-# Frozen v1 audit uses Ariadne's canonical cl100k_base primitive.
-from ariadne_tokens import TOKENIZER, token_count
+TOKENIZER = 'cl100k_base'
+
+
+def token_count(text):
+    """Frozen v1 token audit; independent of the current writer's tokenizer."""
+    import tiktoken
+    return len(tiktoken.get_encoding('cl100k_base').encode(text, disallowed_special=()))
 
 
 def render(items, week, topic, part, revision, reserve):
