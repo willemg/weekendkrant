@@ -48,7 +48,7 @@ Gebruik bij `record_sherlock_source`:
 - `rationale`: een korte controleerbare reden voor die uitkomst;
 - `title`: optioneel, indien nuttig.
 
-Registreer geen zoekresultaten, snippets, ongeopende kandidaten of URL's die alleen door de filtertool zijn gekomen.
+Registreer geen zoekresultaten, zoekfragmenten, ongeopende kandidaten of URL's die alleen door de filtertool zijn gekomen.
 
 ## Rolgrens
 
@@ -114,7 +114,7 @@ De filter:
 - reserveert niets;
 - registreert niets;
 - canonicaliseert niet namens Sherlock;
-- doet geen story-deduplicatie.
+- doet geen deduplicatie van verhalen.
 
 Een URL die als `unreviewed` terugkomt, telt nog niet als gereviewde bron. Pas na daadwerkelijke inhoudelijke beoordeling en succesvolle `record_sherlock_source`-registratie is die bron verwerkt.
 
