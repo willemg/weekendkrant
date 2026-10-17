@@ -187,6 +187,40 @@ class LoaderTests(unittest.TestCase):
             path.write_bytes(b"x" * 65536)
             self.assertEqual(len(load_contract(path)[1]), 65536)
 
+    def test_runtime_contract_hygiene_keeps_prose_dutch_and_role_local(self):
+        contracts = (
+            "sherlock.md", "sherlock-output.md",
+            "leonardo.md", "leonardo-output.md",
+            "kuifje.md", "kuifje-output.md",
+        )
+        old_english_instruction_fragments = (
+            "Read the supplied", "Write rolling", "Do not undertake",
+            "You may propose", "When input.research_results is present",
+            "Transport: call", "Separate optional", "Optional input.",
+            "Execute only", "Search for primary evidence", "Source refs are",
+            "This role has no recall tool", "Publish sources only",
+            "Stop if authority is refused", "Summarize concrete findings",
+            "For failure use", "Retry exact terminal arguments",
+            "Missions cannot be created",
+        )
+        for name in contracts:
+            text = (ROOT / "roles" / name).read_text()
+            for fragment in old_english_instruction_fragments:
+                self.assertNotIn(fragment, text, (name, fragment))
+
+        foreign_roles = {
+            "sherlock.md": ("Leonardo", "Ariadne", "Einstein", "Kuifje", "Striktland", "Minos"),
+            "sherlock-output.md": ("Leonardo", "Ariadne", "Einstein", "Kuifje", "Striktland", "Minos"),
+            "leonardo.md": ("Sherlock", "Ariadne", "Einstein", "Kuifje", "Striktland", "Minos"),
+            "leonardo-output.md": ("Sherlock", "Ariadne", "Einstein", "Kuifje", "Striktland", "Minos"),
+            "kuifje.md": ("Sherlock", "Ariadne", "Einstein", "Leonardo", "Striktland", "Minos"),
+            "kuifje-output.md": ("Sherlock", "Ariadne", "Einstein", "Leonardo", "Striktland", "Minos"),
+        }
+        for name, forbidden in foreign_roles.items():
+            text = (ROOT / "roles" / name).read_text()
+            for role in forbidden:
+                self.assertNotIn(role, text, (name, role))
+
     def test_executor_has_no_concrete_roles_and_python_has_no_prompt_constants(self):
         executor = (ROOT / "docs/agents/executor.md").read_text()
         for name in ("Sherlock", "Leonardo", "Kuifje", "Einstein", "Striktland", "Minos"):
