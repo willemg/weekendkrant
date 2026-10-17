@@ -9,6 +9,21 @@ from job_control import JobControl
 from leonardo_operator import inspect_job
 
 
+def frozen_leonardo(prefix):
+    from unittest.mock import patch
+    from leonardo import canonical
+    def encode(value):
+        if isinstance(value, dict) and 'role_contract' in value and 'parts' in value:
+            value = dict(value, schema_version=1, output_contract=prefix + '\n' + value['output_contract'])
+        return canonical(value)
+    return patch('leonardo.canonical', side_effect=encode)
+
+
+def grouped_result(claim, summary, limitations):
+    return dict(mission_results=[dict(mission_id=m['mission_id'], summary=summary, limitations=limitations)
+                                for m in claim['input']['missions']])
+
+
 class Phase12Tests(LeonardoFixture):
     def setUp(self):
         super().setUp()
@@ -63,7 +78,7 @@ class Phase12Tests(LeonardoFixture):
         self.assertEqual(self.conn.execute('SELECT count(*) FROM kuifje_missions').fetchone()[0], 1)
         with self.assertRaises(ValueError):
             self.finish(leo, self.state(2), 'changed:finish', kuifje_missions=[])
-        for table in ('kuifje_missions', 'kuifje_assignments'):
+        for table in ('kuifje_missions', 'kuifje_assignments', 'kuifje_assignment_missions'):
             for sql in ('UPDATE '+table+' SET rowid=rowid', 'DELETE FROM '+table,
                         'INSERT OR REPLACE INTO '+table+' SELECT * FROM '+table):
                 with self.assertRaises(sqlite3.IntegrityError):
@@ -72,7 +87,7 @@ class Phase12Tests(LeonardoFixture):
         with patch('role_contracts.load_contract', side_effect=AssertionError('frozen')):
             claim = self.start('kuifje')
         self.assertEqual(claim['role'], 'Kuifje')
-        self.assertEqual(claim['input']['mission']['mission_id'], report['mission_id'])
+        self.assertEqual(claim['input']['missions'][0]['mission_id'], report['mission_id'])
         self.assertIn('Kuifje', claim['role_contract'])
         self.assertEqual(self.start('kuifje'), claim)
         from ariadne_tokens import measure
@@ -101,19 +116,19 @@ class Phase12Tests(LeonardoFixture):
         self.issue()
         claim = self.start('kuifje')
         authority = {k: claim[k] for k in ('job_id', 'attempt_id', 'token')}
-        mission = claim['input']['mission']['mission_id']
-        fiche = dict(schema_version=1, date='2026-10-06', topic=2, content='Independent primary report é')
+        mission = claim['input']['missions'][0]['mission_id']
+        fiche = dict(schema_version=1, date=claim['input']['date'], topic=2, content='Independent primary report é')
         queue_id = self.queue.add(fiche, mission_id=mission, fiche_id='source:1', claim=authority)
         self.assertEqual(queue_id, self.queue.add(fiche, mission_id=mission, fiche_id='source:1', claim=authority))
         with self.assertRaises(ValueError):
             self.queue.add(dict(fiche, content='changed'), mission_id=mission, fiche_id='source:1', claim=authority)
-        result = dict(summary='One primary report found.', limitations='No third replication.')
+        result = grouped_result(claim, 'One primary report found.', 'No third replication.')
         args = dict(authority, status='succeeded', output_refs=[claim['result_ref']], kuifje_result=result)
         control = JobControl(self.conn, lambda: self.now)
         self.assertEqual(control.scheduled('finish', args), control.scheduled('finish', args))
         with self.assertRaises(ValueError):
             self.queue.add(fiche, mission_id=mission, fiche_id='source:2', claim=authority)
-        self.run_day()
+        self.run_job_day(claim)
         self.assertEqual(self.conn.execute('SELECT status FROM ingress_queue WHERE id=?', (queue_id,)).fetchone()[0], 'processed')
         part, revision = self.conn.execute('SELECT part_id,revision FROM revision_sources WHERE queue_id=? ORDER BY revision DESC LIMIT 1', (queue_id,)).fetchone()
         self.store.enqueue('feedback', 'dossier:reproduction', 2, [[part, revision]])
@@ -151,8 +166,8 @@ class Phase12Tests(LeonardoFixture):
         self.assertEqual(status, 200)
         self.assertEqual(package['role'], 'Kuifje')
         self.assertEqual(package['input'], k['input'])
-        fiche = dict(schema_version=1, date='2026-10-06', topic=2, content='Primary source https://example.org/report',
-                     mission_id=k['input']['mission']['mission_id'], fiche_id='report', claim=package['claim'])
+        fiche = dict(schema_version=1, date=k['input']['date'], topic=2, content='Primary source https://example.org/report',
+                     mission_id=k['input']['missions'][0]['mission_id'], fiche_id='report', claim=package['claim'])
         first = post('/ingress', fiche)
         self.assertEqual(first[0], 201)
         self.assertEqual(post('/ingress', fiche), first)
@@ -162,7 +177,7 @@ class Phase12Tests(LeonardoFixture):
         self.assertEqual(post('/ingress', bad)[0], 409)
         finish = {key: k[key] for key in ('job_id', 'attempt_id', 'token')}
         finish.update(status='succeeded', output_refs=[k['result_ref']],
-                      kuifje_result=dict(summary='Found report', limitations='Only one source'))
+                      kuifje_result=grouped_result(k, 'Found report', 'Only one source'))
         self.assertEqual(post('/jobs/finish', finish)[0], 200)
         self.assertEqual(post('/jobs/finish', finish)[0], 200)
         self.assertEqual(post('/ingress', fiche)[0], 409)
@@ -227,18 +242,13 @@ class Phase12Tests(LeonardoFixture):
                 self.finish(claim, self.state(2), 'invalid', kuifje_missions=bad)
         self.finish(claim, self.state(2), 'two', kuifje_missions=[self.proposals()[0],
                     dict(self.proposals()[0], question='What evidence contradicts it?')])
-        self.assertEqual(self.conn.execute('SELECT count(*) FROM kuifje_assignments').fetchone()[0], 2)
+        self.assertEqual(self.conn.execute('SELECT count(*) FROM kuifje_assignments').fetchone()[0], 1)
         self.assertEqual(inspect_job(self.conn, claim['job_id'], compact=True)['mission_count'], 2)
 
     def test_frozen_v2_cannot_issue_missions_and_no_phantom_success_or_direct_claim(self):
-        import role_contracts
-        original = role_contracts.load_contract
-        def legacy(path):
-            ref, text = original(path)
-            return ref, text.replace('leonardo-output-v3:', 'leonardo-output-v2:')
         self.enqueue()
         self.finish(self.start())
-        with patch('role_contracts.load_contract', side_effect=legacy):
+        with frozen_leonardo('leonardo-output-v2:'):
             self.store.reevaluate('legacy', 'dossier:reproduction', 1)
         claim = self.start('legacy')
         with self.assertRaises(ValueError):
@@ -261,15 +271,15 @@ class Phase12Tests(LeonardoFixture):
             with self.assertRaises(ValueError):
                 control.scheduled('finish', dict(authority, **invalid))
         control.scheduled('finish', dict(authority, status='succeeded', output_refs=[kuifje['result_ref']],
-                          kuifje_result=dict(summary='Empty harvest', limitations='No primary report found')))
+                          kuifje_result=grouped_result(kuifje, 'Empty harvest', 'No primary report found')))
         self.assertEqual(self.conn.execute('SELECT count(*) FROM kuifje_fiches').fetchone()[0], 0)
 
     def test_fiche_authority_topic_bound_and_recovery_retry_preserve_original_producer(self):
         self.issue()
         claim = self.start('kuifje')
         authority = {k: claim[k] for k in ('job_id', 'attempt_id', 'token')}
-        mission = claim['input']['mission']['mission_id']
-        fiche = dict(schema_version=1, date='2026-10-06', topic=2, content='report')
+        mission = claim['input']['missions'][0]['mission_id']
+        fiche = dict(schema_version=1, date=claim['input']['date'], topic=2, content='report')
         for bad_claim in (dict(authority, token='wrong'), dict(authority, attempt_id=999)):
             with self.assertRaises(ValueError):
                 self.queue.add(fiche, mission_id=mission, fiche_id='one', claim=bad_claim)
@@ -291,6 +301,23 @@ class Phase12Tests(LeonardoFixture):
             self.queue.add(fiche, mission_id=mission, fiche_id=str(i), claim=new_authority)
         with self.assertRaises(ValueError):
             self.queue.add(fiche, mission_id=mission, fiche_id='six', claim=new_authority)
+
+    def test_legacy_schema1_capabilities_remain_frozen(self):
+        from leonardo import supports_capability
+        for prefix, fine, missions in [('leonardo-output-v1:', False, False),
+                                      ('leonardo-output-v2:', True, False),
+                                      ('leonardo-output-v3:', True, True)]:
+            data = dict(schema_version=1, output_contract=prefix + ' frozen')
+            self.assertEqual(supports_capability(data, 'fine_provenance'), fine)
+            self.assertEqual(supports_capability(data, 'missions'), missions)
+        with frozen_leonardo('leonardo-output-v3:'):
+            self.enqueue()
+        leo = self.start()
+        state = self.state()
+        state['claims'][0]['support'] = ['queue:1']
+        self.finish(leo, state, kuifje_missions=self.proposals())
+        self.assertEqual(leo['input']['schema_version'], 1)
+        self.assertEqual(self.start('legacy:child')['input']['schema_version'], 2)
 
     def test_new_operation_cannot_append_missions_to_already_confirmed_empty_output(self):
         self.reevaluate()

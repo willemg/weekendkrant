@@ -11,6 +11,10 @@ uit de contractsnapshot van de geclaimde job.
 | Begrip | Betekenis |
 | --- | --- |
 | Executor | De enige generieke scheduled intelligente worker |
+| Job | Eén begrensde intelligente run met één rol, immutable context en outputcontract; schedulingeenheid |
+| Attempt | Eén uitvoeringspoging van dezelfde job |
+| Mission | Eén immutable onderzoeksvraag binnen een Kuifje-job, geen schedulingeenheid |
+| Activation | Eén scheduled kans om maximaal één job uit te voeren |
 | Role | Inhoudelijke runtime-instructies voor één type werk |
 | Producer/adapter | Backendcomponent die jobs produceert en/of bindt |
 | Role contract | Versioned repository-artifact voor nieuwe jobs |
@@ -172,12 +176,23 @@ assignment als bovenaan het jobpakket; die redundantie is momenteel exact en
 dus consistent, maar mag bij latere refactors nooit twee verschillende
 contractinhouden opleveren.
 
-**Kuifje:** het rolecontract noemt exact de missionvelden die werkelijk worden
+**Kuifje:** `input.missions` is de ordered lijst van 1..4 zelfstandige missies
+binnen één job/run en één topic. `input.date` geeft expliciet de bevroren
+datum van opdrachtvoorbereiding in Europe/Brussels; iedere fiche gebruikt exact
+die waarde. De publicatiedatum van de bron is uitsluitend inhoud in `content`.
+De datum die routing of ordening bepaalt mag nooit door de worker uit
+bronmetadata of een eigen klok worden geraden.
+Het rolecontract noemt exact de missionvelden die werkelijk worden
 aangeleverd. `question`, `rationale` en `scope` sturen het onderzoek;
 `topic` begrenst onderwerp en publicatiemetadata; de overige identifiers en
 refs zijn uitsluitend identiteit/provenance. Het outputcontract verklaart de
 rolnaam en het technische veld `kuifje_result` lokaal. Er is een expliciete
 Weekendkrant-toolgrens en er wordt geen eerdere dossierinhoud verondersteld.
+De samengestelde context moet ook fichepublicatie per `mission_id`, limieten per
+missie, claimvalidatie bij missiegrenzen en één volledig ordered
+`mission_results`-jobresultaat lokaal verklaren. Mogelijke toolresponses voor
+claimverlies, conflict en onzeker transport worden samen met het concrete
+schema-2-jobpakket beoordeeld; generieke descriptions blijven rolneutraal.
 
 De gedeelde MCP-toolsurface is eveneens onderdeel van deze audit. De descriptions
 van generieke tools zijn daarom rolneutraal gemaakt; rolspecifieke payloadregels
@@ -340,16 +355,26 @@ bronvolgorde en eerdere geregistreerde revisies blijven intact. Overflow sluit
 een part definitief. Er is geen dagafsluit-gating, zondagjob,
 weekrapport of automatische retentie. Bestaande data blijft behouden.
 
-### Gepland geheugen- en budgetbeheer
+### Geheugenbeheer en gepland budgetbeheer
 
-Volgens het [doelontwerp van 8 oktober 2026](leonardo-memory-and-orchestration.md)
-wordt Ariadne ook beheerder van Leonardo's persistente state en contextaanbieding:
-state letterlijk opslaan en versioneren, omvang meten, concrete revisies
-aanbieden, budget reserveren en werkelijk gebruik afrekenen. Het vullen van open
-bronparts over daggrenzen is al geïmplementeerd.
-Kuifje-resultaten volgen expliciete missie- en dossieridentifiers. Dit is nog
-niet geïmplementeerd. Leonardo beslist over betekenis, compressie en inhoudelijke
-verbanden; Ariadne controleert formaat, omvang, koppelingen en toegestane acties.
+Ariadne/backend beheert Leonardo's persistente dossierstate en contextaanbieding:
+state letterlijk opslaan en versioneren, omvang meten, concrete immutable
+partrevisies aanbieden en claimgebonden historical recall auditen. Ook het
+vullen van open bronparts over daggrenzen is geïmplementeerd. Het
+[geheugenontwerp](leonardo-memory-and-orchestration.md) blijft richtinggevend
+voor verdere uitbreiding; providerusage, kostenafrekening en capaciteitsbeleid
+zijn nog gepland.
+
+De fase-12-keten bewaart afzonderlijke immutable Kuifje-missies en hun
+job-/attemptbinding. Kuifjes bronfiches doorlopen de bestaande ingress- en
+partketen. Daarnaast levert expliciete selectie van één terminale Kuifje-job en
+attempt alle missie-uitkomsten als aanvullende `research_results` aan Leonardo,
+ook bij lege oogst of een terminale mislukking. Deze context verruimt
+`processed_refs` niet. Automatische resultaatselectie en dossierroutering zijn
+niet geïmplementeerd. Zie het [fase-12-contract](phase-12-kuifje.md).
+
+Leonardo beslist over betekenis, compressie en inhoudelijke verbanden; Ariadne
+controleert formaat, omvang, koppelingen en toegestane acties.
 
 ### Niet doen
 
@@ -366,13 +391,20 @@ Ariadne vlecht draden; ze denkt niet.
 
 ## Leonardo — de schrijver en synthesizer
 
-Leonardo krijgt context met nieuwe bronparts en de geldige compacte dossierstate;
-gerichte historical recall is binnen dezelfde job beschikbaar; Kuifje-missiecontext
-volgt later. Elke
-uitvoering wordt expliciet samengesteld; continuïteit zit in de opgeslagen state
-en bronnen. Dossierstate/jobs en de eerste echte scheduled statecyclus zijn
-inmiddels operationeel bewezen. Historical recall is lokaal getest; productie-invoering blijft open. Kuifje-acties
-zijn nog niet geïmplementeerd.
+Leonardo krijgt expliciet samengestelde context met nieuwe bronparts en de
+geldige compacte dossierstate, of een reevaluation-opdracht zonder nieuwe parts.
+Gerichte historical recall is binnen dezelfde job beschikbaar. Optioneel bevat
+zijn assignment expliciet geselecteerde Kuifje-uitkomsten in `research_results`;
+die zijn aanvullende onderzoekscontext, geen primair bronbewijs. Continuïteit
+zit in de opgeslagen state en bronnen.
+
+Leonardo kan naast een succesvolle state maximaal vier afzonderlijke
+Kuifje-missies voorstellen. De backend valideert en bewaart die atomair als
+immutable artifacts en bundelt ze binnen hetzelfde topic tot één Kuifje-job/run.
+Missies en operationele administratie horen niet in Leonardo's dossierstate.
+Dossierstate, recall, missievoorstellen en expliciete resultaatretour zijn
+geïmplementeerd; automatische Leonardo-productie en resultaatroutering blijven
+buiten dit contract.
 
 Leonardo onderzoekt primair de inhoudelijke/structurele ruimte: welke informatie
 samenhangt, welke onafhankelijke sporen binnen een topic bestaan, welke claims en
@@ -430,11 +462,11 @@ deterministische opslag-, validatie-, budget- en routinglaag.
 
 ## Kuifje — de onderzoeksreporter (fase 12)
 
-Kuifje werkt alleen aan een afgebakende onderzoeksmissie die inhoudelijk door
-Leonardo wordt voorgesteld en door Ariadne/backend als duurzame opdracht wordt
-gevalideerd en opgeslagen. Leonardo start of spawnt Kuifje dus niet rechtstreeks:
-een open geldige missie wordt later via dezelfde generieke dispatcher een
-Kuifje-job. Hij krijgt de vraag en relevante context, zoekt aanvullend bewijs of
+Kuifje werkt in één run aan de ordered 1..4 afgebakende onderzoeksmissies van
+één succesvolle Leonardo-finish, binnen exact hetzelfde topic. Iedere missie
+wordt afzonderlijk immutable gevalideerd en opgeslagen. Leonardo start of spawnt Kuifje dus niet rechtstreeks:
+de 1..4 missies vormen samen één ready Kuifje-job die later via dezelfde
+generieke dispatcher wordt geclaimd. Hij krijgt de vraag en relevante context, zoekt aanvullend bewijs of
 tegenspraak en levert bronvaste resultaten onder dezelfde missie- en
 dossieridentiteit. Ook lege oogst en beperkingen worden expliciet gerapporteerd.
 

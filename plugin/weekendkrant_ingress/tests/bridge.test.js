@@ -89,10 +89,10 @@ test('descriptions identify the private workspace and bounded effects',()=>{
  assert.match(descriptions.submit_weekendkrant_fiche,/ingressqueue/);
  assert.match(descriptions.submit_weekendkrant_fiche,/publiceert niets publiek/);
  assert.match(descriptions.start_sherlock_run,/runstate/);
- assert.match(descriptions.start_sherlock_run,/maakt.*aan/);
+ assert.match(descriptions.start_sherlock_run,/[Mm]aak(?:t)?.*aan/);
  assert.match(descriptions.filter_sherlock_sources,/leest uitsluitend/);
  assert.match(descriptions.filter_sherlock_sources,/wijzigt niets/);
- assert.match(descriptions.filter_sherlock_sources,/URLs.*niet.*opgehaald.*bezocht/);
+ assert.match(descriptions.filter_sherlock_sources,/URL.s.*niet.*opgehaald.*bezocht/);
  assert.match(descriptions.record_sherlock_source,/auditmetadata/);
  assert.match(descriptions.record_sherlock_source,/inhoudelijk beoordeeld/);
  assert.match(descriptions.record_sherlock_source,/bronidentiteit.*opgeslagen.*gecanonicaliseerd/);
@@ -307,4 +307,23 @@ test('phase 12 transports separate missions, results and mission-attributed ingr
  }),{status:'success',queue_item_id:9});
  for(const bad of [{...payload,run_id:1},{...payload,fiche_id:''},{...payload,claim:null}])
   assert.equal((await submit(bad,env,()=>assert.fail('network'))).code,'invalid_payload');
+});
+
+
+test('grouped results transport both shapes and strictly reject malformed items',async()=>{
+ const authority={job_id:4,attempt_id:8,token:'secret'};
+ const results=[1,2,3].map(i=>({mission_id:`kuifje:2:${i}`,summary:'Empty',limitations:'Coverage'}));
+ const args={...authority,status:'succeeded',output_refs:['kuifje-result:job:4'],kuifje_result:{mission_results:results}};
+ let n=0;
+ const result=await callTool('finish_weekendkrant_job',args,env,async(url,options)=>{
+  if(!n++)return ok({url:good});
+  assert.deepEqual(JSON.parse(options.body),args);
+  return ok({job_id:4,attempt_id:8,job_status:'succeeded'});
+ });
+ assert.equal(result.status,'success');
+ for(const bad of [[],[...results,results[0]],results.slice(0,1).map(r=>({...r,summary:''})),
+                  results.map(r=>({...r,extra:true})),results.map(r=>({...r,mission_id:1})),
+                  Array(5).fill(results[0])]){
+  assert.equal((await callTool('finish_weekendkrant_job',{...args,kuifje_result:{mission_results:bad}},env,()=>assert.fail('network'))).code,'invalid_request');
+ }
 });

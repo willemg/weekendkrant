@@ -111,19 +111,21 @@ class IngressQueue:
                 from kuifje import require_authority, digest
                 from leonardo import canonical
                 try:
-                    job, mission = require_authority(db, mission_id, claim, received_at)
+                    job, mission, job_date = require_authority(db, mission_id, claim, received_at)
                 except ValueError as error:
                     raise FicheRunConflict(str(error)) from error
                 if mission['topic'] != payload['topic']:
                     raise FicheRunConflict('Wrong mission topic')
+                if job_date is not None and payload['date'] != job_date:
+                    raise FicheRunConflict('Fiche date must match immutable job date')
                 payload_sha = digest(canonical(payload))
-                prior = db.execute('SELECT queue_item_id,payload_sha256 FROM kuifje_fiches WHERE job_id=? AND fiche_id=?',
-                                   (job, fiche_id)).fetchone()
+                prior = db.execute('SELECT queue_item_id,payload_sha256 FROM kuifje_fiches WHERE job_id=? AND mission_id=? AND fiche_id=?',
+                                   (job, mission_id, fiche_id)).fetchone()
                 if prior:
                     if prior[1] != payload_sha:
                         raise FicheRunConflict('Fiche identity reused with different payload')
                     return prior[0]
-                if db.execute('SELECT count(*) FROM kuifje_fiches WHERE job_id=?', (job,)).fetchone()[0] >= 5:
+                if db.execute('SELECT count(*) FROM kuifje_fiches WHERE job_id=? AND mission_id=?', (job, mission_id)).fetchone()[0] >= 5:
                     raise FicheRunConflict('Mission fiche bound exceeded')
             cursor = db.execute(
                 'INSERT INTO ingress_queue (received_at, payload) VALUES (?, ?)',
@@ -133,8 +135,8 @@ class IngressQueue:
                 db.execute('INSERT INTO sherlock_fiches(queue_item_id,run_id) VALUES (?,?)',
                            (identity, run_id))
             if mission_id is not None:
-                db.execute('INSERT INTO kuifje_fiches VALUES (?,?,?,?,?)',
-                           (identity, job, claim['attempt_id'], fiche_id, payload_sha))
+                db.execute('INSERT INTO kuifje_fiches VALUES (?,?,?,?,?,?)',
+                           (identity, job, claim['attempt_id'], mission_id, fiche_id, payload_sha))
             return identity
 
     def pending_count(self):

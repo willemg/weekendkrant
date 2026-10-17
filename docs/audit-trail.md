@@ -196,3 +196,16 @@ in receipts of requestlogs. Validate geeft actuele leasegevoelige state; een oud
 claimreceipt bewijst alleen de vroegere claimcommit. Geen modelreasoning,
 verzonnen usage of side-effectgaranties worden als audit opgeslagen.
 Zie [identiteit en retries](jobs.md#fase-4-protocol-identiteit-en-operation-receipts).
+
+
+## Job- en missiegranulariteit
+
+Een job identificeert één intelligente run; attempts zijn uitvoeringspogingen
+van dezelfde frozen opdracht. Kuifje bewaart afzonderlijke immutable missies met
+producer_job_id, dossier/state, ordinal, inhoudshash en metingen. De ordered
+`kuifje_assignment_missions`-mapping verbindt 1..4 missies uit één Leonardo-finish
+met precies één job binnen hetzelfde topic. Fiches dragen expliciete mission_id
+naast job/producerende attempt, met databasebewijs van lidmaatschap. Eén terminale
+jobresultaatselectie levert één herleidbaar research_result per missie; deze
+context is geen primair bewijs en verruimt processed_refs niet. Historische
+schema-13-job-/missie-/fiche-/resultaatidentiteiten blijven behouden.

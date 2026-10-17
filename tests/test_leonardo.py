@@ -64,6 +64,11 @@ class LeonardoFixture(PartFixture):
         args.update(extra)
         return JobControl(self.conn, lambda: self.now).execute("finish", args)
 
+    def run_job_day(self, claim):
+        import daily
+        day = datetime.fromisoformat(claim['input']['date']).replace(hour=12, tzinfo=timezone.utc)
+        return daily.run_daily(self.root, self.db, self.output, day, self.lock)
+
     def http_post(self):
         import http.client
         import threading

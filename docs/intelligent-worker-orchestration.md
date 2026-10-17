@@ -43,7 +43,8 @@ van reeds geïmplementeerd gedrag.
 > activatie precies één begrensde job uitvoert wanneer werk beschikbaar is.
 > Identiteit en continuïteit zitten in persistente Weekendkrant-state.
 
-`role != worker` en `job != model personality`.
+`role != worker` en `job = run`. Een inhoudelijke subtaak is geen job.
+Capaciteit en budget tellen jobstarts/runs, niet afzonderlijke missies.
 
 Een worker kiest zijn rol niet zelf. De backend levert een concrete opdracht,
 bijbehorend rolcontract en begrensde context. Een activatie zonder nuttig werk
@@ -78,12 +79,13 @@ Einstein krijgt hier uitsluitend een gedocumenteerde verantwoordelijkheid, geen
 | --- | --- |
 | Scheduled executor / worker | Generieke intelligente uitvoerder die bij een scheduled activatie één opdracht kan uitvoeren; heeft geen permanente redactionele rol of betrouwbaar eigen geheugen. |
 | Role | Inhoudelijk contract voor Sherlock, Leonardo, Kuifje, Striktland of Minos. Bepaalt verantwoordelijkheden, toegestane acties en vereiste output. |
-| Job | Eén begrensde opdracht met stabiele `job_id`, rol, inputreferenties, uitvoeringsvoorwaarden en outputcontract. |
+| Job | Eén begrensde intelligente run met stabiele `job_id`, één rol, immutable input/context en één outputcontract. Schedulingeenheid die meerdere inhoudelijke subtaken kan bevatten; zie [canonieke begrippen](jobs.md#canonieke-begrippen). |
 | Job attempt | Eén geregistreerde uitvoeringspoging van dezelfde job, met eigen identiteit, claim, tijden en uitkomst. Een retry van uitvoering hoeft geen nieuwe job te worden. Een bevestigde toolretry met dezelfde operatie-identiteit maakt geen nieuwe attempt; zie fase 4. |
 | Dispatcher | Deterministische backendlogica die op expliciete work/state en configureerbare regels beslist welke uitvoerbare job beschikbaar komt. |
 | Persistent state/artifact | Opgeslagen bronmateriaal, concrete partrevisie, dossierstateversie, missie, draft, resultaat of audit met stabiele referenties; onafhankelijk van workergeheugen. |
 | Dossier | Langlevend inhoudelijk onderzoek met eigen identiteit, state, hypotheses, claims, bronverwijzingen en eventuele missies. Een topic of fysieke part is niet automatisch een dossier. |
-| Missie | Expliciete, begrensde onderzoeksvraag met `mission_id`, dossierkoppeling, context, status en resultaat; kan een Kuifje-job voeden. |
+| Missie | Eén begrensde inhoudelijke onderzoeksvraag binnen een Kuifje-job; zelfstandig immutable provenance-artifact, geen schedulingeenheid. De 1..4 missies van één Leonardo-finish vormen samen één run binnen hetzelfde topic. |
+| Activation | Eén scheduled kans om maximaal één job te claimen en uit te voeren. |
 
 De huidige `sherlock_runs` zijn Sherlock-specifieke audit, geen generieke jobs.
 De bestaande tabel `attempts` registreert Ariadne-runtimefouten en is evenmin
@@ -140,7 +142,7 @@ missie laten wachten terwijl nuttig werk beschikbaar is.
 | --- | --- |
 | Recente topicdekking voldoet niet aan vastgelegde meetbare voorwaarden | Sherlock voor dat topic |
 | Voldoende nieuwe beschikbare partrevisies en geldige dossierstate volgens gekozen aanbiedregels | Leonardo |
-| Open, gevalideerde onderzoeksmissie met context en budget | Kuifje |
+| Gevalideerde ordered set van 1..4 missies uit één Leonardo-finish binnen hetzelfde topic | Kuifje |
 | Draft/claims met concrete bronreferenties klaar voor controle | Striktland |
 | Striktland registreert een relevant probleem volgens het afgesproken resultaatcontract | Minos |
 | Geen nuttig uitvoerbaar werk, onvoldoende budget of pause actief | Geen intelligente job |
@@ -695,9 +697,9 @@ Een echte productierun en automatische dossierrouter blijven afzonderlijk.
 - [x] Laat Ariadne/backend zo'n voorstel atomair valideren en als duurzame missie
   opslaan met `mission_id`, dossier, vraag, context/referenties, status en begrensd
   uitvoeringsbudget.
-- [x] Maak een open gevalideerde missie beschikbaar als begrensde Kuifje-job via
-  dezelfde generieke dispatcher. De missie ontstaat on demand uit agentwerk; haar
-  uitvoering hoeft niet in dezelfde scheduled activatie plaats te vinden.
+- [x] Maak de 1..4 gevalideerde missies van één Leonardo-finish samen beschikbaar
+  als één begrensde Kuifje-job via dezelfde generieke dispatcher. De missies ontstaan on demand
+  uit agentwerk; hun uitvoering hoeft niet in dezelfde scheduled activatie plaats te vinden.
 - [x] Routeer Kuifjes bronvaste resultaat mechanisch naar hetzelfde dossier,
   inclusief lege oogst/fouten. Kuifje wijzigt de Leonardo-state niet rechtstreeks;
   een volgende Leonardo-iteratie verwerkt missie + resultaat in een nieuwe state.

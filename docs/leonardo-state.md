@@ -223,10 +223,14 @@ op basis van een mislukte attempt en nooit afgeleid uit lokale tokenmetingen.
 Deze implementatie heeft lokale testdekking; productie-invoering en meerdere
 karakteriseringsruns blijven afzonderlijke operationele stappen.
 
-Missievoorstellen en -administratie volgen daarna. Een toekomstige Kuifje-missie
-is inhoudelijk een on-demand opdracht van Leonardo, maar wordt eerst door
-Ariadne/backend persistent gevalideerd en krijgt pas daarna via de generieke
-dispatcher een Kuifje-job; Leonardo spawnt nooit rechtstreeks een andere worker.
+Ten tijde van fase 9.6 volgden missievoorstellen en -administratie nog later.
+Inmiddels implementeert [fase 12](phase-12-kuifje.md) die keten: Leonardo levert
+maximaal vier afzonderlijke missievoorstellen naast de state. Ariadne/backend
+valideert en bewaart ze atomair als immutable artifacts en bundelt de missies
+van één succesvolle finish binnen hetzelfde topic tot één Kuifje-job/run.
+Leonardo spawnt nooit rechtstreeks een andere worker. Expliciete selectie van
+een terminale Kuifje-job/attempt levert alle missie-uitkomsten terug als
+`research_results`, zonder `processed_refs` uit te breiden.
 Dossieroverstijgende synthese, automatische offer-to-jobpolicy, betrouwbare
 providerkosten en eindredactionele selectie volgen eveneens afzonderlijk. Ariadne
 voert geen semantische dossierkeuze uit.
