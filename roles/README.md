@@ -19,3 +19,15 @@ die de worker werkelijk aangeleverd krijgt, expliciet beschikbare tools en de
 beslissingen die binnen die job genomen moeten worden. Architectuurmotivatie,
 verantwoordelijkheden van andere rollen, toekomstige rollen, historische
 incidenten en andere ontwikkelcontext horen in `docs/`, niet in `roles/`.
+
+
+Beoordeel een rolefile nooit op zichzelf. Leg vóór activering de generieke
+executorinstructie, het echte jobpakket, rolecontract, outputcontract, zichtbare
+toolnamen/descriptions/schema's en mogelijke inhoudelijke input naast elkaar en
+voer de samengestelde-contextaudit uit zoals beschreven in
+[docs/roles.md](../docs/roles.md#samengestelde-contextaudit).
+
+Gebruik geen handmatige `v1`/`v2`-labels in role- of outputcontracten. Git,
+de immutable contractsnapshot en de SHA-256-ref identificeren de concrete
+contractinhoud. Een `schema_version` in machine-output is daarvan losstaand en
+blijft alleen waar het dataschema die waarde vereist.
