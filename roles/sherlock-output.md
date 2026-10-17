@@ -1,4 +1,6 @@
-# Sherlock-outputcontract, versie 1
+# Outputcontract voor Sherlock
+
+Dit outputcontract hoort bij de rol Sherlock.
 
 De persistente Sherlock-run is het resultaatartifact. De exacte
 `sherlock-run:<run_id>` wordt als `result_ref` aangeleverd. Geef bij generieke
