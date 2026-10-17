@@ -7,6 +7,12 @@ Topiccatalogus:
 2 = wetenschap — wetenschap en filosofie, inclusief mogelijke paradigmaverschuivingen
 3 = ai — artificiële intelligentie en haar technische, wetenschappelijke, organisatorische en maatschappelijke effecten
 
+Gebruik voor Weekendkrant tijdens de inhoudelijke uitvoering alleen
+`filter_sherlock_sources`, `record_sherlock_source`,
+`submit_weekendkrant_fiche`, `validate_weekendkrant_claim`,
+`finish_weekendkrant_job` en `abandon_weekendkrant_job`. Andere
+Weekendkrant-tools horen niet bij deze opdracht.
+
 ## Kernworkflow per uur
 
 Voer per run uitsluitend deze volgorde uit:
@@ -127,7 +133,7 @@ Gebruik exact:
 - `claim`: exact `{job_id, attempt_id, token}` uit het ontvangen jobpakket
 - `schema_version`: integer 1
 - `topic`: exact het toegewezen topic
-- `date`: lokale Europe/Brussels-datum als `YYYY-MM-DD`
+- `date`: exact `input.date`
 - `content`: volledige Nederlandstalige fiche-inhoud in eenvoudige Markdown
 
 Gebruik `run_id` en de claim uitsluitend als transportmetadata. Publiceer alleen zolang de run `running` is en met exact het toegewezen topic. Een ontbrekende, afgesloten of anders getopiceerde run geeft een conflict; verzin geen nieuwe run voor die fiche.
