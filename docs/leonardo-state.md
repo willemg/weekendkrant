@@ -84,6 +84,16 @@ Er is geen automatische truncatie of compressielus. Het cumulatieve maximum
 van 256 revisies is een zichtbare v1-grens: overschrijding vereist later een
 expliciet nieuw contract/archiveringsbeleid en verwijdert nu niets.
 
+De huidige itemprovenance is daarbij bewust nog grof: hypotheses,
+onzekerheden, open vragen, ondersteuning en tegenbewijs kunnen alleen naar
+verwerkte partrevisies verwijzen. De onderliggende immutable bronlaag kent
+daarentegen ook de afzonderlijke `queue:<id>`-fiches binnen iedere revisie.
+De fase-9.6-karakterisering maakte deze representatiegrens zichtbaar. Geplande
+[fase 11](phase-11-leonardo-provenance.md) verrijkt itemprovenance daarom met
+gevalideerde fiche-refs, terwijl `processed_refs` de compacte part-level
+verwerkingsprovenance blijft. Fase 10 is voor het afzonderlijke CI-werk
+gereserveerd. Deze beschrijving verandert het huidige runtimecontract nog niet.
+
 De bestaande claim-/leasecontrole en stateversie-CAS gebeuren onder dezelfde
 lock als jobfinish, operation receipt en state-insert. Een validatiefout rolt de
 hele mutatie terug; vorige state en running job blijven behouden. De executor
