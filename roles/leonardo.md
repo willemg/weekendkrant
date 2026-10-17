@@ -1,4 +1,4 @@
-# Leonardo v2
+# Leonardo v3
 
 Read the supplied immutable state and source revisions. Focus on the semantic
 and structural organization of the supplied material: relationships, clusters,
@@ -20,6 +20,13 @@ better structure; do not preserve items mechanically for fear of losing details.
 Integrate new information into the existing structure where appropriate. Keep
 all processed_refs as provenance even when individual items disappear. The
 immutable source layer remains lossless; a generated state is never primary evidence.
+
+Keep processed_refs at immutable partrevision level. Individual refs, support
+and counterevidence may be more precise: cite queue:<id> identities visible in
+the SOURCE boundaries of processed revisions, as permitted by your supplied
+output contract. A queue reference refines processed input; it never introduces
+new input. Choose the appropriate granularity and keep concrete source identity
+when useful, without inferring membership from text similarity or current state.
 
 When old details need re-examination, call `recall_weekendkrant_part` with job_id,
 attempt_id and token from your claim, a supplied part:<id>:<revision> ref and a

@@ -1,192 +1,87 @@
 # Fase 11: fijnmazige Leonardo-provenance
 
-Fase 11 verrijkt Leonardo's compacte redactionele state met fijnmaziger
-bronprovenance. Deze fase volgt na fase 10, die voor het rudimentaire CI-systeem
-is gereserveerd.
+## Invariant en representatie
 
-Deze pagina legt uitsluitend het ontwerp en de implementatiegrenzen vast. De
-documentatie-PR voor fase 11 wijzigt geen runtimecontract, schema, validator,
-scheduled taak, plugin of productiegedrag.
+`processed_refs` blijft coarse-grained input provenance: exact de unie van
+vorige processed immutable partrevisions en de nieuwe aangeboden partrevisions.
+Het is de authoritative grens van Leonardo's verwerkte input, geen lijst van
+queuefiches. Een rolling state is geen primaire bron.
 
-## Aanleiding
+Fine-grained inhoudelijke provenance staat in `hypotheses[].refs`,
+`uncertainties[].refs`, `open_questions[].refs`, `claims[].support` en
+`claims[].counterevidence`. Deze velden mogen verwerkte partrefs en `queue:<id>`
+mengen. Een queuefiche moet aantoonbaar lid zijn van minstens één concrete
+immutable partrevision uit `processed_refs`. Queuebestaan of topicgelijkheid
+alleen is onvoldoende. Leonardo kiest de passende granulariteit; de backend
+valideert bereik en identiteit, niet de inhoudelijke waarheid van een claim.
 
-De fase-9.6-karakterisering liet Leonardo grote hoeveelheden nieuwe broncontext
-succesvol structureren. Daarbij signaleerde Leonardo zelf in zowel de
-wetenschaps- als AI-state een beperking: individuele state-items konden alleen
-naar volledige `part:<id>:<revision>`-revisies verwijzen, terwijl één part veel
-afzonderlijke fiches bevat.
+## Onderzoek en bewijs van membership
 
-Dat is geen verlies van bronprovenance in Ariadne. De immutable parttekst bevat
-per fiche een `SOURCE queue:<id>`-identiteit en SQLite bewaart de exacte
-revision-membership naar `queue_id`, bronbytes, hash, datum en positie. De
-beperking ontstaat in het huidige Leonardo-outputcontract en de statevalidator:
-item-level `refs`, `support` en `counterevidence` mogen alleen waarden uit
-`processed_refs` gebruiken, en `processed_refs` bevat partrevisies.
+De bestaande opslag is voldoende. Ariadne archiveert de exacte fichebytes in
+`source_archive` en registreert de geordende `revision_sources`-membership bij
+`part_revisions`, vóór de actieve pointer wordt gezet. Triggers blokkeren
+wijziging/verwijdering van archief en revision-membership en toevoeging aan een
+reeds geregistreerde actieve of historische revision. De reconstructieprimitive
+verifieert bronbytes, hashes, volgorde en tokenaudit bij assignmentaanmaak en
+recall. `WEEKENDKRANT-PART-1` toont de fiche-identiteiten als `SOURCE queue:<id>`.
 
-De vroege ontwikkelfase is niet het moment om deze beschikbare granulariteit
-voortijdig weg te abstraheren. We weten nog niet welke redactionele,
-audit-, Striktland-, Kuifje- of latere krantworkflows fijnmazige bronidentiteit
-nodig zullen hebben.
+Bij finish controleert `commit_state()` eerst de exacte processed unie tegen
+de immutable assignmentsnapshot. Daarna leest het voor die specifieke
+`(part_id, revision)`-paren de bestaande `revision_sources`, verbonden met
+`source_archive` en `part_revisions`. Iedere itemqueue moet in die afgeleide
+verzameling zitten. Ook vorige processed revisions tellen mee, niet alleen de
+nieuwe parts van de huidige assignment.
 
-## Ontwerpprincipe
+Dit gebeurt deterministisch server-side onder dezelfde korte transactie en
+claimfencing als statefinish. Weigering rolt jobfinish, state en receipt terug.
+Er wordt geen mutable ingressqueue, actieve revisionpointer of tekstmatching
+gebruikt. Geen nieuwe mappingtabel, schemamigratie of persistente kopie van de
+relatie. Verwijderde redundante revisiefiles of verwijderde ingressrijen tasten
+de historische bewijsrelatie niet aan.
 
-Bewaar zoveel mogelijk bronidentiteit zolang de kosten en grenzen nog
-karakteriseringsdata zijn. Leonardo mag inhoudelijk abstraheren, maar zijn
-provenance mag fijner blijven dan zijn tekstuele synthese.
+## Contractversie en compatibiliteit
 
-Meer granulariteit betekent niet dat ieder state-item verplicht elke
-onderliggende fiche moet opsommen. Leonardo kiest de semantisch passende
-granulariteit:
+Het nieuwe outputcontract begint met `leonardo-output-v2:`. De JSON-state blijft
+schema v1: velden, limieten en partrefs blijven hetzelfde. Vormvalidatie accepteert
+canonieke `queue:<id>`-strings met een positief decimaal SQLite-ID (maximaal
+9223372036854775807), zonder teken, voorloopnul of extra witruimte. Deze syntax
+verleent op zichzelf geen membershiprecht.
 
-- een brede hypothese over een volledige bronbundel mag naar één of meer
-  `part:<id>:<revision>`-refs verwijzen;
-- een concrete claim die door specifieke fiches gedragen wordt, mag naar
-  `queue:<id>`-refs verwijzen;
-- een item mag beide vormen combineren wanneer een deel van het bewijs
-  partbreed en een ander deel fiche-specifiek is.
+De semantische finishvalidatie staat queue-itemrefs uitsluitend toe wanneer het
+bevroren assignment-outputcontract die v2-marker draagt. Deploymentbestanden
+worden bij finish niet gelezen. Oude assignments blijven part-only; oude
+states worden niet herschreven. Nieuwe assignments bevriezen de bijgewerkte
+rol- en outputtekst via de bestaande contractloader. Retries blijven de exacte
+canonieke state bevestigen, ook na latere states.
 
-De backend valideert identiteit en bereik, niet de inhoudelijke keuze voor een
-grovere of fijnere verwijzing.
+`processed_refs` wordt nooit met queue-IDs uitgebreid. Gewone geldige partrefs
+blijven werken. Source facts houden verplichte ondersteuning; support en
+counterevidence kunnen onafhankelijk fijnmazig zijn. De 4.000-token-/32-KiB-
+stategrens blijft gehandhaafd zonder truncatie of stille vergroving.
 
-## Twee provenance-lagen in de state
+## Inspectie en recall
 
-### Verwerkingsprovenance
+Volledige en compacte operatorinspectie tonen onder
+`context_usage.state_provenance` de aantallen unieke itempartrefs en itemqueuerefs
+(`part_ref_count`, `queue_ref_count`), of null zonder bevestigde state. Deze
+metingen worden uit de immutable outputstate afgeleid, zonder extra opslag.
+Ze zijn geen inhoudelijke kwaliteitsscore. De volledige inspectie bewaart de
+state met alle referenties; de onderliggende membership blijft exact opvraagbaar.
 
-`processed_refs` blijft de compacte, exacte verzameling immutable partrevisies
-die Leonardo heeft verwerkt. Dit veld beantwoordt:
+De bestaande part-recall geeft de oorspronkelijke fiche-identiteiten terug.
+Er is geen afzonderlijke fiche-recalltool nodig voor deze fase.
 
-> Welk broncorpus heeft deze state gezien?
+## Gerichte regressievalidatie
 
-Het wordt dus niet opgeblazen tot honderden queue-ID's. De bestaande invariant
-blijft het uitgangspunt: eerdere processed partrefs blijven behouden en alle
-nieuwe aangeboden partrevisies worden toegevoegd.
+`tests/fast_track.txt` selecteert uitsluitend `test_leonardo_provenance`:
+acceptatie van gemengde refs in alle itemvelden, onafhankelijke support en
+counterevidence, exacte retries, bestaande maar onverwerkte queuefiches,
+vreemde parts/revisions, malformed refs, de immutable grens na actieve revisiegroei
+en ingressverwijdering, vorige processed input, weigering van zelf toegevoegde
+processed refs en het oude bevroren part-only contract. De gewone partref blijft
+expliciet gedekt. Dezelfde tests controleren atomaire weigering en inspectietellingen.
 
-### Itemprovenance
+Ontwikkeling en PR-validatie gebruiken alleen `./start_tests.sh`. De volledige
+regressiesuite wordt bewust aan de afzonderlijke CI op de exacte commit overgelaten.
 
-De provenancevelden van afzonderlijke state-items krijgen een rijker domein:
-
-- `hypotheses[].refs`
-- `uncertainties[].refs`
-- `open_questions[].refs`
-- `claims[].support`
-- `claims[].counterevidence`
-
-Deze velden mogen in fase 11 verwijzen naar:
-
-1. een verwerkte `part:<id>:<revision>`; of
-2. een `queue:<id>` die aantoonbaar lid is van ten minste één verwerkte
-   partrevisie.
-
-Een willekeurige queue-ID buiten het immutable verwerkte corpus blijft ongeldig.
-Topicgelijkheid, tekstgelijkenis of aanwezigheid elders in het archief geeft
-geen autorisatie.
-
-## Backendvalidatie
-
-De toekomstige implementatie moet fijnmazige refs deterministisch kunnen
-valideren zonder Leonardo te vertrouwen voor bronlidmaatschap.
-
-Voor iedere `queue:<id>` in itemprovenance geldt conceptueel:
-
-```text
-queue:<id>
-    -> revision_sources
-    -> lid van minstens één part:<id>:<revision>
-       uit processed_refs
-```
-
-De bestaande immutable revision-membership en `source_archive` blijven de
-autoritatieve bron. Geen heuristische lookup op titel, URL, datum of inhoud.
-
-Bestaande partrefs blijven geldig. Bestaande opgeslagen states worden niet
-herschreven om kunstmatig fijnmaziger te lijken.
-
-## Recall
-
-Fase 11 vereist niet automatisch een nieuwe fiche-recalltool. Een part-recall
-levert de exacte gereconstrueerde parttekst al met de individuele
-`SOURCE queue:<id>`-grenzen. Leonardo kan daardoor tijdens een geldige job
-fiche-identiteiten opnieuw waarnemen wanneer hij een part gericht herleest.
-
-Een afzonderlijke fiche-recallroute is pas gerechtvaardigd als latere
-karakterisering aantoont dat part-recall voor selectieve herlezing aantoonbaar
-te grof of te duur is. Dat is geen voorwaarde voor fase 11.
-
-## Stateomvang is voorlopig geen reden om granulariteit weg te gooien
-
-De eerste grote karakteriseringsstates bleven veel kleiner dan hun broninput.
-Fase 11 mag daarom niet uit voorzorg queue-provenance verwijderen om de huidige
-compactheidsdoelen cosmetisch te behouden.
-
-De bestaande stategrenzen zijn nog steeds technische contractgrenzen. Als
-fijnmazige provenance in realistische productie-input tegen de 4.000-token- of
-32-KiB-grens botst, moet de implementatiefase dat expliciet meten en vervolgens
-een bewuste contractkeuze maken. Stil terugvallen naar grovere refs of
-bronidentiteiten afkappen is niet toegestaan.
-
-## Contract- en compatibiliteitsgrens
-
-De runtimecontracten onder `roles/` worden door assignments exact ingevroren.
-De implementatie van fase 11 moet daarom expliciet beslissen hoe het uitgebreid
-refdomein wordt geversioneerd en gevalideerd zonder de betekenis van reeds
-bevroren jobs stilzwijgend te veranderen.
-
-Minimale compatibiliteitsvoorwaarden:
-
-- bestaande part-only states blijven geldig;
-- historische states worden niet gemigreerd alsof ze fijnmazige provenance
-  bevatten;
-- een oude immutable assignment blijft volgens zijn eigen contractsnapshot
-  interpreteerbaar;
-- nieuwe assignments krijgen een contract dat de toegestane part- en queue-refs
-  letterlijk beschrijft;
-- backendvalidatie en runtimecontract mogen niet van elkaar afwijken.
-
-Of dit een compatibele verruiming van state schema v1 kan zijn of een expliciete
-nieuwe outputcontractversie vereist, wordt in de implementatie-PR beslist met
-tests tegen frozen oude assignments.
-
-## Inspectie en karakterisering
-
-De operatorinspectie moet na implementatie zichtbaar kunnen maken hoeveel
-item-level provenance op part- en ficheniveau werd gebruikt. Minimaal interessant:
-
-- aantal unieke partrefs in itemprovenance;
-- aantal unieke queue-refs in itemprovenance;
-- items zonder fijnmazige refs terwijl de tekst een concrete bronclaim doet;
-- eventueel de herleiding `queue:<id>` naar partrevisie en Sherlock-run waar
-  die metadata beschikbaar is.
-
-Dit zijn karakteriseringssignalen, geen automatische inhoudelijke
-kwaliteitsscore.
-
-## Niet in fase 11
-
-Fase 11 introduceert niet:
-
-- semantische routing door Ariadne;
-- automatische dossierkeuze;
-- Einstein-longitudinale analyse;
-- Kuifje-missies of worker-spawning;
-- Striktland-validatie van de inhoudelijke claim zelf;
-- een nieuwe scheduler;
-- providerusage- of kostenmeting;
-- retentie of verwijdering van bronmateriaal.
-
-De stap verrijkt uitsluitend de traceerbaarheid van Leonardo's eigen
-structurele output tot de fijnste reeds beschikbare bronidentiteit.
-
-## Implementatiebewijs voor de latere functionele PR
-
-De functionele fase-11-PR moet ten minste aantonen dat:
-
-1. part-only output achterwaarts geldig blijft;
-2. geldige `queue:<id>`-refs uit processed revisions worden geaccepteerd;
-3. queue-refs buiten die revisions hard worden geweigerd;
-4. gemengde part- en queue-provenance geldig is;
-5. support en counterevidence onafhankelijk fijnmazig kunnen zijn;
-6. retries, fencing en atomische statefinish dezelfde garanties behouden;
-7. frozen oude assignments hun bestaande contractsemantiek behouden;
-8. inspectie de nieuwe granulariteit reproduceerbaar zichtbaar maakt.
-
-De concrete fast-track wordt pas in die functionele PR opnieuw beoordeeld.
+Geen Kuifje, Einstein, scheduler-, deployment- of dossierherontwerp in deze fase.

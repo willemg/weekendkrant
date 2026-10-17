@@ -391,8 +391,8 @@ geïmplementeerd en operationeel bewezen. Historical recall en lokale audit zijn
 in fase 9.6 geïmplementeerd en lokaal getest. Productie-invoering en meerdere
 karakteriseringsruns met daadwerkelijke recall blijven open vóór Kuifje.
 
-Fase 10 is gereserveerd voor het afzonderlijke rudimentaire CI-systeem en
-wijzigt deze redactionele architectuur niet. Daarna volgt fase 11:
+Fase 10 implementeert het afzonderlijke rudimentaire CI-systeem en
+wijzigt deze redactionele architectuur niet. Fase 11 implementeert:
 [fijnmazige Leonardo-provenance](phase-11-leonardo-provenance.md). Daarin blijven
 `processed_refs` compacte part-level verwerkingsprovenance, terwijl item-level
 `refs`, `support` en `counterevidence` ook gevalideerde `queue:<id>`-fiches

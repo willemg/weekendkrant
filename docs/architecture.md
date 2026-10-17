@@ -156,3 +156,12 @@ Fase 9.5: de scheduled executor gebruikt het minimale canonieke
 operaties. Start geeft alleen executor_id; jobophaling leest de bestaande
 immutable binding. Finish/abandon vereisen geen modelgegenereerde operatie-ID.
 Er is geen nieuw schema, sessiemodel of scheduler. Zie [dispatcher](dispatcher.md).
+
+
+Fase 11: Leonardo's `processed_refs` blijft de authoritative grens van verwerkte
+immutable partrevisions. Itemvelden `refs`, `support` en `counterevidence` mogen
+ook `queue:<id>` noemen, uitsluitend wanneer de bestaande immutable
+`revision_sources`-membership die fiche aan een van die exacte processed revisions
+koppelt. Dit verfijnt inputprovenance zonder extra inputmechanisme of mappingopslag.
+De server valideert deze grens atomair bij statefinish en respecteert het
+bevroren outputcontract van de job. Zie [Leonardo-state](leonardo-state.md).
