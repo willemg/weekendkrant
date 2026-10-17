@@ -1,3 +1,2 @@
-# Fase 10-correctie: CI-rapportage/artifacts/crashherstel, env-behoud en triggerregressies.
-test_ci_runner
-test_test_runner
+# Bescherm oorspronkelijke v1-opslag bij migratie naar het actuele schema.
+test_offers.OfferMigrationTests
