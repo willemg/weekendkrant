@@ -15,6 +15,7 @@ import ci_runner as ci
 
 A, B = 'a' * 40, 'b' * 40
 ROOT = Path(__file__).resolve().parents[1]
+UNUSED_SOURCE = 'https://example.test/unused.git'
 
 
 class StateTests(unittest.TestCase):
@@ -59,7 +60,7 @@ class StateTests(unittest.TestCase):
 
     def test_idle_is_silent_and_does_not_clone(self):
         with patch.object(ci, 'clone_test') as task:
-            self.assertEqual(ci.run(self.state, 'unused', sys.executable), 0)
+            self.assertEqual(ci.run(self.state, UNUSED_SOURCE, sys.executable), 0)
         task.assert_not_called()
         self.assertFalse(self.state.read().get('last_result'))
 
@@ -101,7 +102,7 @@ class StateTests(unittest.TestCase):
         self.assertIn(A[:12], messages[0])
         self.assertIn(str(self.state.root / 'failure'), messages[0])
         with patch.object(ci, 'clone_test') as task:
-            self.assertEqual(ci.run(self.state, 'unused', sys.executable, messages.append), 0)
+            self.assertEqual(ci.run(self.state, UNUSED_SOURCE, sys.executable, messages.append), 0)
         task.assert_not_called()
         self.assertEqual(len(messages), 1)
         self.assertEqual(list((self.state.root / 'work').iterdir()), [])
@@ -139,7 +140,7 @@ class StateTests(unittest.TestCase):
         with (self.state.root / 'runner.lock').open('a') as lock:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             with patch.object(ci, 'clone_test') as task:
-                self.assertEqual(ci.run(self.state, 'unused', sys.executable), 0)
+                self.assertEqual(ci.run(self.state, UNUSED_SOURCE, sys.executable), 0)
             task.assert_not_called()
         self.assertEqual(self.run_ci(), 0)
 
@@ -161,7 +162,7 @@ class StateTests(unittest.TestCase):
         self.assertEqual(self.state.read()['last_result']['status'], 'running')
         self.assertEqual(self.state.read()['pending']['sha'], A)
         with patch.object(ci, 'clone_test') as task:
-            self.assertEqual(ci.run(self.state, 'unused', sys.executable), 0)
+            self.assertEqual(ci.run(self.state, UNUSED_SOURCE, sys.executable), 0)
         task.assert_not_called()
         self.assertIsNone(self.state.read()['pending'])
         self.assertEqual(len(ci.Report(self.state).rows()), 1)
@@ -189,7 +190,7 @@ class StateTests(unittest.TestCase):
             log.write(b'BEGIN\n' + b'x' * 262144 + b'\nEND\n')
             return 1
         with patch.object(ci, 'clone_test', side_effect=task):
-            ci.run(self.state, 'unused', sys.executable)
+            ci.run(self.state, UNUSED_SOURCE, sys.executable)
         output = (self.state.root / 'failure/test.log').read_bytes()
         self.assertTrue(output.startswith(b'BEGIN'))
         self.assertTrue(output.endswith(b'END\n'))
@@ -297,7 +298,7 @@ class StateTests(unittest.TestCase):
         self.assertEqual(self.state.read()['last_result']['status'], 'running')
         self.assertEqual((self.state.root / 'failure/repo/marker').read_text(), 'original')
         with patch.object(ci, 'clone_test') as task:
-            ci.run(self.state, 'unused', sys.executable)
+            ci.run(self.state, UNUSED_SOURCE, sys.executable)
         task.assert_not_called()
         self.assertEqual(self.rows()[0]['status'], 'failed')
         self.assertTrue(Path(self.rows()[0]['artifact_path']).exists())
@@ -317,7 +318,7 @@ class StateTests(unittest.TestCase):
                 self.run_ci(lambda clone: 2)
         self.assertTrue((self.state.root / 'failure.previous/repo').exists())
         self.assertTrue(all(row['artifact_path'] is None for row in self.rows()))
-        ci.run(self.state, 'unused', sys.executable)
+        ci.run(self.state, UNUSED_SOURCE, sys.executable)
         self.assertEqual(len(self.rows()), 2)
         self.assertEqual(len(list(self.state.root.rglob('repo'))), 1)
         self.assertTrue(Path(self.rows()[0]['artifact_path']).exists())
