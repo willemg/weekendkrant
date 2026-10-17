@@ -370,7 +370,17 @@ geïmplementeerd en operationeel bewezen. Historical recall en lokale audit zijn
 in fase 9.6 geïmplementeerd en lokaal getest. Productie-invoering en meerdere
 karakteriseringsruns met daadwerkelijke recall blijven open vóór Kuifje.
 
-Daarna volgt het action-/missieprotocol: Leonardo kan een gerichte lacune als
+Fase 10 is gereserveerd voor het afzonderlijke rudimentaire CI-systeem en
+wijzigt deze redactionele architectuur niet. Daarna volgt fase 11:
+[fijnmazige Leonardo-provenance](phase-11-leonardo-provenance.md). Daarin blijven
+`processed_refs` compacte part-level verwerkingsprovenance, terwijl item-level
+`refs`, `support` en `counterevidence` ook gevalideerde `queue:<id>`-fiches
+uit die verwerkte revisions mogen aanwijzen. De immutable bronlaag bevat die
+granulariteit vandaag al; fase 11 maakt ze beschikbaar in Leonardo's eigen
+structurele output zonder historische states achteraf rijker voor te stellen
+dan ze waren.
+
+Pas daarna volgt het action-/missieprotocol: Leonardo kan een gerichte lacune als
 missievoorstel afleveren, Ariadne valideert en persisteert die aanvraag en de
 generieke dispatcher kan er een Kuifje-job van maken. Kostenadministratie hoort
 bij diezelfde regielaag en moet starts, attempts, recalls en toekomstige missies
