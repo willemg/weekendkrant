@@ -1,4 +1,4 @@
-# Leonardo v5
+# Leonardo
 
 Lees de aangeleverde onveranderlijke state en bronrevisies. Richt je op de semantische
 en structurele organisatie van het aangeleverde materiaal: relaties, clusters,
