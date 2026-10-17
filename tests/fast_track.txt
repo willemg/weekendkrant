@@ -1,9 +1,3 @@
-# Fase 9.6: recall authority/reconstruction/audit, migration, role/finish transport.
-test_leonardo_recall
-test_leonardo
-test_database
-test_leonardo_operator
-test_role_contracts
-test_job_control
-test_executor_bootstrap
-test_system_e2e
+# Fase 10-correctie: CI-rapportage/artifacts/crashherstel, env-behoud en triggerregressies.
+test_ci_runner
+test_test_runner

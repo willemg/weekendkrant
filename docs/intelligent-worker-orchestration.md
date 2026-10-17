@@ -656,9 +656,17 @@ taak blijft ongewijzigd. Zie [het recallcontract](leonardo-state.md#historical-r
 
 ### Fase 10 — rudimentair CI
 
-Deze fase is gereserveerd voor het afzonderlijke CI-spoor. Zij verandert de
-redactionele workerarchitectuur niet. De concrete CI-implementatie krijgt haar
-eigen functionele PR en testimpact.
+Het afzonderlijke CI-spoor is lokaal geïmplementeerd en gericht getest; het
+verandert de redactionele workerarchitectuur niet. Zie het canonieke
+[CI-contract en runbook](ci.md).
+
+- [x] Opt-in fast-tracktrigger met exacte SHA, idempotentie en coalescing.
+- [x] Verse tijdelijke clone, exact-SHA-checkout en canonieke volledige Python-suite.
+- [x] Niet-blokkerende runnerlock, atomische state/CAS-clear, crashherstel en cleanup.
+- [x] Compacte SQLite-historie, geen successlogs, één failureartifact, expliciete cleanup en ntfy-deduplicatie.
+- [x] Gerichte fast-track en productie-/operatorrunbook.
+- [ ] Externe CI-venv/runner en hourly cron na merge op bibib activeren.
+- [ ] Eerste echte volledige-suite-resultaat en operationele failuremelding bewijzen.
 
 ### Fase 11 — fijnmazige Leonardo-provenance
 

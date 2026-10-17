@@ -72,6 +72,18 @@ De finale transactie controleert ook de geplande partstaat en verschuift de
 actieve revisie samen met provenance en processed-status.
 Zie [partmodel en provenance](audit-trail.md#partmodel-en-provenance).
 
+## Afzonderlijke lokale CI
+
+De optionele fast-tracktrigger registreert een concrete SHA in externe
+`/home/weekendkrant/ci`-state. Een uurlijkse lokale runner test die SHA via de
+canonieke volledige Python-suite in een verse wegwerpclone, met een eigen
+niet-blokkerende lock. Atomische resultaatregistratie en request-CAS behouden
+ondertussen nieuw pending werk. De live `/home/weekendkrant/app` wordt door CI
+nooit als worktree of clonesource gebruikt. Operationele JSON-state, compacte SQLite-rapportage, één failurecheckout met log,
+runnerinstallatie en gedeelde CI-venv staan buiten de applicatiecheckout.
+Dit is lokaal geïmplementeerd; productieactivering volgt na merge. Zie
+[CI-contract, crashsemantiek en runbook](ci.md).
+
 ## GitHub en discovery
 
 `willemg/weekendkrant` is de enige source of truth voor alle niet-geheime code

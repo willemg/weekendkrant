@@ -41,9 +41,14 @@ of naar de volledige suite. Onbekende CLI-argumenten falen eveneens.
 
 `./start_tests.sh --all` gebruikt de volledige unittest-discovery in `tests/`,
 onafhankelijk van de fast-tracklijst, en faalt ook als er geen tests bestaan.
-Dit blijft uitsluitend de expliciete of technisch gemotiveerde uitzondering
-op de normale fast-trackcyclus hierboven. Het shellscript werkt vanuit zijn eigen checkout en
-gebruikt de lokale `.venv/bin/python` als die bestaat, anders `python3`.
+Tijdens ontwikkeling blijft dit uitsluitend de expliciete of technisch
+gemotiveerde uitzondering op de normale fast-trackcyclus hierboven. De
+[afzonderlijke volledige CI-runtime](ci.md) gebruikt dit pad bewust vanuit een
+verse tijdelijke clone van precies de pending SHA; dat maakt de volledige suite
+nog geen verplichte lokale PR-gate. Het shellscript werkt vanuit zijn eigen checkout en
+gebruikt een expliciete `WEEKENDKRANT_TEST_PYTHON` wanneer ingesteld, anders de
+lokale `.venv/bin/python` als die bestaat, anders `python3`. Zo kan een tijdelijke
+CI-clone de stabiele externe CI-venv gebruiken.
 
 ## Initiële regressieset van PR #56
 
@@ -116,3 +121,22 @@ selectiepolicytests worden niet uit de vorige lijst overgenomen. Dit is de
 kleinste gekozen impactset op moduleniveau; Node blijft buiten de default.
 `./start_tests.sh --plugin` valideert apart de publieke toolmetadata, transport-
 contracten en echte MCP → HTTP → SQLite-recall plus generieke finish.
+
+
+## Fase 10: snelle gate en asynchrone volledige CI
+
+De nieuwe selectie bevat uitsluitend `test_ci_runner` (nieuwe state-, clone-,
+rapportage-, artifact-, crash-, locking-, notificatie- en triggerregressies) en `test_test_runner`
+(geraakt canoniek testpad en bestaande selectie-/CLI-regressies). De vorige
+Leonardo-/backendselectie wordt bewust volledig vervangen; die code wijzigt niet.
+
+Met `WEEKENDKRANT_CI_STATE` markeert alleen een succesvolle schone fast-track
+zijn exacte HEAD voor volledige CI. Zonder die configuratie blijven selectie
+en gedrag onafhankelijk van Git; dirty development blijft mogelijk. De trigger
+haalt niets op en vereist geen actieve worker. `--all` en pluginchecks triggeren
+niet opnieuw. Zie [het canonieke CI-document](ci.md) voor de precieze
+voor-/nacontroles, foutsemantiek, coalescing en productieactivering.
+
+De fase-10-correctie behoudt bewust dezelfde twee geraakte modules: nieuwe
+SQLite-/artifactretentie- en env-behoudtests horen bij `test_ci_runner`; het
+canonieke testpad en zijn trigger blijven via `test_test_runner` gedekt.
