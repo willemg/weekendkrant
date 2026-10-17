@@ -1,19 +1,19 @@
-# Sherlock-outputcontract, versie 1
+# Outputcontract voor Sherlock
 
-De persistente Sherlock-run is het resultaatartifact. De backend levert de exacte
-`sherlock-run:<run_id>` als `result_ref`. Geef bij generieke finish uitsluitend die
-referentie mee als `output_refs`, ook bij een lege oogst. De backend sluit run en
-attempt in dezelfde transactie. Bronregistraties en fiches blijven via run_id
-gekoppeld aan job_id en attempt_id. Claimgegevens zijn transportmetadata, geen
-fiche-inhoud. Bevestigde bronregistraties en fiches worden bij fouten behouden.
+Dit outputcontract hoort bij de rol Sherlock.
 
-`succeeded` vereist inhoudelijk voltooide zoekdekking, alle werkelijk gereviewde
-bronnen geregistreerd en alle geselecteerde fiches bevestigd. `failed` sluit een
-bekend mislukte uitvoering af. Bij onzekere effecten gebruik `uncertain` of
-abandon; de job blijft geblokkeerd voor expliciet operatorherstel. Een finishreceipt
-bewijst registratie van de uitkomst, geen inhoudelijke verificatie van de scout.
+De exacte resultaatreferentie wordt als `result_ref` aangeleverd. Geef bij
+`finish_weekendkrant_job` uitsluitend die referentie mee als `output_refs`,
+ook bij een lege oogst. Claimgegevens zijn transportmetadata, geen fiche-inhoud.
 
-Transport: call `finish_weekendkrant_job` with job_id, attempt_id and token from
-the supplied claim, status and output_refs. Do not supply an operation_id. For unknown effects use uncertain
-or `abandon_weekendkrant_job` with the same authority and error. After an uncertain
-terminal response retry only the exact terminal request, never the content work.
+`succeeded` vereist inhoudelijk voltooide zoekdekking, registratie van alle
+werkelijk gereviewde bronnen en bevestiging van alle geselecteerde fiches.
+`failed` sluit een bekend mislukte uitvoering af. Gebruik bij onzekere effecten
+`uncertain` of `abandon_weekendkrant_job`.
+
+Transport: roep `finish_weekendkrant_job` aan met `job_id`, `attempt_id` en
+`token` uit de aangeleverde claim, plus `status` en `output_refs`. Geef geen
+`operation_id` mee. Gebruik bij onbekende effecten `uncertain` of
+`abandon_weekendkrant_job` met dezelfde autoriteit en een foutmelding. Na een
+onzeker terminaal antwoord mag alleen exact hetzelfde terminale verzoek opnieuw
+worden geprobeerd, nooit het inhoudelijke werk.

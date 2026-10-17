@@ -41,8 +41,150 @@ blocked-weigering heeft geen role-file-I/O nodig. Alleen wanneer nieuwe
 Sherlock-productie werkelijk wordt overwogen, vindt lazy preparation plaats.
 De executor leest zelf nooit rolbestanden uit de repository.
 
-Deze wijziging verandert geen schema, dispatchpolicy, offer-/dossierkeuze of
-live scheduled task en voert geen fase-9-proef of deployment uit.
+
+### Runtimecontracthygiëne en contextisolatie
+
+De role- en outputcontracten zijn productie-input voor een worker, geen verkorte
+architectuurdocumentatie. Daarom staan alle natuurlijke-taalinstructies in deze
+contracten in het Nederlands. Exacte technische identifiers, toolnamen,
+veldnamen, enumwaarden en letterlijke externe foutmeldingen blijven in hun
+contractuele vorm staan.
+
+Een rolecontract moet epistemisch gesloten zijn. Een worker krijgt alleen
+verwijzingen naar context die hij werkelijk kan waarnemen: aangeleverde input,
+expliciet beschikbare tools en velden, en de grenzen van zijn eigen opdracht.
+Uitleg over waarom een regel bestaat, welke andere rol later iets zal doen,
+backendtopologie, historische incidenten en ontwikkelmotivatie horen hier in de
+documentatie en niet in de runtimeprompt.
+
+Dit voorkomt niet alleen lokale promptvervuiling maar ook contaminatie doorheen
+de keten. Het risico lijkt op het fluisterspel uit een jeugdbeweging: één
+oorspronkelijke zin wordt van persoon tot persoon doorgegeven en komt vervormd
+terug. In een agentketen is dat gevaarlijker omdat iedere tussenstap de ontvangen
+context als legitieme taakinput kan behandelen. Een architectuurhint in een
+rolecontract kan zo eerst een inferentie in state worden, daarna een
+onderzoeksmissie sturen, vervolgens de bronselectie beïnvloeden en uiteindelijk
+als nieuwe inhoud terugkeren. Tegen dan is de oorspronkelijke herkomst van het
+frame moeilijk zichtbaar.
+
+Daarom bewaken we naast bronprovenance ook de herkomst van framing. Runtimeprompts
+bevatten alleen operationele instructies voor de huidige job; architectuur,
+motivatie en historische lessen blijven in `docs/`.
+
+
+Een bijkomend risico is **statuspromotie**. Informatie die bij de eerste worker
+slechts ruis, bijkomstige formulering of impliciete architectuurcontext was, kan
+na één transformatie in een state of missie voor de volgende worker de status van
+legitieme taakcontext krijgen. De oorsprong en oorspronkelijke onzekerheidsstatus
+zijn dan niet meer zichtbaar. Zo kan een keten ontstaan als:
+
+`ruis in instructie → inferentie in state → onderzoekscontext → gerichte bronselectie → nieuw bewijsachtig materiaal`
+
+Daarbij vervormt niet alleen de inhoud, maar ook het soort informatie dat een zin
+geacht wordt te zijn. Wat begon als niet-inhoudelijke context kan onderweg als
+premisse, onderzoeksvraag of quasi-bewijs worden behandeld. Daarom is het niet
+voldoende om alleen bronrefs technisch correct te bewaren: ook framing die geen
+inhoudelijke provenance heeft, moet uit persistente inhoudelijke artifacts en
+missies geweerd worden.
+
+
+### Samengestelde-contextaudit
+
+Een rolefile wordt nooit geïsoleerd beoordeeld. Voor iedere bestaande of nieuwe
+intelligente rol reconstrueren we vóór activering de **werkelijke context die de
+worker ontvangt** en lezen we die alsof er geen andere kennis over Weekendkrant
+bestaat. Minimaal worden samen bekeken:
+
+1. de generieke executorinstructies die vóór de rol worden uitgevoerd;
+2. het concrete jobpakket zoals de producer of adapter het aanlevert, inclusief
+   claim, `role`, `input`, `result_ref` en technische refs;
+3. het volledige rolecontract;
+4. het volledige outputcontract;
+5. alle Weekendkrant-toolnamen, descriptions en input/outputschema's die voor de
+   worker zichtbaar zijn;
+6. de inhoudelijke artifacts die werkelijk als input kunnen verschijnen, zoals
+   state, parts, missies, geselecteerde onderzoeksresultaten en recallresultaten.
+
+De centrale vraag is:
+
+> **Is deze samengestelde context intern consistent en volledig begrijpelijk
+> zonder kennis van iets erbuiten, en zonder dat externe architectuurcontext als
+> inhoudelijke kennis kan binnensijpelen?**
+
+De audit controleert daarbij expliciet:
+
+- **referentiële geslotenheid:** ieder begrip waarop een instructie steunt is in
+  de samengestelde context gedefinieerd of is een exact zichtbaar technisch
+  identifier;
+- **semantische consistentie:** verschillende lagen geven hetzelfde veld, begrip
+  of handeling geen strijdige betekenis;
+- **epistemische zuiverheid:** transportmetadata, identifiers, opslagdetails,
+  architectuur en ontwikkelhistoriek worden niet als inhoudelijk bewijs of
+  redactionele kennis aangeboden;
+- **statusbehoud:** een technische ref, eerdere samenvatting of rationale krijgt
+  niet stilzwijgend de status van primair bewijs;
+- **toolgrens:** de rol benoemt welke Weekendkrant-tools voor haar huidige job
+  bedoeld zijn; gedeelde toolbeschrijvingen blijven rolneutraal en leggen geen
+  verantwoordelijkheden van andere rollen uit;
+- **outputsluiting:** ieder verplicht outputveld is lokaal verklaard en kan
+  uitsluitend met de aangeleverde input en toegestane tools correct worden
+  ingevuld;
+- **taalhygiëne:** natuurlijke-taalinstructies zijn Nederlands; alleen exacte
+  technische identifiers, schemawaarden en letterlijke externe meldingen blijven
+  in hun contractuele vorm;
+- **geen handmatige promptversies:** role- en outputcontracten krijgen geen
+  `v1`, `v2` of vergelijkbare handmatige versielabels. Gitgeschiedenis,
+  contractsnapshot en SHA-256 identificeren de concrete contractinhoud.
+  Machinevelden zoals `schema_version` blijven bestaan wanneer het dataschema
+  ze werkelijk vereist.
+
+Een nuttige eindtest is de **koude-worker-test**: geef een reviewer alleen de
+hierboven samengestelde context en vraag welke informatie inhoudelijk bewijs is,
+welke informatie alleen identiteit/provenance is, welke tools gebruikt mogen
+worden en welk resultaat verwacht wordt. Als daarvoor uitleg uit onze
+architectuurdocumentatie nodig is, is het runtimecontract nog niet gesloten.
+
+Deze audit is voortaan een ontwerpvoorwaarde vóór runtime-invoering van nieuwe
+rollen. Dat geldt in het bijzonder voor de geplande rollen Striktland, Minos en
+Einstein: eerst hun volledige jobpakket, toolsurface, rolecontract en
+outputcontract samen ontwerpen en als één context auditen, pas daarna de rol
+activeren.
+
+### Audit van de huidige rollen
+
+De huidige Sherlock-, Leonardo- en Kuifje-contexten zijn volgens deze methode
+naast hun producer-output en gedeelde toolsurface gelegd.
+
+**Sherlock:** `input.topic` en `input.date` zijn de enige inhoudelijke
+jobvelden; het rolecontract gebruikt voortaan expliciet `input.date` in plaats
+van zelf een kalenderdatum af te leiden. Het contract bevat een expliciete
+Weekendkrant-toolgrens. Het outputcontract beschrijft alleen de vereiste uitkomst
+en transporthandeling, niet de backendarchitectuur.
+
+**Leonardo:** de inhoudelijke basis is state, aangeleverde parts en geselecteerde
+`research_results`. `dossier_id`, versienummers, tokenizer en refs worden
+expliciet als identiteit, formaat of provenance behandeld en niet als bewijs.
+Het technische veld `kuifje_missions` wordt lokaal verklaard als naam voor
+onderzoeksvoorstellen, zonder kennis van een andere rol te vereisen. De
+`queue:<id>`-vorm is lokaal gedefinieerd zonder opslagimplementatie als
+inhoudelijke context. Role- en outputcontract staan zowel in de immutable
+assignment als bovenaan het jobpakket; die redundantie is momenteel exact en
+dus consistent, maar mag bij latere refactors nooit twee verschillende
+contractinhouden opleveren.
+
+**Kuifje:** het rolecontract noemt exact de missionvelden die werkelijk worden
+aangeleverd. `question`, `rationale` en `scope` sturen het onderzoek;
+`topic` begrenst onderwerp en publicatiemetadata; de overige identifiers en
+refs zijn uitsluitend identiteit/provenance. Het outputcontract verklaart de
+rolnaam en het technische veld `kuifje_result` lokaal. Er is een expliciete
+Weekendkrant-toolgrens en er wordt geen eerdere dossierinhoud verondersteld.
+
+De gedeelde MCP-toolsurface is eveneens onderdeel van deze audit. De descriptions
+van generieke tools zijn daarom rolneutraal gemaakt; rolspecifieke payloadregels
+staan in role- en outputcontracten. De huidige plugin exposeert technisch nog
+enkele rolspecifiek benoemde tools aan alle workers. Zolang de toolsurface niet
+per job kan worden gescopeerd, vormt de expliciete allowlist in ieder rolecontract
+de grens: niet-genoemde Weekendkrant-tools behoren niet tot die opdracht.
 
 ## Sherlock — de speurneus
 
