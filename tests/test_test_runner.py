@@ -1,11 +1,13 @@
 """Exercise the CLI against isolated manifests and real unittest modules."""
 
+import os
 from pathlib import Path
 import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 
 class RunnerTests(unittest.TestCase):
@@ -32,13 +34,38 @@ class BetaTests(unittest.TestCase):
         (self.tests / "test_empty.py").write_text("# No tests\n")
 
     def run_cli(self, *args):
+        # Selection fixtures deliberately exclude the optional deployment trigger.
+        env = os.environ.copy()
+        env.pop("WEEKENDKRANT_CI_STATE", None)
         return subprocess.run(
             [sys.executable, str(self.root / "test_runner.py"), *args],
             cwd=self.tmp.name,
+            env=env,
             capture_output=True,
             text=True,
             timeout=10,
         )
+
+    def test_parent_ci_trigger_is_not_inherited_by_selection_fixture(self):
+        self.manifest.write_text("test_environment\n")
+        (self.tests / "test_environment.py").write_text("""import os
+import unittest
+class EnvironmentTests(unittest.TestCase):
+    def test_child_environment(self):
+        self.assertNotIn('WEEKENDKRANT_CI_STATE', os.environ)
+        print('CHILD_CI_TRIGGER_ABSENT')
+""")
+        with patch.dict(os.environ):
+            os.environ.pop("WEEKENDKRANT_CI_STATE", None)
+            baseline = self.run_cli()
+        with patch.dict(os.environ, {"WEEKENDKRANT_CI_STATE": "/home/weekendkrant/ci"}):
+            inherited = self.run_cli()
+            self.assertEqual(os.environ["WEEKENDKRANT_CI_STATE"], "/home/weekendkrant/ci")
+        for result in (baseline, inherited):
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("CHILD_CI_TRIGGER_ABSENT", result.stdout)
+        self.assertEqual(baseline.stdout, inherited.stdout)
+        self.assertFalse((self.root / "ci_runner.py").exists())
 
     def test_explicit_module_and_comments_select_only_listed_tests(self):
         self.manifest.write_text("# Chosen impact\n\ntest_alpha # two cases\n")

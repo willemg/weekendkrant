@@ -133,3 +133,16 @@ onderscheid waargenomen gedrag van een nog onbewezen oorzaak.
   bibibs cwd binnen de live checkout resolveert en wordt geweigerd, terwijl de
   nieuwe HTTPS-sentinel onder dezelfde omstandigheden wordt geaccepteerd. De
   afzonderlijke live-checkout-rejectietest blijft behouden.
+
+
+## Operatorenvironment isoleren in subprocessfixtures (17 oktober 2026)
+
+- **Incident:** met de echte `WEEKENDKRANT_CI_STATE`-export erfden geïsoleerde
+  runnerfixtures onbedoeld de deploymenttrigger. Hun selectiefixture bevat
+  bewust geen `ci_runner.py`, waardoor vier tests op die import faalden.
+- **Les:** isoleer relevante operator-/productie-environment expliciet wanneer
+  subprocessfixtures onafhankelijk gedrag testen. De gewone runnerfixtures
+  verwijderen alleen `WEEKENDKRANT_CI_STATE` uit een kopie van hun childomgeving;
+  de expliciete CI-triggerfixtures behouden hun eigen configuratie.
+- **Regressie:** een echte childtest controleert dat de variabele ontbreekt,
+  met gelijke selectie-uitvoer bij een parent met en zonder actieve export.
