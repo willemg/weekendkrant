@@ -247,9 +247,12 @@ inhoudelijke lacunes nooit zelf vast.
 
 Dit is de eerste bewust agent-gegenereerde werkstroom: semantisch komt de opdracht
 van Leonardo, maar Leonardo start Kuifje nooit rechtstreeks. Ariadne/backend
-valideert en bewaart het voorstel eerst als duurzame missie met stabiele identiteit,
-context, status en budget; pas daarna kan de generieke dispatcher er in een latere
-activatie een Kuifje-job van maken. Een aanvraag is dus nog geen uitgevoerde
+valideert en bewaart maximaal vier voorstellen per succesvolle finish als
+afzonderlijke immutable missies met stabiele identiteit, context en budget.
+Die ordered missieset binnen hetzelfde topic vormt precies één ready Kuifje-job,
+één intelligente run die de generieke dispatcher in een latere activatie claimt.
+Een missie is geen schedulingeenheid; een latere Leonardo-finish kan wel een
+nieuwe missieset en nieuwe Kuifje-run veroorzaken. Een aanvraag is dus nog geen uitgevoerde
 missie en een modelworker spawnt nooit een andere worker.
 
 Een missie bevat minimaal een stabiele `mission_id`, `parent_thread_id`

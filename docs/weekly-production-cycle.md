@@ -49,43 +49,33 @@ kunnen worden afgesloten.
 
 Per topic ziet het maximale normale pad er conceptueel zo uit:
 
-```text
-Sherlock
-   |
-   v
-Leonardo 1
-   |
-   +--> geen relevante lacune --------------------+
-   |                                              |
-   +--> Kuifje-missie                             |
-           |                                      |
-           v                                      |
-        Kuifje 1                                  |
-           |                                      |
-           v                                      |
-        Leonardo 2                                |
-           |                                      |
-           +--> geen tweede missie ---------------+
-           |
-           +--> Kuifje-missie
-                   |
-                   v
-                Kuifje 2
-                   |
-                   v
-        afsluitende Leonardo-run
+```mermaid
+flowchart TD
+    S["Sherlock-run"] --> L1["Leonardo-run 1"]
+    L1 -->|"1..4 missies, zelfde topic"| K1["Eén Kuifje-run"]
+    L1 -->|"Geen missies"| C["Afsluitende Leonardo-run"]
+    K1 --> L2["Leonardo-run 2"]
+    L2 -->|"Nieuwe golf van 1..4 missies"| K2["Volgende Kuifje-run"]
+    L2 -->|"Geen nieuwe missies"| C
+    K2 --> C
 ```
 
 Dat zijn maximaal zes inhoudelijke runs per topic en per golf:
 
 1. Sherlock zoekt breed binnen het topic;
-2. Leonardo structureert de nieuwe oogst en bepaalt of een concrete lacune een
-   gerichte Kuifje-missie rechtvaardigt;
-3. Kuifje onderzoekt die missie alleen wanneer ze werkelijk bestaat;
-4. Leonardo verwerkt het antwoord en bepaalt of nog één gerichte vervolgmissie
+2. Leonardo structureert de nieuwe oogst en bepaalt of concrete lacunes een
+   set van 1..4 gerichte Kuifje-missies binnen hetzelfde topic rechtvaardigt;
+3. één Kuifje-run onderzoekt de volledige missieset alleen wanneer die bestaat;
+4. Leonardo verwerkt het antwoord en bepaalt of een volgende set van 1..4 missies
    nodig is;
 5. een tweede Kuifje-run is opnieuw conditioneel;
 6. Leonardo sluit de golf inhoudelijk af.
+
+Meerdere missies uit dezelfde succesvolle Leonardo-finish kosten samen één
+Kuifje-job/run. Nieuwe missies uit een latere Leonardo-iteratie kunnen wel een
+nieuwe run veroorzaken. Er is geen bundeling over verschillende producerende runs.
+Capaciteit en budget tellen jobstarts/runs, niet afzonderlijke mission-count.
+Eén scheduled activation voert maximaal één job uit.
 
 De Kuifje-stappen zijn dus **reservecapaciteit**, geen quotum. Geen lacune
 betekent geen missie en geen run. Een vruchteloze missie is eveneens een geldig

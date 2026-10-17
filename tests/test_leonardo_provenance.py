@@ -121,9 +121,10 @@ class ProvenanceTests(LeonardoFixture):
         legacy = Path(__file__).parent / 'fixtures' / 'leonardo-output-v1.md'
         def load(path):
             return original(legacy if path.name == 'leonardo-output.md' else path)
-        with patch('role_contracts.load_contract', side_effect=load):
+        from test_phase12 import frozen_leonardo
+        with patch('role_contracts.load_contract', side_effect=load), frozen_leonardo('leonardo-output-v1:'):
             self.enqueue()
         claim = self.start()
-        self.assertEqual(claim['output_contract'], legacy.read_text())
+        self.assertTrue(claim['output_contract'].endswith(legacy.read_text()))
         self.assert_refused(claim, self.queue_state())
         self.finish(claim, self.state())

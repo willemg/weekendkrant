@@ -6,6 +6,7 @@ import sqlite3
 from job_control import JobControl
 from leonardo_operator import inspect_job
 from test_leonardo import LeonardoFixture
+from test_phase12 import grouped_result
 
 
 class CorrectionTests(LeonardoFixture):
@@ -27,8 +28,8 @@ class CorrectionTests(LeonardoFixture):
         args = {k: claim[k] for k in ('job_id', 'attempt_id', 'token')}
         args.update(status=status, output_refs=[claim['result_ref']] if status == 'succeeded' else [])
         if status == 'succeeded':
-            args['kuifje_result'] = dict(summary='No usable primary evidence found',
-                                       limitations='Two repositories inaccessible')
+            args['kuifje_result'] = grouped_result(claim, 'No usable primary evidence found',
+                                                     'Two repositories inaccessible')
         else:
             args['error'] = 'Primary repository unavailable'
         return JobControl(self.conn, lambda: self.now).scheduled('finish', args)
@@ -68,7 +69,7 @@ class CorrectionTests(LeonardoFixture):
             self.store.reevaluate('result:review', 'dossier:reproduction', 1)
         claim = self.start('result:review')
         feedback, = claim['input']['research_results']
-        self.assertEqual(feedback['mission']['mission_id'], k['input']['mission']['mission_id'])
+        self.assertEqual(feedback['mission']['mission_id'], k['input']['missions'][0]['mission_id'])
         self.assertEqual((feedback['job_id'], feedback['attempt_id']), tuple(selection[0]))
         self.assertEqual(feedback['status'], 'succeeded')
         self.assertIn('No usable', feedback['result']['summary'])

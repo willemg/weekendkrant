@@ -117,13 +117,13 @@ class IngressQueue:
                 if mission['topic'] != payload['topic']:
                     raise FicheRunConflict('Wrong mission topic')
                 payload_sha = digest(canonical(payload))
-                prior = db.execute('SELECT queue_item_id,payload_sha256 FROM kuifje_fiches WHERE job_id=? AND fiche_id=?',
-                                   (job, fiche_id)).fetchone()
+                prior = db.execute('SELECT queue_item_id,payload_sha256 FROM kuifje_fiches WHERE job_id=? AND mission_id=? AND fiche_id=?',
+                                   (job, mission_id, fiche_id)).fetchone()
                 if prior:
                     if prior[1] != payload_sha:
                         raise FicheRunConflict('Fiche identity reused with different payload')
                     return prior[0]
-                if db.execute('SELECT count(*) FROM kuifje_fiches WHERE job_id=?', (job,)).fetchone()[0] >= 5:
+                if db.execute('SELECT count(*) FROM kuifje_fiches WHERE job_id=? AND mission_id=?', (job, mission_id)).fetchone()[0] >= 5:
                     raise FicheRunConflict('Mission fiche bound exceeded')
             cursor = db.execute(
                 'INSERT INTO ingress_queue (received_at, payload) VALUES (?, ?)',
@@ -133,8 +133,8 @@ class IngressQueue:
                 db.execute('INSERT INTO sherlock_fiches(queue_item_id,run_id) VALUES (?,?)',
                            (identity, run_id))
             if mission_id is not None:
-                db.execute('INSERT INTO kuifje_fiches VALUES (?,?,?,?,?)',
-                           (identity, job, claim['attempt_id'], fiche_id, payload_sha))
+                db.execute('INSERT INTO kuifje_fiches VALUES (?,?,?,?,?,?)',
+                           (identity, job, claim['attempt_id'], mission_id, fiche_id, payload_sha))
             return identity
 
     def pending_count(self):

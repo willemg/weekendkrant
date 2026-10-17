@@ -25,8 +25,11 @@ blijven gelden. Er is geen automatische periodieke reevaluation.
 
 ## Afzonderlijke missie-artifacts
 
-Nieuwe Leonardo-jobs bevriezen `roles/leonardo.md` v4 en
-`roles/leonardo-output.md` v3. Hun finish kan naast `leonardo_state` een aparte
+Nieuwe Leonardo-jobs bevriezen de actuele `roles/leonardo.md` en
+`roles/leonardo-output.md` in een machineleesbaar assignmentsnapshot met
+`schema_version=2`. Die machineversie ondersteunt queueprovenance en missies,
+onafhankelijk van natuurlijke prompttekst. Alleen historische schema-1-assignments
+behouden hun frozen prefixsemantiek. Een nieuwe finish kan naast `leonardo_state` een aparte
 `kuifje_missions`-lijst bevatten, maximaal vier voorstellen met exact:
 
 | Veld | Betekenis |
@@ -52,16 +55,20 @@ revision_sources en source_archive. Geen lookup in actuele queue/active_revision
 geen fuzzy tekstkoppeling. Een lacune uit nieuwe input kan onmiddellijk een
 missie opleveren. Reevaluation heeft geen nieuwe parts en behoudt dus precies
 de vorige corpusgrens. Item-ID's worden niet gebruikt: rolling
-items mogen worden samengevoegd/verwijderd. Historische v1/v2-outputcontracten
-blijven frozen en verlenen geen missiecapability; fase-11-v2-queueprovenance blijft
-wel geldig.
+items mogen worden samengevoegd/verwijderd. Historische schema-1-assignments behouden hun capabilitygrens: outputprefix
+`leonardo-output-v1:` staat alleen parts toe, `leonardo-output-v2:` ook queueprovenance,
+en `leonardo-output-v3:` ook missievoorstellen. Deze labels worden uitsluitend voor
+legacycompatibiliteit geïnterpreteerd en keren niet terug in actuele rolefiles.
 
 ## Atomiciteit en uitvoering
 
 Contractfiles en tokenmeting worden vóór de write-lock voorbereid. Na generieke
 claimfencing schrijft dezelfde finish-savepoint de volgende Leonardo-state,
-missie-artifacts, precies één ready Kuifje-job per missie, frozen
-kuifje_assignments en terminale receipt. Een fout rolt alles terug; expiryquarantaine
+1..4 missie-artifacts, precies één ready Kuifje-job, één frozen
+`kuifje_assignments`, de ordered `kuifje_assignment_missions`-mapping en terminale
+receipt. Nul missies levert geen Kuifje-job. Alle missies delen mechanisch
+dezelfde dossier-, state-, producer- en topicidentiteit. Er is geen bundeling
+over verschillende Leonardo-runs. Een fout rolt alles terug; expiryquarantaine
 blijft volgens het bestaande controlcontract behouden. Unieke producer/ordinal-
 en mission/jobbindingen plus inhoudsvergelijking voorkomen dubbele objecten bij
 exacte terminale retries, ook via een andere expliciete operatie-identiteit.
@@ -71,8 +78,8 @@ replay niet heropend.
 De ready-only KuifjeProducer draait via dezelfde dispatcher, FIFO, globale lane,
 seriële rolgrens, pause, claims, attempts en executorreceipts. Geen nieuwe tools,
 rollenlijst in de executor of scheduler. Het jobpakket bevat het frozen algemene
-rolcontract, concrete missie en outputcontract. Recovery hergebruikt dezelfde
-missie/assignment en maakt uitsluitend een nieuwe attempt na operatorbewijs.
+rolcontract, de ordered `input.missions`-lijst en outputcontract. Recovery hergebruikt dezelfde
+missieset/assignment en maakt uitsluitend een nieuwe attempt na operatorbewijs.
 Losse claims omzeilen deze binding niet; recovery naar succeeded zonder atomair
 gevalideerde output wordt geweigerd.
 
@@ -80,8 +87,13 @@ Kuifje zoekt binnen de opdracht, maximaal 20 inhoudelijk gereviewde bronnen en
 5 fiches per missie (de backend handhaaft de fichegrens). Hij maakt geen nieuwe
 missies/dossiers en wijzigt geen Leonardo-geheugen. Hij krijgt geen algemene
 recallbevoegdheid; vraag, aanleiding en scope moeten zelfstandig bruikbaar zijn.
-Succes schrijft apart kuifje_result={summary,limitations} en de geleverde
-result_ref, ook bij lege oogst. Failed/uncertain heeft geen outputrefs/resultaat;
+Succes schrijft één jobresultaat met
+`kuifje_result={"mission_results":[{"mission_id":"...","summary":"...","limitations":"..."}]}`
+en `result_ref=kuifje-result:job:<job_id>`. Iedere assigned missie komt exact één
+keer voor in assignmentvolgorde, zonder vreemde IDs; beide tekstvelden zijn
+niet-leeg en maximaal 8192 tekens per missie, ook bij lege oogst. Succes betekent
+dat alle missies zijn afgehandeld. De claim wordt opnieuw gevalideerd vóór nieuw
+werk na iedere missiegrens en vóór schrijfacties. Failed/uncertain heeft geen outputrefs/resultaat;
 de generieke error/attemptaudit bewaart de fout. Reeds gepubliceerde fiches blijven
 behouden bij een latere failure, met hun oorspronkelijke producerende attempt.
 
@@ -91,19 +103,21 @@ Kuifje gebruikt dezelfde submit_weekendkrant_fiche en POST /ingress met de
 ongewijzigde vier inhoudsvelden schema_version/date/topic/content. mission_id,
 fiche_id en claim zijn transportmetadata; run_id is exclusief voor Sherlock.
 De ingress stript deze metadata en bewaart de producerbinding apart in
-kuifje_fiches: queue-item, Kuifje-job, producerende attempt, stabiele fiche_id en
-payloadhash. Mission → assignment → job levert de dossierbinding.
+kuifje_fiches: queue-item, Kuifje-job, producerende attempt, expliciete mission_id,
+stabiele fiche_id en
+payloadhash. De composite foreign key `(job_id,mission_id)` naar de ordered mapping bewijst
+het missielidmaatschap. De fichegrens is vijf per `(job_id,mission_id)`.
 
 Actuele lease, token, meest recente attempt, executorbinding en missietopic
 worden onder de ingresslock gecontroleerd, ook bij retries. De klok wordt na
-lockverwerving gelezen. Dezelfde job/fiche_id/payload retourneert dezelfde
+lockverwerving gelezen. Dezelfde job/mission_id/fiche_id/payload retourneert dezelfde
 queue-ID; een gewijzigde payload conflicteert. Een herstelde attempt kan dezelfde
 fiche bevestigen zonder de oorspronkelijke producer te overschrijven. Na
 claimverlies mag ook een retry niets meer publiceren.
 
 Ariadne materialiseert deze gewone fiches via source_archive/revision_sources
 naar nieuwe immutable partrevisions. De keten is terug te volgen met
-revision_sources → kuifje_fiches → kuifje_assignments → kuifje_missions.
+revision_sources → kuifje_fiches → kuifje_assignment_missions → kuifje_missions.
 Een latere gewone Leonardo-enqueue krijgt expliciet geselecteerde nieuwe
 revisies voor het bestaande dossier; fase 12 introduceert geen automatische
 inhoudelijke dossierrouter of offerselectie. Kuifje schrijft nooit rechtstreeks
@@ -127,7 +141,10 @@ jobstatus en gesloten attemptstatus moeten overeenkomen. Een via recovery
 beëindigde uncertain/expired attempt wordt dus niet als direct failed resultaat
 aangeboden.
 
-Het Leonardo-snapshot bevat research_results: concrete missie, missiehash,
+Eén geselecteerd JOB:ATTEMPT wordt deterministisch in assignmentvolgorde
+uitgevouwen naar één `research_results`-item per missie, ook bij failed jobs
+(zonder per-missie succes te verzinnen). Het Leonardo-snapshot bevat daarin
+mission_id, concrete missie, missiehash,
 job/attempt, outcome-ref, status, fout, eventueel resultaat/resultref/hash en
 oorspronkelijke tokenaudit. Die volledige aanvullende context wordt samen met
 het overige assignment door Ariadne's actuele tokenizer gemeten en immutable
@@ -165,10 +182,10 @@ een wijziging ervan vereist een expliciet nieuw versiecontract.
 
 ## Operatorpad en invoering
 
-Na code-update: voer de centrale database.py-migratie naar schema 13 uit en
+Na code-update: voer de centrale database.py-migratie naar schema 14 uit en
 herstart de ingressbackend. Synchroniseer/publiceer daarna de Sites-brug met de
 nieuwe optionele finish- en fichevelden voordat nieuwe jobs worden uitgevoerd.
-Deze PR voert die operationele handelingen niet uit.
+Migratie en Sites-publicatie zijn afzonderlijke operationele stappen.
 
 Voor een bewust gekozen bestaand dossier (geen kunstmatig bronmateriaal):
 
@@ -191,20 +208,34 @@ De Leonardo-inspectie toont dossier, basisversie, mode, new_part_count=0,
 previous_state_tokens, recallaudit per attempt, outputstate-tokens en
 mission_count. Missie-inspectie toont identiteit, producerende Leonardo-job,
 dossier/stateversie, provenance, bytes/tokens/tokenizer, gekoppelde Kuifje-job,
-status, attempt_id, assignmentomvang en ficheaantal. Leonardo-contextinspectie
-toont ook research_result_count, research_result_refs en contexttokens/-bytes. Status leeft op de generieke job,
+status, attempt_id, assignmentomvang, mission_count, fiche_count voor deze missie
+en job_fiche_count voor de volledige run. Leonardo-contextinspectie
+toont ook research_result_count (missie-uitkomsten), selected_kuifje_job_count
+(geselecteerde runs), research_result_refs en contexttokens/-bytes. Status leeft op de generieke job,
 nooit als mutable tekst in de missie.
+
+## Schema 14 en frozen compatibiliteit
+
+Een job is één run; een missie is een inhoudelijke subtaak en immutable
+provenance-artifact, geen schedulingeenheid. Schema 13 legde historisch een
+één-op-één-relatie vast. Migratie `014_grouped_kuifje.sql` vervangt die relationele
+vorm door job-level assignments en ordered mapping, met unieke missionbinding.
+Iedere bestaande job krijgt uitsluitend mappingpositie 1. Bestaande job- en
+mission-ID's, snapshotbytes/hashes, metingen, statuses, attempts, receipts, fiches
+en resultaten blijven exact behouden. Er worden geen oude ready jobs gebundeld,
+opnieuw gesnapshot of opnieuw gepland. Migratie blijft atomair en idempotent.
+
+Frozen Kuifje-schema-1-input behoudt singular `mission`, oude contractbytes,
+`kuifje_result={summary,limitations}` en `kuifje-result:<mission_id>`.
+Nieuwe schema-2-input gebruikt uitsluitend `missions` en `mission_results`,
+ook voor één missie. De snapshotversie bepaalt het resultaatcontract; de plugin
+transporteert beide vormen zonder zelf die backendbeslissing te nemen.
 
 ## Gerichte validatie
 
-De correctie-fast-track bevat test_phase12_corrections (current-run part- en
-queueprovenance, weigering van latere input, immutable lege oogst, expliciete
-retour in gewone/reevaluation-snapshots en CLI, dossier-/attemptbinding en failed
-onderzoek), drie specifieke bestaande fase-12-regressies voor zero-input,
-atomiciteit en terminale idempotentie, plus de versterkte frozen-v1-regressie.
-Die laatste vervangt Ariadne's actuele primitive en herlaadt part_format_v1.
-Geen brede moduulregressiesets worden automatisch overgenomen.
-De pluginlaag heeft een eigen transporttest en echte MCP → HTTP → SQLite →
-Ariadne-test met verloren antwoorden na missie-, fiche- en finishcommit.
-Validatie gebruikt uitsluitend ./start_tests.sh en ./start_tests.sh --plugin.
-De volledige regressiesuite blijft aan de afzonderlijke CI op de exacte commit.
+De lokale fast-track karakteriseert grouped productie, per-missie ingress,
+volledige ordered resultaten, frozen compatibiliteit, schema-13-retentie,
+rollback, fencing en expliciete feedback. De pluginlaag valideert beide
+resultaatvormen en de echte MCP → HTTP → SQLite → Ariadne-keten. Gebruik
+uitsluitend `./start_tests.sh` en `./start_tests.sh --plugin`; de volledige
+suite draait afzonderlijk in CI op de exacte commit.

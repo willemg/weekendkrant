@@ -177,8 +177,11 @@ preparation en gelijktijdige statewijzigingen tijdens unlocked preparation
 ## Fase 12: missies als ready werk
 
 Leonardo-reevaluation kan met nul nieuwe parts expliciet worden klaargezet.
-Een succesvolle Leonardo-finish kan aparte immutable missies en hun unieke
-ready Kuifje-jobs atomair opslaan. KuifjeProducer bindt uitsluitend bestaande
+Een succesvolle Leonardo-finish slaat 1..4 aparte immutable missies voor
+hetzelfde topic samen met precies één ready Kuifje-job atomair op; nul missies
+levert nul jobs. Een job is één run, missies zijn inhoudelijke subtaken.
+Eén activatie claimt maximaal één job, ook wanneer die meerdere missies bevat.
+KuifjeProducer bindt uitsluitend bestaande
 frozen opdrachten; alle selectie-, admission-, lease- en herstelregels hierboven
 blijven generiek. Geen automatische reevaluation of nieuwe scheduler.
 Zie het [fase-12-contract en operatorpad](phase-12-kuifje.md).

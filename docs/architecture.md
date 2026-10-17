@@ -170,7 +170,7 @@ bevroren outputcontract van de job. Zie [Leonardo-state](leonardo-state.md).
 ## Fase 12: gesloten onderzoekslus
 
 Bestaande Leonardo-state → expliciete reevaluation zonder nieuwe parts → aparte
-immutable Kuifje-missie/assignment → generieke Kuifje-job → bestaande fiche-ingress
+1..4 immutable Kuifje-missies → één grouped assignment / generieke Kuifje-job → bestaande fiche-ingress
 → Ariadne → immutable partrevision → latere gewone Leonardo-run.
 Missies horen nooit in Leonardo-state. Ariadne bezit één canonieke tokenizer in
 ariadne_tokens.py, gedeeld door actuele verwerking en agents. Historische
@@ -178,3 +178,11 @@ WEEKENDKRANT-PART-1-reconstructie behoudt haar onafhankelijke frozen v1-tokenaud
 Ook lege of mislukte Kuifje-onderzoeken kunnen expliciet als aanvullende frozen
 Leonardo-assignmentcontext worden geselecteerd, zonder synthetische bronnen.
 Zie [opslag, fencing, tokenaudit en grenzen](phase-12-kuifje.md).
+
+
+Een intelligente job is één begrensde run met één rol en immutable context en
+outputcontract. Een missie is een inhoudelijke subtaak, geen schedulingeenheid.
+Eén Leonardo-finish bundelt zijn 1..4 missies binnen hetzelfde topic tot één
+Kuifje-job; de dispatcher blijft maximaal één job per scheduled activatie uitvoeren.
+Schema 14 bewaart bestaande single-mission jobs en hun frozen contracten exact.
+Zie [canonieke begrippen](jobs.md#canonieke-begrippen) en [fase 12](phase-12-kuifje.md).

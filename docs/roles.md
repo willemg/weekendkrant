@@ -11,6 +11,10 @@ uit de contractsnapshot van de geclaimde job.
 | Begrip | Betekenis |
 | --- | --- |
 | Executor | De enige generieke scheduled intelligente worker |
+| Job | Eén begrensde intelligente run met één rol, immutable context en outputcontract; schedulingeenheid |
+| Attempt | Eén uitvoeringspoging van dezelfde job |
+| Mission | Eén immutable onderzoeksvraag binnen een Kuifje-job, geen schedulingeenheid |
+| Activation | Eén scheduled kans om maximaal één job uit te voeren |
 | Role | Inhoudelijke runtime-instructies voor één type werk |
 | Producer/adapter | Backendcomponent die jobs produceert en/of bindt |
 | Role contract | Versioned repository-artifact voor nieuwe jobs |
@@ -172,12 +176,18 @@ assignment als bovenaan het jobpakket; die redundantie is momenteel exact en
 dus consistent, maar mag bij latere refactors nooit twee verschillende
 contractinhouden opleveren.
 
-**Kuifje:** het rolecontract noemt exact de missionvelden die werkelijk worden
+**Kuifje:** `input.missions` is de ordered lijst van 1..4 zelfstandige missies
+binnen één job/run en één topic. Het rolecontract noemt exact de missionvelden die werkelijk worden
 aangeleverd. `question`, `rationale` en `scope` sturen het onderzoek;
 `topic` begrenst onderwerp en publicatiemetadata; de overige identifiers en
 refs zijn uitsluitend identiteit/provenance. Het outputcontract verklaart de
 rolnaam en het technische veld `kuifje_result` lokaal. Er is een expliciete
 Weekendkrant-toolgrens en er wordt geen eerdere dossierinhoud verondersteld.
+De samengestelde context moet ook fichepublicatie per `mission_id`, limieten per
+missie, claimvalidatie bij missiegrenzen en één volledig ordered
+`mission_results`-jobresultaat lokaal verklaren. Mogelijke toolresponses voor
+claimverlies, conflict en onzeker transport worden samen met het concrete
+schema-2-jobpakket beoordeeld; generieke descriptions blijven rolneutraal.
 
 De gedeelde MCP-toolsurface is eveneens onderdeel van deze audit. De descriptions
 van generieke tools zijn daarom rolneutraal gemaakt; rolspecifieke payloadregels
@@ -430,11 +440,11 @@ deterministische opslag-, validatie-, budget- en routinglaag.
 
 ## Kuifje — de onderzoeksreporter (fase 12)
 
-Kuifje werkt alleen aan een afgebakende onderzoeksmissie die inhoudelijk door
-Leonardo wordt voorgesteld en door Ariadne/backend als duurzame opdracht wordt
-gevalideerd en opgeslagen. Leonardo start of spawnt Kuifje dus niet rechtstreeks:
-een open geldige missie wordt later via dezelfde generieke dispatcher een
-Kuifje-job. Hij krijgt de vraag en relevante context, zoekt aanvullend bewijs of
+Kuifje werkt in één run aan de ordered 1..4 afgebakende onderzoeksmissies van
+één succesvolle Leonardo-finish, binnen exact hetzelfde topic. Iedere missie
+wordt afzonderlijk immutable gevalideerd en opgeslagen. Leonardo start of spawnt Kuifje dus niet rechtstreeks:
+de 1..4 missies vormen samen één ready Kuifje-job die later via dezelfde
+generieke dispatcher wordt geclaimd. Hij krijgt de vraag en relevante context, zoekt aanvullend bewijs of
 tegenspraak en levert bronvaste resultaten onder dezelfde missie- en
 dossieridentiteit. Ook lege oogst en beperkingen worden expliciet gerapporteerd.
 

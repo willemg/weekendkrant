@@ -11,7 +11,7 @@ Het systeem is bewust opgesplitst in een reeks smalle rollen:
 - **Sherlock** verzamelt nieuws, doet een eerste lichte triage en vat bronnen compact samen.
 - **Ariadne** is volledig deterministisch en vlecht Sherlocks output tot thematische draden met een harde tokenlimiet.
 - **Leonardo** maakt van die draden inhoudelijke syntheses en verhalen en schrijft compacte dossierstate.
-- **Kuifje** is de toekomstige onderzoeksreporter voor expliciete missies van Leonardo.
+- **Kuifje** onderzoekt expliciete missies van Leonardo: de 1..4 missies van één succesvolle finish vormen samen één job/run binnen hetzelfde topic.
 - **Striktland** controleert of feitelijke claims door het aangeleverde bronmateriaal worden gedragen.
 - **Minos** herschrijft alleen wanneer Striktland een probleem vindt en velt daarmee het eindoordeel.
 
@@ -158,3 +158,11 @@ Volledige Python-validatie kan na merge asynchroon via de lokale fase-10-CI op
 bibib draaien, met een verse clone per exacte SHA, compacte SQLite-resultaten
 en uitsluitend bij failure één bewaarde debugcheckout met log. De snelle test blijft de
 normale ontwikkel-/deploymentgate. Zie [CI-installatie en operatorrunbook](docs/ci.md).
+
+
+Een **job is één intelligente run**, de schedulingeenheid met één rol en
+immutable context/outputcontract; inhoudelijke subtaken zijn geen aparte runs.
+De executor voert per scheduled activatie maximaal één job uit. Kuifje-missies
+blijven afzonderlijke immutable provenance-artifacts binnen zo'n job. Schema 14
+bewaart bestaande single-mission jobs en frozen schema-1-contracten exact.
+Zie [jobbegrippen](docs/jobs.md#canonieke-begrippen) en [Kuifje](docs/phase-12-kuifje.md).

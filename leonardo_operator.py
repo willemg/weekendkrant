@@ -68,6 +68,7 @@ def context_usage(db, job):
                           queue_ref_count=sum(r.startswith('queue:') for r in refs))
     research = snapshot.get('research_results', [])
     return dict(research_result_count=len(research),
+                selected_kuifje_job_count=len({r['job_id'] for r in research}),
                 research_result_refs=[r['ref'] for r in research],
                 research_result_tokens=sum(token_count(canonical(r)) for r in research),
                 research_result_bytes=sum(len(canonical(r).encode('utf-8')) for r in research),

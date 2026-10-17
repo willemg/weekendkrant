@@ -17,7 +17,7 @@ Schema en migraties staan wel in Git; er worden geen productiegegevens meegeleve
 
 ## Eén migratieketen
 
-`database.py` beheert alle DDL en `PRAGMA user_version`. De actuele versie is **11**.
+`database.py` beheert alle DDL en `PRAGMA user_version`. De actuele versie is **14**.
 De genummerde SQL-bestanden in `migrations/` zijn de bron van waarheid:
 
 | Versie | Migratie | Verantwoordelijkheid |
@@ -33,6 +33,9 @@ De genummerde SQL-bestanden in `migrations/` zijn de bron van waarheid:
 | 9 | `009_sherlock_executor.sql` | Immutable Sherlock-opdrachten, contractsnapshots, run/job/attempt-binding en activatiereceipts |
 | 10 | `010_dispatcher.sql` | Generieke activatiereceipts en dispatcherpolicy |
 | 11 | `011_leonardo.sql` | Immutable dossieridentiteit, inputsnapshots, revisiebindingen en stateversies |
+| 12 | `012_leonardo_recall.sql` | Ruime contextfail-safe en immutable recallaudit |
+| 13 | `013_kuifje.sql` | Historische afzonderlijke missie-artifacts, één missie per job |
+| 14 | `014_grouped_kuifje.sql` | Job-level assignment, ordered missiemapping en expliciete mission-scoped ficheprovenance |
 
 De historische nummering blijft behouden. Versie 0 kan een lege database zijn,
 maar ook reeds de voorheen ongeversioneerde runtime-tabellen bevatten.
@@ -260,5 +263,29 @@ De additieve migratie 013_kuifje.sql voegt kuifje_missions,
 kuifje_assignments, kuifje_fiches en kuifje_results toe met immutable
 update/delete/replace-triggers. Bestaande Leonardo-state en assignments worden
 niet herschreven. De missie verwijst naar haar producerende job en succesvolle
-stateversie; een unieke mission_id koppelt precies één Kuifje-assignment/job.
+stateversie; schema 13 koppelde historisch iedere missie aan een afzonderlijke
+Kuifje-assignment/job. Schema 14 vervangt die relationele vorm.
 Zie het [fase-12-contract](phase-12-kuifje.md) voor inhoud en transactiegrenzen.
+
+
+## Schema 14: één job is één run
+
+`kuifje_assignments` bevat job_id, snapshot, sha256, bytes, tokens en tokenizer.
+`kuifje_assignment_missions` koppelt job_id aan position (1..4) en mission_id,
+met PRIMARY KEY(job_id,position), UNIQUE(mission_id), UNIQUE(job_id,mission_id)
+en foreign keys naar beide immutable artifacts. De mapping bewaart de oorspronkelijke
+Leonardo-volgorde. Een origintrigger weigert gemengde producer/dossier/statebinding;
+backendvalidatie controleert daarnaast expliciet het topic en het volledige corpus.
+
+`kuifje_fiches` bewaart mission_id expliciet, met composite foreign key naar
+(job_id,mission_id). Idempotentie is UNIQUE(job_id,mission_id,fiche_id), zodat
+lokale fiche-ID's binnen dezelfde run per missie opnieuw gebruikt kunnen worden.
+Alle nieuwe tabellen/rijen behouden update/delete/replace-immutability.
+
+Migratie bewaart bestaande snapshots en resultaten bytegelijk, alle IDs,
+metingen, attempts, statuses, receipts en queue-items. Iedere oude assignment
+krijgt één mapping op positie 1; ficheprovenance wordt uit haar bestaande binding
+overgenomen. Geen herplanning of retroactieve bundeling. DDL, kopiëren en versie
+committen atomair; een fout herstelt schema 13. Herhalen is een no-op en
+`PRAGMA foreign_key_check` blijft leeg. Frozen snapshotvormen en resultaatrefs
+staan in [fase 12](phase-12-kuifje.md#schema-14-en-frozen-compatibiliteit).

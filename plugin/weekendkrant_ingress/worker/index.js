@@ -51,9 +51,12 @@ const leonardoStateSchema=schema({schema_version:{type:'integer',enum:[1]},dossi
 const validLeonardoState=x=>object(x)&&new TextEncoder().encode(JSON.stringify(x)).length<=32768;
 const missionSchema=schema({question:boundedSchema(8192),rationale:boundedSchema(8192),scope:boundedSchema(8192),refs:{...stateRefs,minItems:1}});
 const missionsSchema={type:'array',maxItems:4,items:missionSchema};
-const kuifjeResultSchema=schema({summary:boundedSchema(8192),limitations:boundedSchema(8192)});
+const legacyResultSchema=schema({summary:boundedSchema(8192),limitations:boundedSchema(8192)});
+const missionResultSchema=schema({mission_id:boundedSchema(128),summary:boundedSchema(8192),limitations:boundedSchema(8192)});
+const kuifjeResultSchema={oneOf:[legacyResultSchema,schema({mission_results:{type:'array',minItems:1,maxItems:4,items:missionResultSchema}})]};
 const validMissions=x=>Array.isArray(x)&&x.length<=4&&x.every(m=>strict(m,['question','rationale','scope','refs'])&&['question','rationale','scope'].every(k=>bounded(m[k],8192))&&Array.isArray(m.refs)&&m.refs.length>0&&m.refs.length<=256&&m.refs.every(r=>bounded(r,128)));
-const validKuifjeResult=x=>strict(x,['summary','limitations'])&&bounded(x.summary,8192)&&bounded(x.limitations,8192);
+const validLegacyResult=x=>strict(x,['summary','limitations'])&&bounded(x.summary,8192)&&bounded(x.limitations,8192);
+const validKuifjeResult=x=>validLegacyResult(x)||(strict(x,['mission_results'])&&Array.isArray(x.mission_results)&&x.mission_results.length>=1&&x.mission_results.length<=4&&x.mission_results.every(r=>strict(r,['mission_id','summary','limitations'])&&bounded(r.mission_id,128)&&bounded(r.summary,8192)&&bounded(r.limitations,8192))&&new Set(x.mission_results.map(r=>r.mission_id)).size===x.mission_results.length);
 const generic=[
  {name:'recall_weekendkrant_part',path:'/jobs/leonardo-recall',description:'Lees één exacte onveranderlijke partrevisie die binnen de provenance van de huidige privé Weekendkrant-job is toegestaan. Vereist actuele claimautoriteit, ook bij retries. Wijzigt geen dossier-, bron- of jobstate; schrijft alleen recallaudit. Kies een attempt-lokale recall_id en herhaal dezelfde ref en recall_id bij een verloren antwoord. Retourneert ref, sha256, content en lokale cl100k_base-tokens en UTF-8-bytes van content. Maakt geen nieuwe job en haalt geen externe bron op.',properties:{...authoritySchema,ref:{type:'string',maxLength:128,pattern:'^part:[1-9][0-9]*:[1-9][0-9]*$'},recall_id:boundedSchema(128)},
  valid:x=>strict(x,['job_id','attempt_id','token','ref','recall_id'])&&authority(x)&&bounded(x.recall_id,128)&&bounded(x.ref,128)&&/^part:[1-9][0-9]*:[1-9][0-9]*$/.test(x.ref),

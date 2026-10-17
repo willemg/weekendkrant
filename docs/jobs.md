@@ -1,5 +1,28 @@
 # Generieke jobs, attempts en control-plane (schema 10)
 
+## Canonieke begrippen
+
+Een **job is één begrensde intelligente run** met stabiele `job_id`, één rol,
+immutable input/context en één outputcontract. De job is de schedulingeenheid
+en kan meerdere rolspecifieke inhoudelijke subtaken bevatten. Een **attempt**
+is één uitvoeringspoging van dezelfde job; recovery verandert de input niet.
+Een **role** bepaalt het inhoudelijke gedragscontract. Een **activation** is één
+scheduled kans om maximaal één job te claimen en uit te voeren.
+
+Een **mission** is één begrensde onderzoeksvraag binnen een Kuifje-job: een
+zelfstandig immutable provenance-artifact met eigen `mission_id`, geen
+schedulingeenheid. Eén succesvolle Leonardo-finish met 1..4 missies voor
+hetzelfde topic maakt precies één Kuifje-job. Zonder missies ontstaat geen job.
+Een latere Leonardo-finish kan een volgende missieset en dus een nieuwe run maken.
+Bestaande schema-13-jobs blijven afzonderlijke historische runs met één missie.
+
+Eén scheduled activatie voert maximaal één job uit. Dat begrenst het aantal
+runs per activation, niet het aantal inhoudelijke subtaken binnen die run.
+Capaciteit en budget worden in jobstarts/runs gemeten, niet in mission-count.
+Toekomstige rollen kunnen eveneens meerdere claims of correcties binnen één
+begrensde run behandelen; dit introduceert geen nieuwe rolruntime.
+
+
 Fase 7: de startketen gebruikt nu de [algemene dispatcher](dispatcher.md), met ready-first
 selectie, persistente pause en globale/rolconcurrency. `start_weekendkrant_executor`
 blijft het enige startpunt; `/executor/start` is canoniek en de oude
