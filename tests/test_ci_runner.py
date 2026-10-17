@@ -342,23 +342,12 @@ class StateTests(unittest.TestCase):
 
 class SourceFixtureCwdTests(unittest.TestCase):
     def test_neutral_source_paths_from_live_checkout_cwd(self):
-        # Re-run the affected scenarios with the path resolution seen on bibib,
-        # without creating or modifying /home/weekendkrant/app on this host.
-        names = (
-            'test_idle_is_silent_and_does_not_clone',
-            'test_failure_diagnostics_and_no_hourly_retry_or_notification_spam',
-            'test_busy_runner_is_nonblocking',
-            'test_crash_before_result_commit_retries_instead_of_false_green',
-            'test_full_failure_output_is_preserved_beyond_old_tail_limit',
-            'test_crash_after_publish_before_db_recovers_exact_artifact',
-            'test_crash_between_failure_renames_is_recoverable',
-        )
-        suite = unittest.TestSuite(StateTests(name) for name in names)
-        result = unittest.TestResult()
+        # Pin down why the relative fixture failed only from bibib's checkout.
         with patch('os.getcwd', return_value=str(ci.LIVE)):
-            suite.run(result)
-        self.assertEqual(result.testsRun, len(names))
-        self.assertEqual(result.errors + result.failures, [])
+            self.assertEqual(Path('unused').resolve(), ci.LIVE / 'unused')
+            with self.assertRaisesRegex(ValueError, 'live checkout'):
+                ci.validate_source('unused')
+            ci.validate_source(UNUSED_SOURCE)
 
 
 class GitIntegrationTests(unittest.TestCase):

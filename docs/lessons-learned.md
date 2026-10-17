@@ -129,5 +129,7 @@ onderscheid waargenomen gedrag van een nog onbewezen oorzaak.
 - **Les:** een neutrale pad-/URL-fixture mag niet impliciet van de cwd afhangen
   wanneer productiecode absolute checkoutgrenzen valideert. Gebruik een expliciete
   neutrale URL waar de source niet wordt gebruikt, zonder de beveiliging af te zwakken.
-- **Regressie:** de zeven scenario's worden ook met het cwd-resolutiegedrag van
-  bibib uitgevoerd; de afzonderlijke live-checkout-rejectietest blijft behouden.
+- **Regressie:** een directe test bewijst dat de oude relatieve sentinel onder
+  bibibs cwd binnen de live checkout resolveert en wordt geweigerd, terwijl de
+  nieuwe HTTPS-sentinel onder dezelfde omstandigheden wordt geaccepteerd. De
+  afzonderlijke live-checkout-rejectietest blijft behouden.
