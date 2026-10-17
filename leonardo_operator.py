@@ -6,7 +6,7 @@ from pathlib import Path
 import sqlite3
 
 from jobs import _id
-from leonardo import LeonardoStore, canonical
+from leonardo import LeonardoStore, canonical, item_refs
 from part_format_v1 import token_count
 
 
@@ -59,7 +59,13 @@ def context_usage(db, job):
         state = db.execute('SELECT tokens FROM leonardo_states WHERE attempt_id=?', (attempt['attempt_id'],)).fetchone()
         attempt['state_tokens'] = state[0] if state else None
         attempt['provider_usage'] = None
-    return dict(tokenizer='cl100k_base', new_part_count=len(new_parts),
+    state_row = db.execute('SELECT content FROM leonardo_states WHERE job_id=?', (job,)).fetchone()
+    provenance = None
+    if state_row:
+        refs = set(item_refs(json.loads(state_row[0])))
+        provenance = dict(part_ref_count=sum(r.startswith('part:') for r in refs),
+                          queue_ref_count=sum(r.startswith('queue:') for r in refs))
+    return dict(tokenizer='cl100k_base', state_provenance=provenance, new_part_count=len(new_parts),
                 new_part_tokens=sum(part['tokens'] for part in new_parts),
                 new_part_bytes=sum(part['bytes'] for part in new_parts),
                 new_parts=new_parts, previous_state_tokens=previous_state_tokens,

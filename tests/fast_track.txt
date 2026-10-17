@@ -1,2 +1,2 @@
-# Bescherm oorspronkelijke v1-opslag bij migratie naar het actuele schema.
-test_offers.OfferMigrationTests
+# Fase 11: alleen de provenancegrens; volledige regressie via CI.
+test_leonardo_provenance

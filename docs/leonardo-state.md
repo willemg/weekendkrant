@@ -70,11 +70,12 @@ persistente state opnieuw mee.
 
 - schema v1, exact dossier, volgende versie en juiste basisversie;
 - afzonderlijke hypotheses, claims, onzekerheden en open vragen;
-- stabiele item-IDs, tekst en expliciete revisiereferenties;
+- stabiele item-IDs, tekst en expliciete bronreferenties;
 - claims onderscheiden `source_fact` en `inference`, met afzonderlijke
   ondersteuning en tegenbewijs; een bronfeit vereist ondersteuning;
 - `processed_refs` is exact de unie van vorige verwerkte revisies en deze input;
-- itemreferenties verwijzen uitsluitend naar die verwerkte revisies;
+- itemreferenties verwijzen naar verwerkte revisies of naar queuefiches die
+  aantoonbaar lid zijn van minstens één van die exacte immutable revisies;
 - maximaal 64 items per categorie, 256 verwerkte revisies, 4.000 vaste
   v1-tokens en 32.768 UTF-8 bytes voor de volledige canonieke outputstate.
 
@@ -84,15 +85,26 @@ Er is geen automatische truncatie of compressielus. Het cumulatieve maximum
 van 256 revisies is een zichtbare v1-grens: overschrijding vereist later een
 expliciet nieuw contract/archiveringsbeleid en verwijdert nu niets.
 
-De huidige itemprovenance is daarbij bewust nog grof: hypotheses,
-onzekerheden, open vragen, ondersteuning en tegenbewijs kunnen alleen naar
-verwerkte partrevisies verwijzen. De onderliggende immutable bronlaag kent
-daarentegen ook de afzonderlijke `queue:<id>`-fiches binnen iedere revisie.
-De fase-9.6-karakterisering maakte deze representatiegrens zichtbaar. Geplande
-[fase 11](phase-11-leonardo-provenance.md) verrijkt itemprovenance daarom met
-gevalideerde fiche-refs, terwijl `processed_refs` de compacte part-level
-verwerkingsprovenance blijft. Fase 10 is voor het afzonderlijke CI-werk
-gereserveerd. Deze beschrijving verandert het huidige runtimecontract nog niet.
+Fase 11 onderscheidt twee lagen: `processed_refs` is coarse-grained input
+provenance op immutable partrevision-niveau; `refs`, `support` en
+`counterevidence` zijn fine-grained inhoudelijke provenance. Een item mag een
+verwerkte `part:<id>:<revision>` en/of `queue:<id>` gebruiken. Queue-membership
+wordt server-side bewezen via `revision_sources` en `source_archive`, uitsluitend
+binnen de transitieve grens van de daadwerkelijk verwerkte immutable revisies.
+Het bestaan van een queue-ID, dezelfde topic of membership in een andere
+(actieve) revision is onvoldoende. De mutable ingressqueue en actieve
+partpointer worden niet geraadpleegd. Geen fuzzy tekstmatching, nieuwe tabel of
+dubbele persistente mapping; historische revisies blijven zonder fysieke file
+bruikbaar. Bestaande partrefs en historische states blijven behouden.
+
+Het nieuwe outputcontract begint met `leonardo-output-v2:`; de JSON-state blijft
+schema v1, met dezelfde velden en omvangsgrenzen. Alleen assignments met deze
+expliciete versie in hun immutable outputcontract mogen queue-itemrefs gebruiken.
+Oude contractsnapshots blijven part-only, ook na een backendupdate. De exacte
+`processed_refs`-unie wordt vóór de membershipcontrole gecontroleerd, binnen
+het bestaande gefencete atomaire finishpad. Een model kan zijn inputgrens dus
+niet uitbreiden door extra processed refs mee te sturen. Zie
+[fase 11](phase-11-leonardo-provenance.md) voor bewijs en compatibiliteit.
 
 De bestaande claim-/leasecontrole en stateversie-CAS gebeuren onder dezelfde
 lock als jobfinish, operation receipt en state-insert. Een validatiefout rolt de

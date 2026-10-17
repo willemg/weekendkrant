@@ -16,6 +16,22 @@ from part_format_v1 import token_count
 from revision_storage import reconstruct
 
 ROOT = Path(__file__).resolve().parent
+FINE_PROVENANCE_CONTRACT = 'leonardo-output-v2:'
+
+
+def queue_ref(value):
+    """Canonical positive SQLite identity; syntax alone grants no authority."""
+    return (isinstance(value, str) and len(value) <= 25
+            and re.fullmatch(r'queue:[1-9][0-9]*', value) is not None
+            and int(value[6:]) <= 9223372036854775807)
+
+
+def item_refs(state):
+    """All content provenance, excluding coarse processed input provenance."""
+    for field in ('hypotheses', 'claims', 'uncertainties', 'open_questions'):
+        for item in state[field]:
+            for key in (('support', 'counterevidence') if field == 'claims' else ('refs',)):
+                yield from item[key]
 
 # Local allocation/serialization guardrails, NOT measured provider context limits
 # or economic targets. Apply to start snapshot plus cumulative delivered recalls.
@@ -89,7 +105,8 @@ def encoded_state(state):
                 if (
                     not isinstance(values, list)
                     or len(values) > 256
-                    or any(not isinstance(v, str) or v not in refs for v in values)
+                    or any(not isinstance(v, str) or (v not in refs and not queue_ref(v))
+                           for v in values)
                 ):
                     raise ValueError("State item references unprocessed material")
             if field == "claims" and item["kind"] == "source_fact" and not item["support"]:
@@ -366,6 +383,25 @@ def commit_state(control, args, encoded):
     required = old_refs | {p["ref"] for p in input_state["parts"]}
     if set(state["processed_refs"]) != required:
         raise ValueError("Output must preserve exact processed provenance")
+    queues = {ref for ref in item_refs(state) if ref not in required}
+    if queues:
+        # The immutable assignment determines the output vocabulary. Updating
+        # deployment files must not silently widen already frozen contracts.
+        if not input_state['output_contract'].startswith(FINE_PROVENANCE_CONTRACT):
+            raise ValueError('Frozen output contract permits only part references')
+        allowed = set()
+        for ref in required:
+            match = re.fullmatch(r'part:([1-9][0-9]*):([1-9][0-9]*)', ref)
+            if match is None:
+                raise ValueError('Invalid processed part reference')
+            allowed.update(f'queue:{identity}' for (identity,) in db.execute(
+                '''SELECT m.queue_id FROM revision_sources m
+                   JOIN source_archive a ON a.queue_id=m.queue_id
+                   JOIN part_revisions r ON r.part_id=m.part_id AND r.revision=m.revision
+                   WHERE m.part_id=? AND m.revision=?''',
+                tuple(map(int, match.groups()))))
+        if not queues <= allowed:
+            raise ValueError('State item references unprocessed queue material')
     db.execute(
         "INSERT INTO leonardo_states VALUES (?,?,?,?,?,?,?,?,?)",
         (
