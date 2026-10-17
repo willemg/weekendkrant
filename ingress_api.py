@@ -161,15 +161,24 @@ def create_server(config):
             self.audit_event('received')
             if self.path == '/ingress':
                 try:
-                    if 'run_id' in payload:
+                    if 'mission_id' in payload:
+                        from jobs import _text
+                        _text(payload['mission_id'], 128)
+                        if 'run_id' in payload:
+                            raise ValueError('Ambiguous producer')
+                        fiche = {key: value for key, value in payload.items()
+                                 if key not in ('mission_id', 'fiche_id', 'claim')}
+                        item_id = queue.add(fiche, mission_id=payload['mission_id'],
+                                            fiche_id=payload.get('fiche_id'), claim=payload.get('claim'))
+                    elif 'run_id' in payload:
                         run_id = payload['run_id']
                         if type(run_id) is not int:
                             raise ValueError('Invalid run_id')
                         fiche = {key: value for key, value in payload.items() if key not in ('run_id', 'claim')}
                         item_id = queue.add(fiche, run_id=run_id, claim=payload.get('claim'))
                     else:
-                        if 'claim' in payload:
-                            raise ValueError('Claim requires run_id')
+                        if 'claim' in payload or 'fiche_id' in payload:
+                            raise ValueError('Claim requires producer binding')
                         item_id = queue.add(payload)
                 except FicheRunConflict:
                     self.reply(409, {'error': 'run_conflict'})

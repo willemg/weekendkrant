@@ -28,7 +28,7 @@ zonder een langlevend modelproces nodig te hebben.
 | Geïmplementeerde fase 8 en 8.5 | Expliciete Leonardo-dossiers/state/jobs (schema 11); Sherlock- en Leonardo-contracten onder `roles/`, immutable snapshots bij nieuwe jobs, geen automatische Leonardo-productie. |
 | Eerste fase-9-productieproef | Op 16 oktober 2026 is de eerste echte scheduled Leonardo-job succesvol afgerond: één eerdere attempt expireerde, attempt 2 schreef dossierstate v1. De immutable assignment mat lokaal 23.665 `cl100k_base`-inputtokens; de opgeslagen state 1.844 tokens. De proef bevestigde rolling state, maar maakte historische bronherlezing als ontbrekende runtimefunctie zichtbaar. |
 | Lokaal geïmplementeerde fase 9.6 | Selectieve claimgebonden historical recall, exacte reconstructie en audit per attempt (schema 12); ruime lokale technische contextfail-safe, compacte inspectie en bijgewerkt Leonardo-rolcontract. Productie-invoering en karakteriseringsruns blijven open. |
-| Nog niet geïmplementeerd | Kuifje-missies en -jobs; providerusage/kostenboekhouding; drafts, verificatie- en correctiejobs, capaciteitsbeleid en automatische eindredactie. |
+| Nog niet geïmplementeerd | Providerusage/kostenboekhouding; drafts, verificatie- en correctiejobs, capaciteitsbeleid en automatische eindredactie. |
 
 Fase 3 voegt uitsluitend lokale jobopslag en schema 7 toe, zonder plugin, actieve
 taakinstructies, cron, systemd of deployment te wijzigen. De bestaande runtimecontracten
@@ -683,6 +683,10 @@ Zie het afzonderlijke
 - [ ] Karakteriseer de extra stateomvang en inspecteer part- versus fichegranulariteit.
 
 ### Fase 12 — Kuifje
+
+Geïmplementeerde backend-slice: [fase-12-contract](phase-12-kuifje.md), inclusief
+expliciete reevaluation, aparte immutable missies en generieke Kuifje-jobs.
+Een echte productierun en automatische dossierrouter blijven afzonderlijk.
 
 - [ ] Laat Leonardo een expliciet missievoorstel kunnen opleveren wanneer bestaande
   state, nieuwe input en eventuele historical recall een concrete informatielacune

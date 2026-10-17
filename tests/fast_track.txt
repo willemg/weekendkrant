@@ -1,2 +1,5 @@
-# Fase 11: alleen de provenancegrens; volledige regressie via CI.
-test_leonardo_provenance
+# Fase 12: minimale feedbacklus en drie geraakte bestaande contractgrenzen
+test_phase12
+test_leonardo.LeonardoTests.test_assignment_dispatch_finish_replay_and_next_snapshot
+test_leonardo_provenance.ProvenanceTests.test_mixed_refs_all_item_fields_and_exact_retry
+test_revision_storage.RevisionStorageTests.test_v1_reconstruction_survives_replaced_current_renderer_and_tokenizer

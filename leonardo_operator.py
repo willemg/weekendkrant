@@ -7,7 +7,7 @@ import sqlite3
 
 from jobs import _id
 from leonardo import LeonardoStore, canonical, item_refs
-from part_format_v1 import token_count
+from ariadne_tokens import token_count
 
 
 def enqueue_offers(db, operation_id, dossier_id, base_version, offer_ids):
@@ -79,11 +79,13 @@ def inspect_job(db, job, compact=False):
     db.execute('BEGIN')  # One consistent read snapshot, without a writer lock.
     try:
         if compact:
-            result = rows(db, '''SELECT a.job_id,a.dossier_id,j.status FROM leonardo_assignments a
+            result = rows(db, '''SELECT a.job_id,a.dossier_id,a.base_version,j.status FROM leonardo_assignments a
                 JOIN jobs j ON j.id=a.job_id WHERE a.job_id=?''', (job,))
             if not result:
                 raise ValueError('Unknown Leonardo assignment')
-            return dict(result[0], context_usage=context_usage(db, job))
+            return dict(result[0], mode=json.loads(db.execute('SELECT snapshot FROM leonardo_assignments WHERE job_id=?', (job,)).fetchone()[0]).get('mode', 'new_material'),
+                        mission_count=db.execute('SELECT count(*) FROM kuifje_missions WHERE producer_job_id=?', (job,)).fetchone()[0],
+                        context_usage=context_usage(db, job))
         return _inspect_job(db, job)
     finally:
         db.rollback()  # Release the read snapshot, including on unknown jobs.
@@ -97,6 +99,7 @@ def _inspect_job(db, job):
         raise ValueError('Unknown Leonardo assignment')
     report = result[0]
     snapshot = report.pop('snapshot')
+    report['mission_count'] = db.execute('SELECT count(*) FROM kuifje_missions WHERE producer_job_id=?', (job,)).fetchone()[0]
     report['context_usage'] = context_usage(db, job)
     report['input_bytes'] = len(snapshot.encode('utf-8'))
     assignment = json.loads(snapshot)
@@ -155,6 +158,12 @@ def main(argv=None):
     enqueue.add_argument('--base-version', required=True, type=int)
     enqueue.add_argument('--operation-id', required=True)
     enqueue.add_argument('--offer', required=True, action='append', type=int)
+    reevaluate = sub.add_parser('reevaluate')
+    reevaluate.add_argument('--dossier', required=True)
+    reevaluate.add_argument('--base-version', required=True, type=int)
+    reevaluate.add_argument('--operation-id', required=True)
+    mission = sub.add_parser('inspect-mission')
+    mission.add_argument('--mission', required=True)
     inspect = sub.add_parser('inspect')
     inspect.add_argument('--job', required=True, type=int)
     inspect.add_argument('--compact', action='store_true', help='Only local context usage per attempt')
@@ -170,6 +179,11 @@ def main(argv=None):
                 GROUP BY d.id ORDER BY d.id''')
         elif args.command == 'create-dossier':
             result = dict(dossier_id=LeonardoStore(db).create_dossier(args.dossier, args.topic))
+        elif args.command == 'reevaluate':
+            result = dict(job_id=LeonardoStore(db).reevaluate(args.operation_id, args.dossier, args.base_version))
+        elif args.command == 'inspect-mission':
+            from kuifje import inspect_mission
+            result = inspect_mission(db, args.mission)
         elif args.command == 'enqueue':
             result = dict(job_id=enqueue_offers(db, args.operation_id, args.dossier,
                                               args.base_version, args.offer))

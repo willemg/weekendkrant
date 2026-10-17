@@ -30,7 +30,8 @@ beheerd door `database.py` en `migrations/`; de canonieke details staan in
 De eerste echte scheduled Leonardo-call en rolling dossierstate zijn inmiddels
 operationeel bewezen via fase 9. Fase 9.6 implementeert selectieve historical
 recall binnen een lopende job en recalltelemetrie; productieproeven daarvan
-blijven open. Nog niet geïmplementeerd zijn Kuifje-missies, betrouwbare
+blijven open. Fase 12 implementeert aparte immutable Kuifje-missies en zero-new-part
+reevaluation, zie het [actuele contract](phase-12-kuifje.md). Nog open zijn betrouwbare
 providerusage-/kostenboekhouding, automatische aanbiedplanning en de
 uiteindelijke weekredactie. De verdere secties beschrijven het doelontwerp en
 worden hieronder aangevuld met de bevindingen uit de eerste productieproef.
@@ -215,7 +216,10 @@ schema, met ten minste:
 - onzekerheden, beperkingen en nog onbeantwoorde vragen;
 - verwerkte partversies en onderzocht materiaal;
 - open, afgeronde of vruchteloze onderzoekssporen;
-- lopende missies en de reden waarom aanvullend bewijs nodig is.
+- redactionele vragen en de reden waarom aanvullend bewijs nodig is.
+
+Concrete missies en hun lifecycle horen **nooit** in Leonardo-state. Zij leven
+als afzonderlijke immutable runtime-input; zie het [fase-12-contract](phase-12-kuifje.md).
 
 Een streefomvang van ongeveer 1–2K tokens en een configureerbaar maximum rond
 4K zijn ontwerpwaarden. De definitieve grenzen volgen uit het gekozen model,
@@ -276,8 +280,8 @@ in het volgende budget. Missie en resultaten blijven traceerbaar naar de
 stateversie en partversies die aanleiding gaven tot het onderzoek.
 
 Het huidige ingress-payloadschema versie 1 accepteert exact vier fichevelden. Missievelden mogen
-daar nu dus niet zomaar bij. Een uitbreiding vergt een expliciet geversioneerd
-protocol en validatie in de volledige ingressketen.
+daar nu dus niet zomaar bij. Fase 12 behoudt die inhoudsvelden: missie- en claimbinding worden afzonderlijk
+als transportmetadata gevalideerd en persistent naast de fiche opgeslagen.
 
 ## Context- en kostenbeheer door Ariadne
 

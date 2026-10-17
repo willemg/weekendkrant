@@ -8,6 +8,10 @@ Deze slice implementeert expliciete dossier- en jobaanmaak in de Python-backend,
 ready-dispatch via de bestaande dispatcher en statefinish via de bestaande
 HTTP/MCP-tool. Geen permanente worker, nieuwe scheduler, automatische
 jobproductie uit offers, model-API-call, missie-uitvoering of fase-9-proefcyclus.
+Voor reevaluation en afzonderlijke immutable missies geldt aanvullend het
+[fase-12-contract](phase-12-kuifje.md), dat de eerdere uitsluitingen van
+missies hieronder vervangt. Leonardo-state bevat nooit missies.
+
 Een topic is geen dossier: de aanroeper kiest expliciet een inhoudelijke
 `dossier_id`. De eerste slice begrenst een dossier tot één topic.
 
@@ -40,7 +44,7 @@ bestaande job zonder role-file-I/O. De job-outputref hasht de exacte opgeslagen
 outputtekst, de rolref hasht bij bind uitsluitend de persistente roltekst.
 Historische assignments en refs worden niet gemigreerd of herschreven.
 
-De assignment bevriest de vorige state, 1–32 expliciet gekozen revisies,
+Een gewone assignment bevriest de vorige state, 1–32 expliciet gekozen revisies,
 exact gereconstrueerde brontekst en hashes, rolcontract en outputcontract in
 SQLite. Revisies moeten bij het dossiertopic horen. De normale provenance en
 `revision_storage.reconstruct` controleren bytes, bronvolgorde, hashes en tokens.
@@ -195,8 +199,8 @@ Rolling state is een verliesgevende structurele kenniskaart. Items mogen
 samengevoegd, herschreven, samengevat of verwijderd worden; processed_refs blijven
 provenance. Modelstate wordt geen primaire bron. Historie wordt gericht herlezen,
 nooit integraal vooraf geladen. Nieuwe jobs bevriezen het bijgewerkte Leonardo-
-rolcontract; bestaande jobs behouden hun oude snapshot. Einstein-analyse en
-Kuifje-missievoorstellen/-uitvoering blijven uitgesloten.
+rolcontract; bestaande jobs behouden hun oude snapshot. Einstein-analyse blijft uitgesloten. Fase 12 voegt afzonderlijke missievoorstellen
+en Kuifje-jobs toe, zonder missies in dossierstate op te slaan.
 
 `leonardo_operator.py ... inspect --job ID --compact` toont in `context_usage`
 ook `new_part_count`, `new_part_tokens`, `new_part_bytes` en `new_parts`: een lijst

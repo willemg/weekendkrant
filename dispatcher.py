@@ -4,6 +4,7 @@ from job_control import JobControl, ControlConflict
 from jobs import _text, _stamp
 from sherlock_executor import SherlockProducer
 from leonardo import LeonardoProducer
+from kuifje import KuifjeProducer
 
 
 def admission(db, role=None):
@@ -25,7 +26,7 @@ class Dispatcher:
         self.control = JobControl(db, clock)
         self.store = self.control.store
         self.db = db
-        self.producers = [p(self) for p in (producer_types if producer_types is not None else (SherlockProducer, LeonardoProducer))]
+        self.producers = [p(self) for p in (producer_types if producer_types is not None else (SherlockProducer, LeonardoProducer, KuifjeProducer))]
         self.by_role = {p.role: p for p in self.producers}
         if len(self.by_role) != len(self.producers):
             raise ValueError('Duplicate role adapter')

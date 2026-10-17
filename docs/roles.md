@@ -286,7 +286,7 @@ producer/adapter, scheduler, schema of runtimecode toe. Ariadne verricht noch
 Leonardo's structurele analyse, noch Einsteins temporele analyse; zij blijft de
 deterministische opslag-, validatie-, budget- en routinglaag.
 
-## Kuifje — de onderzoeksreporter (gepland)
+## Kuifje — de onderzoeksreporter (fase 12)
 
 Kuifje werkt alleen aan een afgebakende onderzoeksmissie die inhoudelijk door
 Leonardo wordt voorgesteld en door Ariadne/backend als duurzame opdracht wordt
@@ -299,7 +299,9 @@ dossieridentiteit. Ook lege oogst en beperkingen worden expliciet gerapporteerd.
 Kuifje bepaalt niet zelf naar welk dossier zijn oogst gaat en vervangt Sherlocks
 brede signalering niet. Ariadne routeert zijn resultaten zonder inhoudelijk oordeel.
 Kuifje wijzigt de Leonardo-state niet zelf; een volgende Leonardo-iteratie verwerkt
-missie en resultaten in een nieuwe state.
+nieuwe bronrevisies in een volgende state; missies blijven aparte runtime-state.
+Zie het [actuele fase-12-contract](phase-12-kuifje.md) en de frozen
+[rolinstructie](../roles/kuifje.md).
 Zie het [missie- en geheugenontwerp](leonardo-memory-and-orchestration.md).
 
 ## Striktland — de feitencontroleur

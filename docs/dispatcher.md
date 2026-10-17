@@ -61,7 +61,7 @@ lockverwerving:
    Nieuw ready werk gaat dus vóór productie, en een inmiddels bezette of gepauzeerde
    lane levert een duurzame lege receipt op. Replay, onmiddellijke admissionweigering
    en bestaand ready/recovery-werk hebben helemaal geen preparation nodig. Geregistreerd zijn
-   `SherlockProducer` en de ready-only `LeonardoProducer`. Alleen Sherlock
+   `SherlockProducer`, de ready-only `LeonardoProducer` en `KuifjeProducer`. Alleen Sherlock
    produceert automatisch nieuwe jobs. Geen rolrotatie in de dispatcher.
 6. De geselecteerde job wordt opnieuw op ready-status, rol en opdracht gecontroleerd,
    atomair geclaimd en aan rolspecifieke execution-state gebonden. De generieke
@@ -172,3 +172,13 @@ Regressievalidatie van lazy preparation: ready Sherlock-recovery en replay met
 falende producer-preparation, duurzame pause/running/blocked-weigering zonder
 preparation en gelijktijdige statewijzigingen tijdens unlocked preparation
 (ready-first, admission en replay van een inmiddels bevestigde activatie).
+
+
+## Fase 12: missies als ready werk
+
+Leonardo-reevaluation kan met nul nieuwe parts expliciet worden klaargezet.
+Een succesvolle Leonardo-finish kan aparte immutable missies en hun unieke
+ready Kuifje-jobs atomair opslaan. KuifjeProducer bindt uitsluitend bestaande
+frozen opdrachten; alle selectie-, admission-, lease- en herstelregels hierboven
+blijven generiek. Geen automatische reevaluation of nieuwe scheduler.
+Zie het [fase-12-contract en operatorpad](phase-12-kuifje.md).

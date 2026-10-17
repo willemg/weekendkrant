@@ -250,3 +250,16 @@ Backend/schema en Sites-publicatie zijn aparte invoerstappen; deze fase voert ze
 niet uit. Validatie in de pluginlaag: `./start_tests.sh --plugin`, inclusief
 exacte tools/list-annotations, request/responsevalidatie en echte recall door
 MCP → HTTP → SQLite → generieke statefinish. De normale fast-track blijft Node-vrij.
+
+
+## Fase 12: afzonderlijke missies en Kuifje-fiches
+
+Geen nieuwe tools: finish_weekendkrant_job accepteert optioneel kuifje_missions
+naast leonardo_state, of kuifje_result voor een Kuifje-job. De backend valideert
+rol, frozen contract, provenance, budget, fencing en atomaire opslag.
+submit_weekendkrant_fiche accepteert Kuifjes mission_id, stabiele fiche_id en
+claim als transportmetadata zonder Sherlock-run_id. De inhoud blijft schema v1;
+exacte mission/fiche/payload-retries zijn idempotent zolang de claim geldig is.
+De algemene fichetool behoudt idempotentHint=false wegens legacy-/Sherlockgedrag.
+De generieke executor en jobophaling veranderen niet.
+Zie [backendcontract en invoering](../../docs/phase-12-kuifje.md).
