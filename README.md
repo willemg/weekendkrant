@@ -152,3 +152,8 @@ Tests: `./start_tests.sh` draait de [expliciete fast-track](docs/test-fast-track
 ook na pull op schone main. `./start_tests.sh --all` vraagt expliciet de volledige
 suite aan; dat is niet de normale post-pull/deploymenttest.
 De eerste [Leonardo-backendslice](docs/leonardo-state.md) gebruikt schema 11.
+
+
+Volledige Python-validatie kan na merge asynchroon via de lokale fase-10-CI op
+bibib draaien, met een verse clone per exacte SHA. De snelle test blijft de
+normale ontwikkel-/deploymentgate. Zie [CI-installatie en operatorrunbook](docs/ci.md).

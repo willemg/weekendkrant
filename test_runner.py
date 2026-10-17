@@ -1,6 +1,8 @@
 """Run the versioned fast-track list, or explicit full unittest discovery."""
 
 import argparse
+import os
+import subprocess
 from pathlib import Path
 import re
 import sys
@@ -64,11 +66,28 @@ def main(argv=None):
     except (OSError, ValueError, TypeError, ImportError) as error:
         print(f"Test selection failed: {error}", file=sys.stderr)
         return 2
+    ci_state = os.environ.get("WEEKENDKRANT_CI_STATE") if not args.all else None
+    ci_sha = None
+    if ci_state:
+        from ci_runner import clean_head
+        try:
+            ci_sha = clean_head(ROOT)
+        except (ValueError, OSError, subprocess.SubprocessError) as error:
+            print(f"CI niet gemarkeerd: {error}", file=sys.stderr)
     print("Full suite (--all)" if args.all else "Fast-track: tests/fast_track.txt", flush=True)
     for entry in selected:
         print(f"  {entry}", flush=True)
     print(f"Selected {module_count} modules, {suite.countTestCases()} tests", flush=True)
-    return 0 if unittest.TextTestRunner(verbosity=1).run(suite).wasSuccessful() else 1
+    if not unittest.TextTestRunner(verbosity=1).run(suite).wasSuccessful():
+        return 1
+    if ci_sha:
+        from ci_runner import State, mark_checkout
+        try:
+            mark_checkout(State(ci_state), ROOT, ci_sha)
+        except (ValueError, OSError, KeyError, TypeError, subprocess.SubprocessError) as error:
+            print(f"CI trigger failed: {error}", file=sys.stderr)
+            return 2
+    return 0
 
 
 if __name__ == "__main__":

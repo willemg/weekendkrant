@@ -102,3 +102,17 @@ onderscheid waargenomen gedrag van een nog onbewezen oorzaak.
   [Python-systeemtest](../tests/test_system_e2e.py),
   [afzonderlijke pluginchecks](../plugin/weekendkrant_ingress/README.md#lokaal-testen-en-bouwen)
   en [optionele bridge/backend-test buiten Python-discovery](../plugin/weekendkrant_ingress/tests/bridge_backend.py).
+
+
+## Volledige CI is een afzonderlijke runtimegate (fase 10)
+
+- **Aanleiding:** de volledige suite maakt kleine iteraties en post-pullvalidatie
+  onnodig traag; een gedeelde CI-/runtimecheckout zou bovendien Ariadne kunnen raken.
+- **Blijvende regel:** fast-track blijft de lokale ontwikkel-/deploymentgate.
+  Volledige lokale CI gebruikt uitsluitend verse tijdelijke clones van een
+  expliciete SHA, nooit de live app als worktree of clonesource. Nieuwe pending
+  requests mogen alleen met een exacte CAS-grens worden opgeruimd. Een incomplete
+  run betekent opnieuw testen, nooit succes veronderstellen.
+- **Afgedwongen in:** [runner](../ci_runner.py), [gerichte tests](../tests/test_ci_runner.py)
+  en [canoniek CI-contract/runbook](ci.md). Alleen de CI-runtime draait bewust het
+  bestaande `--all`-pad; deze uitzondering verandert het PR-ontwikkelcontract niet.
