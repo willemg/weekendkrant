@@ -28,7 +28,7 @@ Het doelmodel deelt de 168 uurslots op in drie vensters:
 | --- | --- | ---: | --- |
 | Golf A | zondag 09:00 → woensdag 08:00 | 72 | eerste brede inhoudelijke cyclus voor alle drie topics |
 | Golf B | woensdag 09:00 → zaterdag 08:00 | 72 | tweede brede inhoudelijke cyclus voor alle drie topics |
-| Afsluiting | zaterdag 09:00 → zondag 08:00 | 24 | verificatie, correctie, longitudinale afsluiting en finale krant |
+| Afsluiting | zaterdag 09:00 → zondag 08:00 | 24 | verificatie, arbitrage en finale krant door Minos |
 
 Samen:
 
@@ -121,8 +121,11 @@ maken.
 
 ## Leonardo begint iedere krantweek van een blanco blad
 
-Leonardo maakt de Weekendkrant. Zijn redactionele week begint daarom bij de
-weekgrens **zonder de vorige krant als doorlopende redactionele state**.
+Leonardo bouwt tijdens de eerste 144 uur de inhoudelijke en structurele
+redactionele basis van de Weekendkrant. Hij maakt echter niet de definitieve
+editie: bij de zaterdagse freeze draagt hij zijn werk over aan de eindredactie.
+Zijn redactionele week begint daarom bij de weekgrens **zonder de vorige krant
+als doorlopende redactionele state**.
 
 Binnen één productieweek mag Leonardo uiteraard voortbouwen op zijn eerdere
 runs van diezelfde week:
@@ -135,7 +138,8 @@ Sherlock A
  -> Sherlock B
  -> Leonardo B
  -> ...
- -> Leonardo final
+ -> Leonardo B-close
+ -> frozen editorial package
 ```
 
 Maar bij de volgende zondagse weekgrens begint de nieuwe krant opnieuw als een
@@ -214,79 +218,137 @@ De uiteindelijke naam en vorm van de rubriek blijven open. De architecturale
 grens ligt wel vast: Einstein levert tijdsstructuur, niet een vierde brede
 nieuwsoogst.
 
-## De laatste 24 uur: van onderzoek naar publicatie
+## De laatste 24 uur: gerechtelijke eindredactie
 
-Vanaf zaterdag 09:00 verandert de doelstelling van de dispatcher.
+Vanaf zaterdag 09:00 verandert niet alleen de prioriteit van de dispatcher, maar
+ook de **toegelaten rolruimte**. De eerste 144 uur zijn de creatieve en
+onderzoekende klasse; de laatste 24 uur zijn de gerechtelijke klasse.
 
-Tijdens Golf A en Golf B is de centrale vraag:
-
-> Welke nuttige informatie of synthese moet nog ontstaan?
-
-Tijdens de laatste 24 uur wordt dat:
-
-> Welke open ketens moeten nog gesloten worden om zondag om 09:00 een
-> betrouwbare krant te kunnen publiceren?
-
-Nieuwe brede scouting krijgt dan steeds minder waarde. De resterende capaciteit
-moet beschikbaar zijn voor verificatie, correctie en finale synthese.
-
-Een voorlopig afsluitpad is:
+Conceptueel:
 
 ```text
-inhoudelijke weekstate
-        |
-        v
-Leonardo maakt/selecteert concrete krantclaims en passages
-        |
-        v
-Striktland verifieert claims tegen primaire bronprovenance
-        |
-        +--> goed -----------------------------+
-        |                                      |
-        +--> relevant probleem                 |
-                 |                             |
-                 v                             |
-               Minos                           |
-                 |                             |
-                 +-----------------------------+
-                               |
-                               v
-                    finale Leonardo-run
-                               |
-                               v
-                     Weekendkrant klaar
-                     zondag 09:00
+S_creative = slot 0..143
+S_judicial = slot 144..167
+```
+
+In de laatste klasse zijn Sherlock en Leonardo niet meer admissible:
+
+```text
+Sherlock  ∉ A(S_judicial)
+Leonardo  ∉ A(S_judicial)
+```
+
+Dat is een harde grens, geen lage prioriteit. Een leeg slot op zaterdagavond is
+beter dan nog snel een nieuwe brede Sherlock-oogst of een nieuwe Leonardo-
+interpretatie te openen.
+
+Tegen zaterdag 09:00 moeten Leonardo en Einstein daarom hun actuele redactionele
+output hebben afgegeven in een **frozen editorial package**. Dat pakket kan
+bestaan uit Leonardo's geselecteerde verhalen, claims, onzekerheden en
+provenance plus Einsteins longitudinale bijdragen en bijbehorende bewijsbasis.
+
+Vanaf de freeze ontstaat in principe geen nieuwe journalistieke interpretatie
+meer. De laatste 24 uur dienen voor:
+
+- Striktland-verificatie van concrete claims en passages;
+- uitsluitend indien noodzakelijk nog een begrensde kritieke Kuifje-opdracht om
+  een ontbrekend bewijsstuk te vinden;
+- Minos' beoordeling van wat standhoudt, wat moet worden aangepast, wat zichtbaar
+  onzeker blijft en wat volledig moet verdwijnen;
+- samenstelling van de definitieve Weekendkrant;
+- publicatie vóór zondag 09:00.
+
+Het afsluitpad wordt daarmee:
+
+```text
+Leonardo-output -----------+
+                           |
+Einstein-output -----------+--> frozen editorial package
+                           |              |
+bronprovenance ------------+              v
+                                      Striktland
+                                          |
+                           +--------------+--------------+
+                           |                             |
+                        houdt stand                 probleem / lacune
+                           |                             |
+                           |                     Kuifje-critical?
+                           |                             |
+                           +--------------+--------------+
+                                          |
+                                          v
+                                        Minos
+                                          |
+                           selecteert / combineert /
+                           corrigeert / schrapt /
+                           markeert onzekerheid
+                                          |
+                                          v
+                               definitieve Weekendkrant
+                                      zondag 09:00
 ```
 
 Striktland hoeft niet exact één run per topic te krijgen. Zijn natuurlijke
-werkeenheid kan later een begrensde set claims, passages of bewijsbundels zijn.
-Een topic met veel risicovolle claims kan meer verificatiecapaciteit vereisen
-dan een topic met weinig controversiële beweringen.
+werkeenheid kan een begrensde set claims, passages of bewijsbundels zijn. Een
+topic met veel risicovolle claims kan meer verificatiecapaciteit vereisen dan
+een topic met weinig controversiële beweringen.
 
-Minos is volledig conditioneel. Capaciteit voor Minos moet beschikbaar zijn,
-maar een goede week kan eindigen zonder enige Minos-run.
+Kuifje is in deze klasse alleen nog toegestaan voor een **kritieke,
+deadlinegebonden bewijsopdracht**. Een nieuwe interessante zijvraag of brede
+inhoudelijke lacune schuift door; de laatste 24 uur zijn geen derde
+onderzoeksgolf.
 
-Na Striktland en eventuele Minos-correcties krijgt Leonardo de finale
-redactionele verantwoordelijkheid: hij verwerkt de controles en correcties en
-zet de laatste inhoudelijke stempel op de editie.
+## Minos als eindredacteur
 
-## Finale Leonardo is geen nieuwe onderzoeksronde
+Minos is in dit doelmodel niet langer alleen een conditionele passagecorrector.
+Hij is de eindredacteur en finale beslisser over de concrete editie.
 
-De finale Leonardo-run is een afsluitende redactionele stap. Hij mag geen
-onbegrensde nieuwe onderzoekscyclus openen die de publicatiedeadline voorbij
-duwt.
+Zijn input is niet één Leonardo-passsage, maar het bevroren redactionele pakket:
 
-Als vlak voor publicatie een ernstige onbeantwoorde onzekerheid overblijft,
-moet het systeem liever:
+- Leonardo's inhoudelijke/structurele werk van de lopende krantweek;
+- Einsteins longitudinale bijdragen;
+- Striktlands verificatie-uitkomsten;
+- eventuele kritieke Kuifje-aanvulling;
+- de onderliggende provenance die nodig is om ingrepen te verantwoorden.
 
-- de claim schrappen;
-- de onzekerheid zichtbaar maken;
-- of het verhaal uitstellen;
+Minos mag materiaal van Leonardo en Einstein samenbrengen wanneer dat
+redactioneel zinvol is. Hij hoeft hun bijdragen niet als gescheiden blokken te
+publiceren wanneer een betere, bronvaste combinatie duidelijker is. Evenmin is
+hij verplicht al het aangeleverde materiaal te gebruiken.
 
-dan op het laatste moment een onbeperkte Sherlock/Kuifje-lus te starten.
+Zijn finale bevoegdheden omvatten ten minste:
 
-Deadlinebeleid moet dus niet alleen bepalen welk werk voorrang krijgt, maar ook
-welk nieuw werk **niet meer toegelaten** wordt.
+- behouden;
+- combineren;
+- inkorten;
+- corrigeren;
+- expliciet onzeker maken;
+- schrappen;
+- ordenen tot de definitieve krant.
+
+Daarmee ontstaat een bewuste functiescheiding:
+
+```text
+Leonardo:
+    welke inhoudelijke structuur en verhalen zitten in deze week?
+
+Einstein:
+    welke ontwikkelingen krijgen betekenis door de tijdsdimensie?
+
+Striktland:
+    houden de concrete beweringen stand tegen de bronnen?
+
+Minos:
+    gegeven al dat werk en die verificatie, wat wordt de definitieve krant?
+```
+
+Deze scheiding voorkomt ook dat Leonardo na verificatie zijn eigen verhaal nog
+zelf als eindbeoordelaar herschrijft. De auteur/syntheserol eindigt bij de
+freeze; de rechter/eindredacteur neemt daarna over.
+
+Als vlak voor publicatie een ernstige onbeantwoorde onzekerheid overblijft, moet
+Minos liever een claim schrappen, de onzekerheid zichtbaar maken of een verhaal
+uitstellen dan alsnog een onbeperkte onderzoeks- of syntheselus te openen.
 
 ## Van klokplanning naar een deadline-gedreven DAG
 
@@ -354,17 +416,15 @@ Voor de basis van drie topics:
 = maximaal 36 runs
 ```
 
-Een conservatieve afsluiting met bijvoorbeeld maximaal één Striktland, één
-Minos en één finale Leonardo-stap per topic zou daar hoogstens negen
-topicgebonden runs aan toevoegen:
-
-```text
-36 + 9 = 45
-```
+De afsluitingscapaciteit laat zich minder netjes per topic tellen: Striktland
+kan claimbundels over meerdere verhalen controleren en Minos maakt één
+geïntegreerde editie uit Leonardo- en Einsteinmateriaal. Daarom krijgt de laatste
+24 uur bewust een eigen capaciteitsklasse in plaats van een vast aantal
+"finale runs per topic".
 
 Dit is uitsluitend een **capaciteitsillustratie**, geen gewenste runquota.
-Kuifje en Minos zijn conditioneel, Striktland kan een andere granulariteit
-krijgen en Einstein plus Einstein-Kuifje-ketens komen daar nog bovenop.
+Kuifje is conditioneel, Striktland kan een andere granulariteit krijgen en
+Einstein plus Einstein-Kuifje-ketens komen boven op de 36 maximale basisruns.
 
 Het belangrijkste gevolg is daarom niet dat 168 slots mathematisch meteen
 opgebruikt zijn. Het probleem is dat afhankelijkheden, variabele looptijden,
@@ -381,9 +441,8 @@ Daarom moet het latere weekbeleid expliciet capaciteit kunnen vrijhouden voor:
 - Kuifje-missies die pas uit Leonardo- of Einstein-analyse ontstaan;
 - retries na echte technische failure;
 - Striktland-verificatie;
-- Minos-correctie;
-- finale Leonardo;
-- mogelijk een laatste Einstein-verwerking voor zijn longitudinale rubriek.
+- kritieke Kuifje-verificatie wanneer werkelijk nodig;
+- Minos-eindredactie en samenstelling van de definitieve editie.
 
 "Geen werk" in een slot is dus niet automatisch inefficiëntie. Vrije capaciteit
 kan een bewuste veiligheidsmarge zijn.
@@ -410,11 +469,13 @@ Dit weekmodel is vooral input voor:
 
 - **fase 12, Kuifje:** duurzame conditionele onderzoeksmissies;
 - **fase 13, Striktland:** claimverificatie tegen bronprovenance;
-- **fase 14, Minos:** begrensde correctie op geregistreerde problemen;
-- **fase 15, capaciteits- en budgetbeleid:** slots, prioriteit, reserves,
-  allowance en deadline-urgentie;
-- **fase 16, weekafsluiting/eindredactie:** freeze/admissionbeleid,
-  verificatievolgorde en finale publicatie.
+- **fase 14, Minos:** uitbreiden van beperkte correctierol naar onafhankelijke
+  eindredactie over het frozen Leonardo-/Einsteinpakket en Striktland-uitkomsten;
+- **fase 15, capaciteits- en budgetbeleid:** slotklassen, admissieregels,
+  prioriteit, reserves, allowance en deadline-urgentie;
+- **fase 16, weekafsluiting/eindredactie:** harde freeze, uitsluiting van
+  Sherlock/Leonardo in de laatste 24 uur, verificatievolgorde en finale
+  publicatie door Minos.
 
 Einstein heeft nog geen eigen implementatiefase in de huidige roadmap. Zijn
 longitudinale rol en plaats in deze weekcyclus moeten vóór implementatie nog in
@@ -439,7 +500,7 @@ beschikbaar platformbudget volgen.
 
 De blijvende ontwerpintentie is wel duidelijk:
 
-> **zondag 09:00 is de deadline; de week ervoor is een state-driven,
-> deadline-gedreven redactionele productieketen die brede scouting vroeg laat
-> gebeuren en richting publicatie steeds meer capaciteit reserveert voor
-> verificatie, correctie en finale synthese.**
+> **zondag 09:00 is de deadline; de eerste 144 uur bouwen Sherlock, Leonardo,
+> Kuifje en Einstein het journalistieke materiaal op, waarna een harde freeze de
+> laatste 24 uur overdraagt aan verificatie en Minos als eindredacteur van de
+> definitieve Weekendkrant.**
