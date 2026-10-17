@@ -1,4 +1,4 @@
-# Versioned runtimecontracten
+# Runtimecontracten
 
 Deze bestanden zijn productie-input, geen afzonderlijke scheduled agents.
 Zie [contractgrens, opslag en begrippen](../docs/roles.md#runtimecontracten-fase-85).
