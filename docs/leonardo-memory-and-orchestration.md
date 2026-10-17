@@ -73,6 +73,15 @@ en evolutieanalyse is zijn verantwoordelijkheid, niet die van Leonardo. Einstein
 is gepland; deze PR voegt geen rolbestand, job, producer/adapter, scheduler,
 schema of runtimecode voor hem toe. Ariadne verricht geen semantische analyse.
 
+Het toekomstige [weekproductiemodel](weekly-production-cycle.md) maakt deze
+grens ook temporeel expliciet. Leonardo bouwt binnen één krantweek voort op zijn
+eerdere runs van diezelfde week, maar de volgende editie begint redactioneel van
+een blanco blad. Historische bronnen en eerdere resultaten blijven lossless
+beschikbaar; cross-week evolutie en terugkerende patronen worden juist door
+Einstein gedragen. De beoogde week bestaat uit twee driedaagse
+Sherlock → Leonardo → eventuele Kuifje-vervolgcycli voor elk topic, gevolgd door
+één afsluitdag voor verificatie, eventuele correctie en finale Leonardo-redactie.
+
 ## Drie soorten context
 
 Een vervolgcall kan alleen werken met informatie die opnieuw beschikbaar wordt
