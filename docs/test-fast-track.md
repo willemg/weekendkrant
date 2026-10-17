@@ -126,7 +126,7 @@ contracten en echte MCP → HTTP → SQLite-recall plus generieke finish.
 ## Fase 10: snelle gate en asynchrone volledige CI
 
 De nieuwe selectie bevat uitsluitend `test_ci_runner` (nieuwe state-, clone-,
-crash-, locking-, notificatie- en triggerregressies) en `test_test_runner`
+rapportage-, artifact-, crash-, locking-, notificatie- en triggerregressies) en `test_test_runner`
 (geraakt canoniek testpad en bestaande selectie-/CLI-regressies). De vorige
 Leonardo-/backendselectie wordt bewust volledig vervangen; die code wijzigt niet.
 
@@ -136,3 +136,7 @@ en gedrag onafhankelijk van Git; dirty development blijft mogelijk. De trigger
 haalt niets op en vereist geen actieve worker. `--all` en pluginchecks triggeren
 niet opnieuw. Zie [het canonieke CI-document](ci.md) voor de precieze
 voor-/nacontroles, foutsemantiek, coalescing en productieactivering.
+
+De fase-10-correctie behoudt bewust dezelfde twee geraakte modules: nieuwe
+SQLite-/artifactretentie- en env-behoudtests horen bij `test_ci_runner`; het
+canonieke testpad en zijn trigger blijven via `test_test_runner` gedekt.

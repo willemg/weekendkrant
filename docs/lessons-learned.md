@@ -112,7 +112,10 @@ onderscheid waargenomen gedrag van een nog onbewezen oorzaak.
   Volledige lokale CI gebruikt uitsluitend verse tijdelijke clones van een
   expliciete SHA, nooit de live app als worktree of clonesource. Nieuwe pending
   requests mogen alleen met een exacte CAS-grens worden opgeruimd. Een incomplete
-  run betekent opnieuw testen, nooit succes veronderstellen.
+  run zonder completionreceipt betekent opnieuw testen, nooit succes veronderstellen.
+  Succes is compacte auditmetadata in de aparte rapportdatabase; failure bewaart
+  één exacte debugcheckout met output. Geen logs in operationele JSON-state,
+  geen blijvende successlogs. Private `ci/env` wordt bij updates nooit gewist.
 - **Afgedwongen in:** [runner](../ci_runner.py), [gerichte tests](../tests/test_ci_runner.py)
   en [canoniek CI-contract/runbook](ci.md). Alleen de CI-runtime draait bewust het
   bestaande `--all`-pad; deze uitzondering verandert het PR-ontwikkelcontract niet.

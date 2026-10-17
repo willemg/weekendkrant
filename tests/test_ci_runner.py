@@ -94,12 +94,12 @@ class StateTests(unittest.TestCase):
         self.assertEqual(data['pending']['sha'], A)
         self.assertEqual(data['last_failure']['exitcode'], 7)
         self.assertEqual(data['last_failure']['status'], 'failed')
-        self.assertIn('stdout and stderr', data['last_failure']['log'])
+        self.assertIn('stdout and stderr', (self.state.root / 'failure/test.log').read_text())
         self.assertTrue(data['last_failure']['started_at'])
         self.assertTrue(data['last_failure']['finished_at'])
         self.assertEqual(len(messages), 1)
         self.assertIn(A[:12], messages[0])
-        self.assertIn(str(self.state.path), messages[0])
+        self.assertIn(str(self.state.root / 'failure'), messages[0])
         with patch.object(ci, 'clone_test') as task:
             self.assertEqual(ci.run(self.state, 'unused', sys.executable, messages.append), 0)
         task.assert_not_called()
@@ -126,12 +126,12 @@ class StateTests(unittest.TestCase):
         self.assertEqual(self.state.read()['last_result']['exitcode'], 3)
         self.assertEqual(self.state.read()['last_failure']['status'], 'failed')
 
-    def test_exception_preserves_failure_and_cleans_clone(self):
+    def test_exception_preserves_failure_artifact_and_cleans_work(self):
         self.state.mark(A)
         def broken(clone):
             raise OSError('cannot start test process')
         self.assertNotEqual(self.run_ci(broken), 0)
-        self.assertIn('cannot start', self.state.read()['last_failure']['log'])
+        self.assertIn('cannot start', (self.state.root / 'failure/test.log').read_text())
         self.assertEqual(list((self.state.root / 'work').iterdir()), [])
 
     def test_busy_runner_is_nonblocking(self):
@@ -160,14 +160,41 @@ class StateTests(unittest.TestCase):
                 self.run_ci()
         self.assertEqual(self.state.read()['last_result']['status'], 'running')
         self.assertEqual(self.state.read()['pending']['sha'], A)
-        self.assertEqual(self.run_ci(), 0)
+        with patch.object(ci, 'clone_test') as task:
+            self.assertEqual(ci.run(self.state, 'unused', sys.executable), 0)
+        task.assert_not_called()
         self.assertIsNone(self.state.read()['pending'])
+        self.assertEqual(len(ci.Report(self.state).rows()), 1)
 
-    def test_output_and_state_are_bounded(self):
-        log = ci.TailLog(self.state.root / 'current.log')
-        log.write(b'x' * (ci.LOG_LIMIT * 3))
-        self.assertLessEqual(len(log.tail), ci.LOG_LIMIT)
-        self.assertLessEqual(log.path.stat().st_size, ci.LOG_LIMIT)
+    def test_output_limit_fails_explicitly_without_unbounded_growth(self):
+        log = ci.RunLog(self.state.root / 'test.log', limit=1024)
+        with self.assertRaises(ci.OutputLimitError):
+            log.write(b'x' * 2048)
+        self.assertLessEqual(log.path.stat().st_size, 1200)
+        self.assertIn('OUTPUT LIMIT', log.path.read_text())
+
+    def test_output_limit_stops_real_command(self):
+        log = ci.RunLog(self.state.root / 'test.log', limit=1024)
+        with ci.runner_lock(self.state) as fd:
+            with self.assertRaises(ci.OutputLimitError):
+                ci.command([sys.executable, '-c', 'import os; os.write(1, b"x" * 1048576)'],
+                           self.state.root, dict(os.environ), fd, log)
+        self.assertIn('OUTPUT LIMIT', log.path.read_text())
+        self.assertLessEqual(log.path.stat().st_size, 1200)
+
+    def test_full_failure_output_is_preserved_beyond_old_tail_limit(self):
+        self.state.mark(A)
+        def task(sha, clone, python, source, fd, log):
+            clone.mkdir()
+            log.write(b'BEGIN\n' + b'x' * 262144 + b'\nEND\n')
+            return 1
+        with patch.object(ci, 'clone_test', side_effect=task):
+            ci.run(self.state, 'unused', sys.executable)
+        output = (self.state.root / 'failure/test.log').read_bytes()
+        self.assertTrue(output.startswith(b'BEGIN'))
+        self.assertTrue(output.endswith(b'END\n'))
+        self.assertGreater(len(output), 262144)
+        self.assertLess(self.state.path.stat().st_size, 4096)
 
     def test_source_live_checkout_is_rejected_before_git(self):
         self.state.mark(A)
@@ -209,6 +236,104 @@ class StateTests(unittest.TestCase):
         self.assertEqual(request.data, b'fixture message')
         self.assertEqual(request.get_header('Authorization'), 'Bearer fixture-token')
         self.assertEqual(post.call_args.kwargs['timeout'], 10)
+
+    def rows(self):
+        return ci.Report(self.state).rows()
+
+    def test_success_is_only_compact_report_no_logs(self):
+        self.state.mark(A)
+        self.run_ci()
+        row = self.rows()[0]
+        self.assertEqual((row['sha'], row['status'], row['exitcode']), (A, 'succeeded', 0))
+        self.assertIsNone(row['artifact_path'])
+        self.assertGreaterEqual(row['duration_seconds'], 0)
+        self.assertFalse(list(self.state.root.rglob('*.log')))
+        self.assertFalse(list(self.state.root.rglob('repo')))
+
+    def test_failure_replacement_and_success_preserve_only_one_artifact(self):
+        self.state.mark(A)
+        self.run_ci(lambda clone: (clone.joinpath('marker').write_text('A'), 1)[1])
+        self.state.mark(B)
+        self.run_ci(lambda clone: (clone.joinpath('marker').write_text('B'), 2)[1])
+        self.assertEqual((self.state.root / 'failure/repo/marker').read_text(), 'B')
+        rows = self.rows()
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0]['artifact_path'], str(self.state.root / 'failure'))
+        self.assertIsNone(rows[1]['artifact_path'])
+        self.assertEqual(len(list(self.state.root.rglob('repo'))), 1)
+        self.state.mark(B, force=True)
+        self.run_ci()
+        self.assertEqual(len(self.rows()), 3)
+        self.assertEqual((self.state.root / 'failure/repo/marker').read_text(), 'B')
+        self.assertEqual(len(list(self.state.root.rglob('*.log'))), 1)
+        self.assertNotIn('log', self.state.read()['last_failure'])
+
+    def test_clear_failure_preserves_history_and_pending(self):
+        self.state.mark(A)
+        self.run_ci(lambda clone: 1)
+        pending = self.state.read()['pending']
+        ci.clear_failure(self.state)
+        self.assertFalse((self.state.root / 'failure').exists())
+        self.assertEqual(len(self.rows()), 1)
+        self.assertIsNone(self.rows()[0]['artifact_path'])
+        self.assertEqual(self.state.read()['pending'], pending)
+
+    def test_db_commit_is_idempotent_and_conflicts_fail_closed(self):
+        self.state.mark(A)
+        self.run_ci()
+        result = self.state.read()['last_result']
+        report = ci.Report(self.state)
+        report.add(result, None)
+        report.add(result, None)
+        self.assertEqual(len(report.rows()), 1)
+        with self.assertRaises(ValueError):
+            report.add(dict(result, status='failed', exitcode=1), None)
+
+    def test_crash_after_publish_before_db_recovers_exact_artifact(self):
+        self.state.mark(A)
+        with patch.object(ci.Report, 'add', side_effect=OSError('database unavailable')):
+            with self.assertRaises(OSError):
+                self.run_ci(lambda clone: (clone.joinpath('marker').write_text('original'), 5)[1])
+        self.assertEqual(self.state.read()['last_result']['status'], 'running')
+        self.assertEqual((self.state.root / 'failure/repo/marker').read_text(), 'original')
+        with patch.object(ci, 'clone_test') as task:
+            ci.run(self.state, 'unused', sys.executable)
+        task.assert_not_called()
+        self.assertEqual(self.rows()[0]['status'], 'failed')
+        self.assertTrue(Path(self.rows()[0]['artifact_path']).exists())
+        self.assertEqual((self.state.root / 'failure/repo/marker').read_text(), 'original')
+
+    def test_crash_between_failure_renames_is_recoverable(self):
+        self.state.mark(A)
+        self.run_ci(lambda clone: 1)
+        self.state.mark(B)
+        original = ci.os.replace
+        def fail_publish(src, dst):
+            if Path(src).name.startswith('run-') and Path(dst).name == 'failure':
+                raise OSError('crash during publication')
+            return original(src, dst)
+        with patch.object(ci.os, 'replace', side_effect=fail_publish):
+            with self.assertRaises(OSError):
+                self.run_ci(lambda clone: 2)
+        self.assertTrue((self.state.root / 'failure.previous/repo').exists())
+        self.assertTrue(all(row['artifact_path'] is None for row in self.rows()))
+        ci.run(self.state, 'unused', sys.executable)
+        self.assertEqual(len(self.rows()), 2)
+        self.assertEqual(len(list(self.state.root.rglob('repo'))), 1)
+        self.assertTrue(Path(self.rows()[0]['artifact_path']).exists())
+
+    def test_non_destructive_env_creation_from_runbook(self):
+        import re
+        doc = (ROOT / 'docs/ci.md').read_text()
+        block = re.search(r'if \[\[ ! -e /home/weekendkrant/ci/env \]\]; then.*?\nfi', doc, re.S)
+        self.assertIsNotNone(block)
+        env = self.state.root / 'env'
+        script = block.group().replace('/home/weekendkrant/ci/env', str(env))
+        subprocess.run(['bash', '-c', script], check=True)
+        self.assertEqual(env.stat().st_mode & 0o777, 0o600)
+        env.write_text('PRIVATE=keep-me\n')
+        subprocess.run(['bash', '-c', script], check=True)
+        self.assertEqual(env.read_text(), 'PRIVATE=keep-me\n')
 
 
 class GitIntegrationTests(unittest.TestCase):
@@ -276,8 +401,11 @@ class GitIntegrationTests(unittest.TestCase):
         self.state.mark(self.a)
         with patch.dict(os.environ, {'CI_FIXTURE_EXIT': '9'}):
             self.assertEqual(ci.run(self.state, str(self.repo), sys.executable), 9)
-        self.assertIn('fixture-output', self.state.read()['last_failure']['log'])
-        self.assertFalse(Path(self.proof.read_text().splitlines()[2]).exists())
+        self.assertIn('fixture-output', (self.state.root / 'failure/test.log').read_text())
+        self.assertEqual(ci.git_output(self.state.root / 'failure/repo', 'rev-parse', 'HEAD'), self.a)
+        row = ci.Report(self.state).rows()[0]
+        self.assertEqual((row['sha'], row['status'], row['exitcode']), (self.a, 'failed', 9))
+        self.assertEqual(row['artifact_path'], str(self.state.root / 'failure'))
 
     def test_clone_and_missing_commit_fail_without_false_green(self):
         for source, sha in ((str(self.root / 'missing'), self.a), (str(self.repo), A)):

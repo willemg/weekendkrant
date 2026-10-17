@@ -6,8 +6,9 @@ Een optionele lokale trigger registreert na een geslaagde, schone fast-track de
 exacte HEAD voor een afzonderlijke volledige CI-run. Groen in de fast-track is
 geen bewijs dat de volledige suite groen is.
 
-De CI is een lokaal cronproces, zonder daemon, dispatcher, SQLite of externe
-CI-provider. De implementatie en gerichte tests zijn beschikbaar; productiecron,
+De CI is een lokaal cronproces, zonder daemon, dispatcher of externe CI-provider.
+Een aparte kleine SQLite-rapportdatabase bewaart uitsluitend historische
+resultaten. De implementatie en gerichte tests zijn beschikbaar; productiecron,
 externe venv en eerste echte volledige-suitebewijs worden **na merge** ingevoerd.
 Geen lokale fixturetest vervangt dat runtimebewijs.
 
@@ -61,54 +62,75 @@ branches falen zichtbaar; een bewuste operator kan `mark --force` gebruiken.
 De directe `mark --sha`-CLI is een expliciete operatorselectie en vereist geen
 checkout of voorafgaande fast-track; gebruik hem dus bewust.
 
-## Persistente state, writes en resultaten
+## Drie verantwoordelijkheden en resultaatbewaring
 
-Alles staat standaard onder `/home/weekendkrant/ci`, eigendom van `weekendkrant`,
-met private directoryrechten. Er is één atomisch JSON-statebestand, zodat een
-resultaat en pending-clear geen afzonderlijke crashgevoelige commits vormen.
+Alles staat onder `/home/weekendkrant/ci`, buiten de applicatiecheckout en met
+private rechten voor `weekendkrant`.
 
-| Bestand/map | Eigenaar en functie |
+| Pad | Verantwoordelijkheid |
 | --- | --- |
-| `state.json` | Trigger/operator schrijft `pending`; runner schrijft `last_result` en `last_failure`. Schema `version: 1`. |
-| `state.lock` | Korte exclusieve `flock` voor iedere read-modify-write en state-tempcleanup. |
-| `runner.lock` | Niet-blokkerende exclusieve `flock` voor volledige run en orphan-workcleanup. |
-| `current.log` | Runner bewaart maximaal de laatste 128 KiB gecombineerde stdout/stderr plus command-/foutdiagnose, ook tijdens uitvoering. |
-| `work/run-*/repo` | Alleen tijdelijke verse clone; normaal na iedere uitkomst verwijderd. |
-| `.state-*` | Alleen tijdelijke atomaire writes; na crash onder statelock opgeruimd. |
-| `bin/`, `venv/`, `env` | Geïnstalleerde runner, externe Pythonomgeving en private operatorconfiguratie, geen Git-working tree. |
+| `state.json` | Pending/request-identiteit, actuele/laatste operationele status en minimale failuremetadata voor retry/notificatiededuplicatie. Geen logs of historiek. |
+| `report.sqlite3` | Compacte historische resultaten, één rij per afgeronde logische request. Geen scheduler, pending, admission of lockbeheer. |
+| `failure/repo`, `failure/test.log` | Maximaal één actuele debugcheckout met volledige uitvoer. Bij clone-/checkoutfailure kan de repo onvolledig/afwezig zijn; de log verklaart de infrastructuurfout. |
+| `failure/result.json` | Kleine metadata-identiteit van dat artifact, geen tweede logkopie. |
+| `work/run-*` | Verse actieve clone, streaming `test.log` en completionmetadata; bij groen geheel verwijderd. |
+| `completion.json` | Eén klein duurzaam afrondingsreceipt voor crashherstel tussen filesystem, rapportage en state-CAS; verdwijnt na verwerking. |
+| `failure.previous` | Alleen tijdens failure-safe vervanging, nooit reguliere historiek; na herstel/commit verwijderd. |
+| `state.lock`, `runner.lock` | Korte read-modify-write-lock en afzonderlijke niet-blokkerende runnerlock. |
+| `.state-*` | Tijdelijke atomaire writes; orphancleanup onder statelock. |
+| `bin/`, `venv/`, `env` | Runnerinstallatie, externe Pythonomgeving en private operatorconfiguratie. |
 
-Een statewrite schrijft een nieuwe tijdelijke file, flusht en fsynct die,
-vervangt atomisch `state.json` en fsynct de directory. Locks worden nooit
-verwijderd/vervangen: anders zouden processen verschillende inodes kunnen locken.
-Een beschadigde/onbekende state faalt gesloten; hij wordt niet als idle of groen
-geïnterpreteerd. Herstel vereist operatoronderzoek.
+**Succesvolle volledige CI is auditmetadata, geen debugartifact.** De eigen
+clone, testlog en metadatafile verdwijnen volledig; SQLite houdt alleen SHA,
+requestidentiteit, `succeeded`, start/eindtijd, duur en exitcode 0 bij. De
+`artifact_path` is NULL. Er blijft geen successlog, `current.log` of groene
+checkout achter. Operationele state bevat hoogstens de laatste compacte uitkomst.
 
-`pending` bevat `sha`, een unieke `request` en `marked_at`. De requestidentiteit
-maakt ook een geforceerde rerun van dezelfde SHA tijdens een lopende run veilig.
-`last_result` bevat die identiteit, `status`, `started_at`, `finished_at`,
-`exitcode` en het gekozen Pythonpad. Tijden zijn UTC met offset.
+**Bij rood is de exacte checkout plus output onderdeel van het
+onderzoeksmateriaal.** De verse run-directory wordt naar het vaste `failure/`
+verplaatst, inclusief de daadwerkelijk gebruikte repo en `test.log`. Bij een
+gewone testfailure blijft HEAD op de geteste SHA; de working tree blijft zoals
+zij faalde, zonder reset/clean. Bij infrastructuurfailure kan clone/checkout zelf
+mislukt zijn: er wordt geen fictieve geldige checkout gereconstrueerd.
 
-De runner legt eerst `running` vast, test buiten de statelock en schrijft daarna:
+De volledige gecombineerde stdout/stderr streamt direct naar de logfile, samen
+met command-/infrastructuurdiagnose. Er is een harde **64 MiB** veiligheidsgrens
+per run (plus één korte limietmelding): bij overschrijding wordt de actieve
+commandoprocesgroep gestopt, de run faalt met exitcode 2 en de log vermeldt expliciet dat de
+uitvoer incompleet is. Dit is een runaway-outputnoodrem, geen 128-KiB-tail of
+normale truncatie. Geen logbytes in JSON-state of SQLite.
 
-- `succeeded`, exitcode 0: pending wordt uitsluitend gewist als de volledige
-  pending request nog gelijk is aan de eigen snapshot;
-- `failed`, niet-nul exitcode: pending blijft staan, en `last_failure` krijgt
-  resultaatmetadata plus de laatste 128 KiB diagnostiek in veld `log`.
-  Clone-, checkout- en testcommandofouten falen allemaal; een infrastructuur-
-  exception krijgt exitcode 2. Een signaalexit blijft negatief in JSON en wordt
-  voor de CLI naar de gebruikelijke `128 + signaalnummer` vertaald.
+Een nieuwe failure vervangt het vorige zware artifact pas wanneer de nieuwe
+run-directory gereed is. Beide historische DB-rows blijven bestaan; de oude
+`artifact_path` wordt NULL wanneer het artifact vervangen wordt. Een succes
+verwijdert uitsluitend zijn eigen run-directory en behoudt de eerdere failure
+voor onderzoek. `clear-failure` verwijdert bewust alleen het zware debugartifact
+en maakt bijbehorende DB-verwijzingen NULL, zonder historische rows te wissen.
+Het aantal zware bewaarde artifacts groeit dus niet mee met het aantal runs;
+tijdens vervanging kunnen kort oud en nieuw naast elkaar bestaan.
 
-Komt D binnen terwijl C getest wordt, dan blijft D pending wanneer C eindigt.
-Een succes voor C blijft geldig bewijs over C, maar zegt niets over D. Een
-geforceerde nieuwe request voor C blijft eveneens pending. Er zijn geen stille
-lost updates of vals groene onbehandelde SHAs.
+## Rapportdatabase en idempotentie
 
-Er is geen groeiende historie: één laatste resultaat, één laatste failure met
-begrensde log en één begrensde current-log. Latere successen wissen de laatste
-failure niet. Daarmee blijft de vorige fout onderzoekbaar, zonder oude clones
-te bewaren. Een nieuwere failure vervangt de vorige failurediagnostiek.
-`current.log` is best-effort crashdiagnostiek, geen atomisch resultaatbewijs;
-alleen het gefsyncte `state.json` bevestigt de eindstatus.
+`ci_runs` bevat `id`, `sha`, unieke `request_id`, `status`, `started_at`,
+`finished_at`, `duration_seconds`, `exitcode` en nullable `artifact_path`.
+Alleen afgeronde `succeeded`/`failed`-runs krijgen een row; geen logs, repoarchief
+of schedulerstate. Tijden zijn UTC met offset; duur is de niet-negatieve gemeten
+UTC-tijdsdelta. Een handmatige rerun heeft bewust een nieuwe requestidentiteit.
+
+SQLite gebruikt gewone lokale transacties. Dezelfde completion opnieuw
+registreren verandert geen historische metadata en maakt geen tweede row.
+Een conflicterende uitkomst voor dezelfde request wordt hard geweigerd.
+Rapportage is onafhankelijk van scheduling: pending/CAS en admission blijven in
+de bestaande JSON-state en OS-locks. De rapportdatabase beslist nooit of werk
+wordt toegelaten of geselecteerd. Een DB-writefout bevestigt geen statefinish:
+het receipt blijft staan en moet eerst worden verwerkt.
+
+State-/receiptwrites gebruiken tempfile, file-fsync, atomische replace en
+directory-fsync. `pending` bevat SHA, unieke request en markeertijd.
+`last_result` bevat alleen de minimale operationele uitkomst, en `last_failure`
+behoudt compacte metadata voor notificatiededuplicatie. Geen permanente
+logvelden. Locks worden nooit verwijderd/vervangen: anders kunnen processen
+verschillende inodes locken. Beschadigde/onbekende state faalt gesloten.
 
 ## Failure, rerun en ntfy
 
@@ -125,7 +147,7 @@ failure-SHAs mogen opnieuw melden. Idle, lock-busy en succes sturen niets.
 Stel optioneel `WEEKENDKRANT_CI_NTFY_URL` in op de volledige HTTPS-topic-URL en
 `WEEKENDKRANT_CI_NTFY_TOKEN` op een bearer token indien vereist. Er is geen nieuwe
 Pythondependency: de POST gebruikt urllib, met 10 seconden timeout. De melding
-noemt Weekendkrant CI, de korte SHA en de lokale `state.json`-diagnostiek.
+noemt Weekendkrant CI, de korte SHA en `/home/weekendkrant/ci/failure` met repo en log.
 Configuratie/secrets staan alleen in `ci/env`, nooit in Git. Notificatiefouten
 geven een korte stderr-diagnose en veranderen het reeds opgeslagen CI-resultaat
 niet. Er is geen aflevergarantie: een crash tussen resultaatcommit en POST kan
@@ -141,21 +163,52 @@ Dit is lokaal met een echt gedood runnerproces en nog levend testproces getest.
 Een vastgelopen, nog levend proces is geen stale lock; onderzoek/beëindig het
 proces en verwijder nooit het lockbestand.
 
-| Crashmoment | Bewaarde betekenis en volgende activatie |
+Afronding gebeurt onder de runnerlock in deze vaste volgorde:
+
+1. Tests eindigen met hun echte exitcode; logfile wordt gefsynct. De uitkomst en
+   eigen run-directory worden in een kleine atomische `completion.json` vastgelegd.
+2. Bij groen wordt de eigen run-directory geheel verwijderd. Bij rood worden
+   eerst oude DB-artifactverwijzingen NULL gemaakt, daarna wordt het oude
+   artifact naar `failure.previous` hernoemd en de gereedstaande nieuwe directory
+   naar `failure`. Beide renamegrenzen worden gefsynct. De oude checkout wordt
+   nog niet vernietigd voordat het nieuwe artifact gepubliceerd is.
+3. De DB-resultaatrow wordt idempotent geregistreerd. Alleen een bestaand nieuw
+   artifact met bijpassende `result.json` en `test.log` krijgt een verwijzing.
+4. Compacte operationele eindstatus en request-CAS-clear worden samen in JSON
+   gecommit. Alleen succes voor dezelfde pending request mag pending wissen.
+5. Het oude vervangingsartifact en completionreceipt worden verwijderd; daarna
+   volgt eventueel één best-effort ntfy-poging.
+
+Een crash vóór het receipt laat incomplete werkstate achter: de volgende vrije
+runner ruimt de orphan op en test opnieuw. Een crash ná het receipt laat de
+volgende runner eerst die ene afronding idempotent hervatten, vóór cleanup of
+nieuw werk. Dat geldt ook na DB-commit maar vóór statefinish; er verschijnt geen
+dubbele row en een nieuwere pending request wordt niet gewist.
+
+| Crashmoment | Betekenis en herstel |
 | --- | --- |
-| Vóór clone | Pending of `running`, geen succes; volgende start probeert opnieuw. |
-| Tijdens clone | `running`; kind kan lock behouden tot exit, daarna orphan weg en verse clone. |
-| Tijdens tests | Zelfde; `current.log` biedt begrensde uitvoer, geen bevestigde eindstatus. |
-| Na testsucces, vóór resultaatcommit/CAS | Nog `running` en pending: opnieuw testen, nooit succes veronderstellen. |
-| Tijdens atomische resultaatwrite | Oude volledige state of nieuwe volledige state; geen half resultaat met een losse pending-clear. |
-| Nieuwere pending tijdens run | CAS vergelijkt de eigen request; nieuwere pending blijft onaangeraakt. |
+| Vóór/tijdens clone of tests | Geen bevestigde uitkomst; log staat tijdelijk in `work/run-*/test.log`. Na kindexit opnieuw testen. |
+| Na exitcode 0, vóór duurzaam receipt | Geen groen rapport veronderstellen; opnieuw testen. |
+| Na receipt, vóór DB-commit | Receipt voltooit cleanup/publicatie en registratie zonder een nieuwe test te verzinnen. |
+| Tussen de twee failure-renames | Oud artifact staat nog in `failure.previous`; geen DB-row wijst naar het tijdelijk ontbrekende `failure`. Recovery publiceert de gereedstaande nieuwe run. |
+| Na artifactpublicatie, vóór DB-commit | Manifest/log blijven beschikbaar; recovery registreert exact die failure. |
+| Na DB-commit, vóór CAS | Row bestaat al; identieke registratie en statefinish zijn herhaalbaar. |
+| Nieuwere pending tijdens afronding | CAS vergelijkt de eigen request; nieuwere request blijft staan. |
 | Tweede cron tijdens actieve run | Stille niet-blokkerende exit, geen clone of tests. |
 
-Normale successen, failures en afgevangen exceptions ruimen de clone op via
-`TemporaryDirectory`. Een harde kill/stroomuitval kan rommel achterlaten; de
-volgende vrije runner ruimt de eigen prefix op vóór nieuw werk, ook wanneer er
-geen pending werk is. `cleanup` doet dit handmatig onder dezelfde runnerlock.
-At-least-once testen gaat vóór de besparing van een herhaalde suite.
+Een crash na het loskoppelen van oude DB-links kan een oude historische row
+zonder artifactverwijzing achterlaten; dat is conservatief en beter dan een
+verwijzing naar de verkeerde checkout. Normaal wordt elk completionreceipt
+volledig gereconcilieerd voordat `cleanup`, `clear-failure` of nieuw werk doorgaat.
+Bij beschadigd receipt/manifest stopt de runner zichtbaar en blijft het materiaal
+voor operatoronderzoek staan. Dit is één kleine afrondingsreceipt, geen algemeen
+transactiesysteem over filesystem en SQLite.
+
+Na een harde kill/stroomuitval kan een onvoltooide tijdelijke directory
+achterblijven. De volgende vrije runner reconcilieert eerst en ruimt vervolgens
+alleen de eigen orphanprefix op, ook zonder pending werk. `cleanup` doet dit
+handmatig onder dezelfde runnerlock. Een bewaard failureartifact valt nooit onder
+deze gewone cleanup. At-least-once testen gaat vóór vals succes.
 
 ## Invoering na merge (nog niet geactiveerd)
 
@@ -172,10 +225,13 @@ install -m 600 /home/weekendkrant/app/ci_runner.py /home/weekendkrant/ci/bin/ci_
 mv /home/weekendkrant/ci/bin/ci_runner.py.new /home/weekendkrant/ci/bin/ci_runner.py
 install -m 700 /home/weekendkrant/app/start_ci.sh /home/weekendkrant/ci/bin/start_ci.sh.new
 mv /home/weekendkrant/ci/bin/start_ci.sh.new /home/weekendkrant/ci/bin/start_ci.sh
-install -m 600 /dev/null /home/weekendkrant/ci/env
+if [[ ! -e /home/weekendkrant/ci/env ]]; then
+    install -m 600 /dev/null /home/weekendkrant/ci/env
+fi
 ```
 
-Maak `env` alleen bij eerste installatie leeg, niet bij updates. Bewerk daarna
+Bovenstaande guard maakt `env` uitsluitend bij eerste installatie aan. Een
+bestaand bestand en zijn private inhoud blijven behouden. Bewerk de configuratie
 met bijvoorbeeld `nano /home/weekendkrant/ci/env`:
 
 ```bash
@@ -220,11 +276,13 @@ Voeg daarna met `crontab -e` deze regel toe aan de crontab van `weekendkrant`:
 De wrapper laadt `ci/env`, wisselt naar de externe statedirectory en start één
 runner. Geen stdout bij idle/succes/bekende failure; stderr blijft voor
 operationele fouten beschikbaar aan cron. Zonder cronmail kan dezelfde wrapper
-handmatig worden uitgevoerd; testdiagnostiek staat begrensd in de state/log.
+handmatig worden uitgevoerd; failurediagnostiek staat uitsluitend in het artifact.
 De uurlijkse start is geen belofte over eindtijd of beschikbaarheid.
 
-Werk runnerkopie en wrapper bij toekomstige relevante deployments opnieuw bij,
-buiten een actieve run. Er is geen automatische self-update of productiecron-
+Bij een gewone runnerupdate herhaal je uitsluitend de vier install/mv-opdrachten
+voor `ci_runner.py` en `start_ci.sh`, buiten een actieve run. Behoud `ci/env`,
+state, rapportdatabase en failureartifact; maak geen nieuwe lege configuratie.
+Venvonderhoud is alleen bij gewijzigde dependencies nodig. Er is geen automatische self-update of productiecron-
 installatie. Voor rollback: verwijder de cronregel en unset de triggerexport;
 bewaar state en failurediagnostiek voor onderzoek.
 
@@ -243,11 +301,25 @@ python3 /home/weekendkrant/ci/bin/ci_runner.py status --pending
 # Laatste resultaat (en overige state) direct bekijken
 python3 -m json.tool /home/weekendkrant/ci/state.json
 
-# Laatste failure met SHA, tijden, exitcode en log
+# Laatste compacte operationele failuremetadata
 python3 /home/weekendkrant/ci/bin/ci_runner.py status --failure
 
-# Laatste begrensde uitvoer, ook nuttig na een crash
-cat /home/weekendkrant/ci/current.log
+# Compacte historie (laatste 20 resultaten)
+python3 /home/weekendkrant/ci/bin/ci_runner.py report
+
+# Hetzelfde rechtstreeks via SQLite, indien sqlite3 CLI geïnstalleerd is
+sqlite3 /home/weekendkrant/ci/report.sqlite3 \
+  'SELECT sha,status,finished_at,duration_seconds,artifact_path FROM ci_runs ORDER BY id DESC LIMIT 20;'
+
+# Exacte failing checkout en volledige failurelog onderzoeken
+cd /home/weekendkrant/ci/failure/repo
+git rev-parse HEAD
+git status
+git show --stat
+less /home/weekendkrant/ci/failure/test.log
+
+# Na onderzoek alleen het zware artifact opruimen, historie behouden
+python3 /home/weekendkrant/ci/bin/ci_runner.py clear-failure
 
 # Handmatig hetzelfde pad als cron uitvoeren
 /home/weekendkrant/ci/bin/start_ci.sh
@@ -271,16 +343,23 @@ python3 /home/weekendkrant/ci/bin/ci_runner.py cleanup
 
 Een `running`-resultaat met `runner_busy: false` is incomplete uitvoering, geen
 succes. Een `failed`-resultaat blijft rood zichtbaar ondanks een stille volgende
-cronstart. Controleer bij failure eerst SHA/status/exitcode en `last_failure["log"]`,
-dan bronbereikbaarheid, Pythonomgeving en de concrete testfout. Kies na herstel
+cronstart. Controleer bij failure eerst de DB-row en `failure/test.log`, dan
+bronbereikbaarheid, Pythonomgeving en de concrete testfout. `status --failure`
+is compacte operationele metadata; `report` is de historische rapportage. Kies na herstel
 bewust `rerun`; een nieuwe deployment-SHA mag de oude pending vervangen.
-De log in JSON is het veld `log` binnen `last_failure`, geen los logbestand.
+Een historische row met `artifact_path = NULL` kan zowel groen als een oudere
+rode run zonder nog bewaarde checkout beschrijven; de statuskolom blijft leidend.
+Bij een incomplete run kun je vóór cleanup `work/run-*/test.log` bekijken.
+Een achtergebleven `completion.json` wordt automatisch door `run` of `cleanup`
+herwerkt; verwijder het niet handmatig zonder onderzoek.
 
 ## Testbewijs en grenzen
 
 `tests/fast_track.txt` selecteert voor fase 10 alleen `test_ci_runner` en
 `test_test_runner`. Nieuwe tests dekken state/coalescing/CAS, same-SHA-reruns,
-locking, bounded failurediagnostiek, ntfy met fakes, crashherstel, cleanup,
+locking, compacte SQLite-historie/idempotentie, artifactvervanging, successcleanup,
+behoud/clear van een oudere failure, outputnoodrem, ntfy met fakes, crashherstel,
+het niet-destructieve env-commando, cleanup,
 Git-omgevingisolatie en de echte fast-tracktrigger. Kleine lokale Git-fixtures
 bewijzen exact-SHA, verse clones, onaangeraakte broncheckout en een gedode parent.
 Fixtures gebruiken een mini-entrypoint, nooit een netwerkclone of de volledige

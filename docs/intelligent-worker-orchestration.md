@@ -663,7 +663,7 @@ verandert de redactionele workerarchitectuur niet. Zie het canonieke
 - [x] Opt-in fast-tracktrigger met exacte SHA, idempotentie en coalescing.
 - [x] Verse tijdelijke clone, exact-SHA-checkout en canonieke volledige Python-suite.
 - [x] Niet-blokkerende runnerlock, atomische state/CAS-clear, crashherstel en cleanup.
-- [x] Begrensde failurediagnostiek, bewuste rerun en optionele ntfy-deduplicatie.
+- [x] Compacte SQLite-historie, geen successlogs, één failureartifact, expliciete cleanup en ntfy-deduplicatie.
 - [x] Gerichte fast-track en productie-/operatorrunbook.
 - [ ] Externe CI-venv/runner en hourly cron na merge op bibib activeren.
 - [ ] Eerste echte volledige-suite-resultaat en operationele failuremelding bewijzen.

@@ -8,6 +8,8 @@ import os
 from pathlib import Path
 import re
 import shutil
+import signal
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -15,7 +17,7 @@ from urllib.request import Request, urlopen
 import uuid
 
 LIVE = Path('/home/weekendkrant/app')
-LOG_LIMIT = 128 * 1024
+LOG_LIMIT = 64 * 1024 * 1024
 DEFAULT_STATE = '/home/weekendkrant/ci'
 DEFAULT_SOURCE = 'https://github.com/willemg/weekendkrant.git'
 
@@ -111,7 +113,7 @@ class State:
         with self.edit() as data:
             self.mark_in(data, sha, force)
 
-    def finish(self, request, result, tail):
+    def finish(self, request, result):
         with self.edit() as data:
             previous_failure = data['last_failure']
             data['last_result'] = result
@@ -120,7 +122,7 @@ class State:
                 if data['pending'] == request:
                     data['pending'] = None
             else:
-                data['last_failure'] = dict(result, log=tail.decode('utf-8', errors='replace'))
+                data['last_failure'] = result
             return (result['status'] == 'failed' and
                     (not previous_failure or previous_failure['sha'] != request['sha']))
 
@@ -163,16 +165,88 @@ def mark_checkout(state, repo, expected):
         state.mark_in(data, expected)
 
 
-class TailLog:
-    """Bound both crash diagnostics on disk and the final diagnostic in state."""
-    def __init__(self, path):
+class Report:
+    """Append compact results; never used for admission, pending or locking."""
+    COLUMNS = ('sha', 'request_id', 'status', 'started_at', 'finished_at',
+               'duration_seconds', 'exitcode')
+
+    def __init__(self, state):
+        self.path = state.root / 'report.sqlite3'
+        with self.connect() as db:
+            db.execute("""CREATE TABLE IF NOT EXISTS ci_runs (
+                id INTEGER PRIMARY KEY, sha TEXT NOT NULL,
+                request_id TEXT NOT NULL UNIQUE,
+                status TEXT NOT NULL CHECK(status IN ('succeeded','failed')),
+                started_at TEXT NOT NULL, finished_at TEXT NOT NULL,
+                duration_seconds REAL NOT NULL, exitcode INTEGER NOT NULL,
+                artifact_path TEXT,
+                CHECK((status='succeeded' AND exitcode=0 AND artifact_path IS NULL)
+                   OR (status='failed' AND exitcode<>0)))""")
+
+    @contextmanager
+    def connect(self):
+        db = sqlite3.connect(str(self.path))
+        db.row_factory = sqlite3.Row
+        try:
+            with db:
+                yield db
+        finally:
+            db.close()
+
+    def rows(self, limit=20):
+        with self.connect() as db:
+            return [dict(row) for row in db.execute(
+                'SELECT * FROM ci_runs ORDER BY id DESC LIMIT ?', (limit,))]
+
+    def unreference(self):
+        # Commit BEFORE replacing/removing the old artifact: old history may
+        # lose a debug link after a crash, but can never point to another run.
+        with self.connect() as db:
+            db.execute('UPDATE ci_runs SET artifact_path=NULL WHERE artifact_path IS NOT NULL')
+
+    def add(self, result, artifact):
+        if artifact and not (Path(artifact) / 'test.log').is_file():
+            raise ValueError('Refusing a report link to a missing failure artifact')
+        values = (result['sha'], result['request'], result['status'], result['started_at'],
+                  result['finished_at'], result['duration_seconds'], result['exitcode'])
+        with self.connect() as db:
+            old = db.execute('SELECT * FROM ci_runs WHERE request_id=?', (result['request'],)).fetchone()
+            if old and tuple(old[key] for key in self.COLUMNS) != values:
+                raise ValueError('Conflicting result for an existing CI request')
+            db.execute("""INSERT INTO ci_runs
+                (sha,request_id,status,started_at,finished_at,duration_seconds,exitcode,artifact_path)
+                VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(request_id)
+                DO UPDATE SET artifact_path=excluded.artifact_path""", (*values, artifact))
+
+
+class OutputLimitError(RuntimeError):
+    pass
+
+
+class RunLog:
+    """Full streaming log, up to a hard runaway-output safety limit."""
+    def __init__(self, path, limit=LOG_LIMIT):
         self.path = path
-        self.tail = b''
-        self.write(b'')
+        self.limit = limit
+        self.size = 0
+        self.exceeded = False
+        self.path.touch()
 
     def write(self, chunk):
-        self.tail = (self.tail + chunk)[-LOG_LIMIT:]
-        self.path.write_bytes(self.tail)
+        if self.exceeded:
+            return
+        available = self.limit - self.size
+        with self.path.open('ab') as stream:
+            stream.write(chunk[:available])
+            self.size += min(len(chunk), available)
+            if len(chunk) > available:
+                self.exceeded = True
+                stream.write(b'\nCI OUTPUT LIMIT exceeded; command stopped, output incomplete.\n')
+                raise OutputLimitError('64 MiB CI output safety limit exceeded')
+
+    def sync(self):
+        with self.path.open('rb') as stream:
+            os.fsync(stream.fileno())
 
 
 def command(args, cwd, env, lock_fd, log):
@@ -180,7 +254,8 @@ def command(args, cwd, env, lock_fd, log):
     # overlap its tests or remove its worktree while that child is still alive.
     log.write(('\n$ ' + repr(args) + '\n').encode())
     with subprocess.Popen(args, cwd=str(cwd), env=env, stdout=subprocess.PIPE,
-                          stderr=subprocess.STDOUT, pass_fds=(lock_fd,)) as child:
+                          stderr=subprocess.STDOUT, pass_fds=(lock_fd,),
+                          start_new_session=True) as child:
         try:
             while True:
                 chunk = child.stdout.read1(8192)
@@ -189,7 +264,10 @@ def command(args, cwd, env, lock_fd, log):
                 log.write(chunk)
             return child.wait()
         except BaseException:
-            child.kill()
+            try:
+                os.killpg(child.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
             child.wait()
             raise
 
@@ -248,11 +326,93 @@ def cleanup(state):
     return work
 
 
+def remove_tree(path):
+    if path.is_symlink():
+        raise ValueError('Unexpected symlink in CI artifact paths')
+    if path.exists():
+        shutil.rmtree(path)
+
+
+def completion(state):
+    """Replay one small durable completion receipt, before any orphan cleanup."""
+    journal = state.root / 'completion.json'
+    if not journal.exists():
+        return None
+    entry = json.loads(journal.read_text())
+    request, result = entry['request'], entry['result']
+    valid_sha(result['sha'])
+    name = entry['run_dir']
+    if not re.fullmatch(r'run-[A-Za-z0-9_-]+', name):
+        raise ValueError('Invalid completion work directory')
+    work = outside_checkout(state.root / 'work')
+    if work.parent != state.root:
+        raise ValueError('Invalid completion work path')
+    stage = work / name
+    failure = state.root / 'failure'
+    previous = state.root / 'failure.previous'
+    if stage.is_symlink() or failure.is_symlink() or previous.is_symlink():
+        raise ValueError('Unexpected artifact symlink')
+    report = Report(state)
+    artifact = None
+    if result['status'] == 'failed':
+        if stage.exists():
+            if (not (stage / 'test.log').is_file() or
+                    json.loads((stage / 'result.json').read_text()) != result):
+                raise ValueError('Incomplete staged failure; preserving old artifact')
+            # Old artifact is kept until the new one is ready and published.
+            report.unreference()
+            if failure.exists():
+                remove_tree(previous)
+                os.replace(failure, previous)
+                fsync_dir(state.root)
+            os.replace(stage, failure)
+            fsync_dir(work)
+            fsync_dir(state.root)
+        manifest = json.loads((failure / 'result.json').read_text())
+        if manifest != result or not (failure / 'test.log').is_file():
+            raise ValueError('Published artifact does not match completion receipt')
+        artifact = str(failure)
+    elif result['status'] == 'succeeded' and result['exitcode'] == 0:
+        remove_tree(stage)  # No durable success output, even before DB insert.
+        fsync_dir(work)
+    else:
+        raise ValueError('Invalid completed CI outcome')
+    report.add(result, artifact)
+    should_notify = state.finish(request, result)
+    remove_tree(previous)
+    journal.unlink()
+    fsync_dir(state.root)
+    return result, should_notify
+
+
+def clear_failure(state):
+    with runner_lock(state) as fd:
+        if fd is None:
+            return
+        completion(state)
+        Report(state).unreference()
+        remove_tree(state.root / 'failure')
+        remove_tree(state.root / 'failure.previous')
+        fsync_dir(state.root)
+
+
+def notify_failure(state, outcome, notify):
+    if outcome and outcome[1] and notify:
+        result = outcome[0]
+        message = (f"Weekendkrant CI faalde: {result['sha'][:12]}. "
+                   f"Artifact: {state.root / 'failure'} (repo + test.log).")
+        try:
+            notify(message)
+        except Exception as error:
+            print(f'CI notification failed: {type(error).__name__}', file=sys.stderr)
+
+
 def run(state, source, python, notify=None):
     validate_source(source)
     with runner_lock(state) as lock_fd:
         if lock_fd is None:
             return 0
+        notify_failure(state, completion(state), notify)
         work = cleanup(state)
         with state.edit() as data:
             request = data['pending']
@@ -264,23 +424,24 @@ def run(state, source, python, notify=None):
             result = dict(request, status='running', started_at=now(), finished_at=None,
                           exitcode=None, python=python)
             data['last_result'] = result
-        log = TailLog(state.root / 'current.log')
-        code = 2
+        temp = Path(tempfile.mkdtemp(prefix='run-', dir=str(work)))
+        log = RunLog(temp / 'test.log')
         try:
-            with tempfile.TemporaryDirectory(prefix='run-', dir=str(work)) as temp:
-                code = clone_test(request['sha'], Path(temp) / 'repo', python, source, lock_fd, log)
+            code = clone_test(request['sha'], temp / 'repo', python, source, lock_fd, log)
         except Exception as error:
             log.write(('\nCI infrastructure error: ' + repr(error) + '\n').encode())
             code = 2
-        result.update(status='succeeded' if code == 0 else 'failed', finished_at=now(), exitcode=code)
-        should_notify = state.finish(request, result, log.tail)
-        if should_notify and notify:
-            message = (f"Weekendkrant CI faalde: {request['sha'][:12]}. "
-                       f"Diagnostiek: {state.path} (last_failure).")
-            try:
-                notify(message)
-            except Exception as error:
-                print(f'CI notification failed: {type(error).__name__}', file=sys.stderr)
+        log.sync()
+        finished = now()
+        duration = max(0.0, (datetime.fromisoformat(finished) -
+                             datetime.fromisoformat(result['started_at'])).total_seconds())
+        result.update(status='succeeded' if code == 0 else 'failed', finished_at=finished,
+                      duration_seconds=duration, exitcode=code)
+        atomic_json(temp / 'result.json', result)
+        atomic_json(state.root / 'completion.json',
+                    {'request': request, 'result': result, 'run_dir': temp.name})
+        outcome = completion(state)
+        notify_failure(state, outcome, notify)
         return code if code >= 0 else 128 - code
 
 
@@ -313,6 +474,8 @@ def main(argv=None):
     status.add_argument('--failure', action='store_true')
     status.add_argument('--pending', action='store_true')
     subs.add_parser('cleanup')
+    subs.add_parser('clear-failure')
+    subs.add_parser('report')
     runner = subs.add_parser('run')
     runner.add_argument('--source', default=DEFAULT_SOURCE)
     runner.add_argument('--python', default=sys.executable)
@@ -332,9 +495,14 @@ def main(argv=None):
                 if not previous:
                     raise ValueError('No SHA to rerun')
                 state.mark_in(data, previous['sha'], force=True)
+        elif args.action == 'clear-failure':
+            clear_failure(state)
+        elif args.action == 'report':
+            print(json.dumps(Report(state).rows(), indent=2))
         elif args.action == 'cleanup':
             with runner_lock(state) as fd:
                 if fd is not None:
+                    completion(state)
                     cleanup(state)
         else:
             data = state.read()
@@ -343,7 +511,7 @@ def main(argv=None):
             output = data['last_failure'] if args.failure else (data['pending'] if args.pending else data)
             print(json.dumps(output, indent=2))
         return 0
-    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as error:
+    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError, sqlite3.Error) as error:
         print(f'CI error: {error}', file=sys.stderr)
         return 2
 
