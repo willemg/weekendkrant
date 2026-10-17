@@ -46,11 +46,15 @@ opvragen. Zonder zo'n historical-recallbrug zou opeenvolgende compressie een
 oud detail uit de actieve context kunnen laten verdwijnen terwijl de bron zelf
 nog wel veilig opgeslagen is.
 
-Daarom volgt vóór fase 10 eerst fase 9.6: selectieve read-only historical recall,
+Daarom volgde fase 9.6: selectieve read-only historical recall,
 recalltelemetrie en Leonardo-karakterisering met een verruimde technische
-contextgrens. Kuifje blijft buiten deze stap. Pas nadat Leonardo betrouwbaar kan
-vergeten én terugvinden, krijgt hij later een actiepad om een concrete lacune als
-persistente Kuifje-missie via Ariadne/backend te laten ontstaan.
+contextgrens. Kuifje bleef buiten deze stap. Na deze karakterisering is fase 10
+voor het afzonderlijke rudimentaire CI-systeem gereserveerd. De eerstvolgende
+Leonardo-architectuurstap is [fase 11](phase-11-leonardo-provenance.md):
+fijnmazige itemprovenance tot op bestaande `queue:<id>`-fiches, zonder de
+compacte part-level `processed_refs` te vervangen. Pas daarna volgt het latere
+actiepad waarmee een concrete lacune als persistente Kuifje-missie via
+Ariadne/backend kan ontstaan.
 
 ## Voorwaarden en stopgrenzen
 
