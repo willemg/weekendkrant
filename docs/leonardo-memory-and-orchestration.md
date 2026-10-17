@@ -53,7 +53,7 @@ om fiches te ordenen, state samen te vatten of onderzoeksvragen te kiezen.
 | Einstein (gepland) | Analyseert longitudinale patronen in persistente redactionele state: groei/verzwakking, terugkeer, karakterverandering en langetermijnontwikkelingen. |
 | Kuifje | Onderzoekt een afgebakende missie en retourneert bronnen, bevindingen, onzekerheden en eventuele lege oogst onder de meegegeven identifiers. |
 | Striktland | Controleert claims tegen oorspronkelijke bronfragmenten. |
-| Minos | Herschrijft waar nodig één keer de problematische passage. |
+| Minos | Treedt na de zaterdagse freeze op als eindredacteur: beoordeelt en combineert Leonardo- en Einsteinmateriaal tegen Striktlands verificatie, corrigeert of schrapt waar nodig en maakt de definitieve krant. |
 
 Kuifje is een toekomstige onderzoeksrol. Sherlock blijft de brede reporter:
 dit ontwerp schuift geen missieadministratie of extra synthese naar hem door.
@@ -73,14 +73,26 @@ en evolutieanalyse is zijn verantwoordelijkheid, niet die van Leonardo. Einstein
 is gepland; deze PR voegt geen rolbestand, job, producer/adapter, scheduler,
 schema of runtimecode voor hem toe. Ariadne verricht geen semantische analyse.
 
+De zaterdagse freeze introduceert daarnaast een bewuste auteur/rechtergrens.
+Leonardo structureert de inhoud van de lopende week en Einstein voegt de
+longitudinale dimensie toe, maar geen van beiden beslist in de laatste 24 uur
+nog over de finale editie. Minos ontvangt hun bevroren redactionele output,
+Striktlands verificatie en eventuele kritieke Kuifje-aanvulling, en mag bijdragen
+selecteren, combineren, corrigeren, expliciet onzeker maken of schrappen voordat
+hij de publiceerbare Weekendkrant samenstelt. Daarmee is Minos in het doelmodel
+meer dan een passagecorrector: hij is de eindredacteur.
+
 Het toekomstige [weekproductiemodel](weekly-production-cycle.md) maakt deze
 grens ook temporeel expliciet. Leonardo bouwt binnen één krantweek voort op zijn
 eerdere runs van diezelfde week, maar de volgende editie begint redactioneel van
 een blanco blad. Historische bronnen en eerdere resultaten blijven lossless
 beschikbaar; cross-week evolutie en terugkerende patronen worden juist door
 Einstein gedragen. De beoogde week bestaat uit twee driedaagse
-Sherlock → Leonardo → eventuele Kuifje-vervolgcycli voor elk topic, gevolgd door
-één afsluitdag voor verificatie, eventuele correctie en finale Leonardo-redactie.
+Sherlock → Leonardo → eventuele Kuifje-vervolgcycli voor elk topic. Tegen
+zaterdag 09:00 leveren Leonardo en Einstein hun actuele redactionele output af;
+daarna zijn zij voor de lopende editie niet meer admissible. De laatste 24 uur
+zijn voor Striktland, alleen indien strikt nodig nog kritieke Kuifje-verificatie,
+en Minos als onafhankelijke eindredacteur van de definitieve krant.
 
 ## Drie soorten context
 
