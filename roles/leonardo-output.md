@@ -1,4 +1,6 @@
-leonardo-output-v3: het stateschema blijft v1, met exact de sleutels
+# Outputcontract voor Leonardo
+
+Dit outputcontract hoort bij de rol Leonardo. Het stateschema gebruikt `schema_version=1` en heeft exact de sleutels
 schema_version=1, dossier_id, version, previous_version, hypotheses, claims,
 uncertainties, open_questions, processed_refs. `version` is
 `previous_version+1`. `hypotheses`, `uncertainties` en `open_questions`
