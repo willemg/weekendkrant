@@ -487,7 +487,7 @@ een expliciet herstelde ready job gaat vóór de productierem. Alleen nieuwe job
 worden tegengehouden. Een throttled slot krijgt duurzaam `claim:null`, verbruikt
 geen topic en blijft ook na cooldown bij replay leeg. Een nieuw slot wordt opnieuw
 beoordeeld. Zie [het throttlecontract](sherlock-executor.md#tijdelijke-30-uurs-productierem).
-Fase 7 blijft algemene workselectie; fase 13 blijft empirisch capaciteitsbeleid.
+Fase 7 blijft algemene workselectie; fase 15 blijft empirisch capaciteitsbeleid.
 
 Backendinvoering en synchronisatie van de generieke executorinstructie zijn
 uitgevoerd. De toegelaten activatie en persistente lege replay hierboven bewijzen
@@ -600,8 +600,10 @@ mat lokaal 23.665 inputtokens en state v1 1.844 tokens. Dit zijn vaste lokale
 
 ### Fase 9.6 — Leonardo historical recall en karakterisering
 
-Deze stap gaat bewust vóór fase 10. Eerst moet Leonardo veilig kunnen vergeten en
-terugvinden voordat hij gericht nieuw onderzoek kan bestellen.
+Deze stap gaat bewust vóór de latere semantische uitbreiding naar Kuifje, nu
+fase 12. Eerst moet Leonardo veilig kunnen vergeten en terugvinden voordat hij
+gericht nieuw onderzoek kan bestellen. Fase 10 is het afzonderlijke CI-spoor en
+verandert deze inhoudelijke afhankelijkheid niet.
 
 De oorspronkelijke 35K-grens was een arbitraire eerste cognitieve
 chunkinghypothese: geef Leonardo niet zoveel nieuw, onbekend bronmateriaal
@@ -652,7 +654,27 @@ rollback en immutable triggers zijn lokaal getest. De implementatiecheckboxes
 bewijzen geen deployment of semantische karakterisering. De bestaande scheduled
 taak blijft ongewijzigd. Zie [het recallcontract](leonardo-state.md#historical-recall-fase-96).
 
-### Fase 10 — Kuifje
+### Fase 10 — rudimentair CI
+
+Deze fase is gereserveerd voor het afzonderlijke CI-spoor. Zij verandert de
+redactionele workerarchitectuur niet. De concrete CI-implementatie krijgt haar
+eigen functionele PR en testimpact.
+
+### Fase 11 — fijnmazige Leonardo-provenance
+
+Leg de reeds beschikbare fiche-identiteit ook vast in Leonardo's item-level
+provenance zonder de compacte part-level verwerkingsprovenance te vervangen.
+Zie het afzonderlijke
+[ontwerp voor fase 11](phase-11-leonardo-provenance.md).
+
+- [ ] Laat item-level `refs`, `support` en `counterevidence` naast verwerkte
+  partrefs ook gevalideerde `queue:<id>`-refs uit die revisions gebruiken.
+- [ ] Valideer queue-membership deterministisch tegen immutable revision-provenance.
+- [ ] Behoud bestaande part-only states en frozen oude assignments volgens hun
+  oorspronkelijke contractsemantiek.
+- [ ] Karakteriseer de extra stateomvang en inspecteer part- versus fichegranulariteit.
+
+### Fase 12 — Kuifje
 
 - [ ] Laat Leonardo een expliciet missievoorstel kunnen opleveren wanneer bestaande
   state, nieuwe input en eventuele historical recall een concrete informatielacune
@@ -672,19 +694,19 @@ Kuifje is een rol, geen aparte scheduler. Agents geven elkaar inhoudelijk werk v
 persistente Ariadne/backend-state, nooit door rechtstreeks een andere worker te
 starten.
 
-### Fase 11 — Striktland
+### Fase 13 — Striktland
 
 - [ ] Drafts/claims en bronreferenties expliciet opslaan.
 - [ ] Beperkte verificatiejobs met alleen noodzakelijk bewijs uitvoeren.
 - [ ] Uitkomsten en kwaliteitslabels aan claim, draftversie en job koppelen.
 
-### Fase 12 — Minos
+### Fase 14 — Minos
 
 - [ ] Alleen bij een relevant geregistreerd Striktland-probleem een Minos-job creëren.
 - [ ] Problematische passage en noodzakelijk bewijs begrensd aanbieden.
 - [ ] Correctie en provenance opslaan en daarna stoppen zonder regressielus.
 
-### Fase 13 — capaciteits- en budgetbeleid
+### Fase 15 — capaciteits- en budgetbeleid
 
 - [ ] Empirisch bepalen hoeveel scheduled capaciteit Weekendkrant mag gebruiken.
 - [ ] Drempels voor extra schedulers en terugschakeling op nuttige backlog baseren.
@@ -694,7 +716,7 @@ starten.
 Deze fase verfijnt de voorlopige harde limieten uit fase 7; zij is geen reden om
 eerder onbeperkte capaciteit toe te staan of alle theoretische slots op te vullen.
 
-### Fase 14 — weekafsluiting/eindredactie
+### Fase 16 — weekafsluiting/eindredactie
 
 - [ ] Dezelfde jobqueue tegen het weekend andere expliciete prioriteiten geven.
 - [ ] Scouting waar nodig afremmen, dossiers afronden en open verificatie voltooien.
@@ -702,7 +724,7 @@ eerder onbeperkte capaciteit toe te staan of alle theoretische slots op te vulle
 
 Geen aparte permanente agents nodig; deadlinebeleid blijft een expliciete regel.
 
-### Fase 15 — legacy orchestration opruimen
+### Fase 17 — legacy orchestration opruimen
 
 - [ ] Pas na bewezen nieuw pad de oude Sherlock-specifieke schedulerinterface opruimen.
 - [ ] Oude doelontwerpen en README/architecture/roles naar bewezen runtime bijwerken.
