@@ -26,7 +26,7 @@ class _AtomicStore(JobStore):
 class JobControl:
     fields = {
         'claim': ({'operation_id', 'job_id', 'activation_id'}, set()),
-        'finish': ({'operation_id', 'job_id', 'attempt_id', 'token', 'status', 'output_refs'}, {'error', 'leonardo_state'}),
+        'finish': ({'operation_id', 'job_id', 'attempt_id', 'token', 'status', 'output_refs'}, {'error', 'leonardo_state', 'kuifje_missions', 'kuifje_result'}),
         'abandon': ({'operation_id', 'job_id', 'attempt_id', 'token', 'error'}, set()),
         'reconcile': ({'operation_id', 'job_id', 'attempt_id', 'decision', 'evidence_ref'}, {'output_refs'}),
     }
@@ -107,6 +107,9 @@ class JobControl:
         if 'leonardo_state' in args:
             from leonardo import encoded_state
             encoded = encoded_state(args['leonardo_state'])
+        from kuifje import prepare_missions, encoded_result
+        missions = prepare_missions(self.db, args) if operation == 'finish' else []
+        result = encoded_result(args['kuifje_result']) if 'kuifje_result' in args else None
         canonical = json.dumps([operation, args], sort_keys=True, ensure_ascii=False,
                                separators=(',', ':'), allow_nan=False)
         digest = hashlib.sha256(canonical.encode('utf-8')).hexdigest()
@@ -133,7 +136,7 @@ class JobControl:
                 self.atomic.transaction_now = now
                 self.db.execute('SAVEPOINT control_mutation')
                 try:
-                    response = self._apply(operation, args, encoded)
+                    response = self._apply(operation, args, encoded, missions, result)
                     audit = dict(response)
                     audit.pop('token', None)
                     self.db.execute('''INSERT INTO job_operations
@@ -151,9 +154,9 @@ class JobControl:
             raise ControlConflict(conflict)
         return response
 
-    def _apply(self, operation, args, encoded=None):
+    def _apply(self, operation, args, encoded=None, missions=(), result=None):
         if operation == 'claim':
-            if self.db.execute('SELECT 1 FROM sherlock_assignments WHERE job_id=? UNION ALL SELECT 1 FROM leonardo_assignments WHERE job_id=?', (args['job_id'], args['job_id'])).fetchone():
+            if self.db.execute('SELECT 1 FROM sherlock_assignments WHERE job_id=? UNION ALL SELECT 1 FROM leonardo_assignments WHERE job_id=? UNION ALL SELECT 1 FROM kuifje_assignments WHERE job_id=?', (args['job_id'], args['job_id'], args['job_id'])).fetchone():
                 raise ControlConflict('Role assignments require atomic executor start')
             if self.db.execute('SELECT 1 FROM executor_activations WHERE activation_id=?', (args['activation_id'],)).fetchone():
                 raise ControlConflict('Activation already used by executor start')
@@ -178,7 +181,10 @@ class JobControl:
                                args.get('error'))
             if operation == 'finish':
                 from leonardo import commit_state
-                commit_state(self, args, encoded)
+                state_created = commit_state(self, args, encoded)
+                from kuifje import commit_missions, commit_result
+                commit_missions(self, args, missions, state_created)
+                commit_result(self, args, result)
             if run:
                 self.db.execute("UPDATE sherlock_runs SET status=?,finished_at=? WHERE id=? AND status='running'",
                     ('completed' if status == 'succeeded' else 'failed', _stamp(self.atomic.transaction_now), run[0]))
@@ -190,8 +196,8 @@ class JobControl:
                 and args.get('output_refs') != ['sherlock-run:'+str(run[0])]):
             raise ControlConflict('Sherlock recovery requires its concrete run result')
         if args['decision'] == 'succeeded' and self.db.execute(
-                'SELECT 1 FROM leonardo_assignments WHERE job_id=?', (args['job_id'],)).fetchone():
-            raise ControlConflict('Leonardo state and success must commit atomically; recover with retry or failed')
+                'SELECT 1 FROM leonardo_assignments WHERE job_id=? UNION ALL SELECT 1 FROM kuifje_assignments WHERE job_id=?', (args['job_id'], args['job_id'])).fetchone():
+            raise ControlConflict('Role output and success must commit atomically; recover with retry or failed')
         self.atomic.reconcile(args['job_id'], args['attempt_id'], args['decision'],
                               args['evidence_ref'], args.get('output_refs'))
         self.db.execute("""UPDATE sherlock_runs SET status=?,finished_at=COALESCE(finished_at,?)

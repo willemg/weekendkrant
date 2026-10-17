@@ -12,11 +12,11 @@ from pathlib import Path
 import role_contracts
 
 from jobs import JobStore, _id, _text, _stamp
-from part_format_v1 import token_count
+from ariadne_tokens import token_count, TOKENIZER
 from revision_storage import reconstruct
 
 ROOT = Path(__file__).resolve().parent
-FINE_PROVENANCE_CONTRACT = 'leonardo-output-v2:'
+FINE_PROVENANCE_CONTRACT = ('leonardo-output-v2:', 'leonardo-output-v3:')
 
 
 def queue_ref(value):
@@ -222,13 +222,23 @@ class LeonardoStore:
         ).fetchone()
         return json.loads(row[0]) if row else None
 
-    def enqueue(self, operation_id, dossier_id, base_version, revisions):
+    def reevaluate(self, operation_id, dossier_id, base_version, kuifje_results=None):
+        """New editorial work over existing state, never replayed source input."""
+        return self.enqueue(operation_id, dossier_id, base_version, [], mode='reevaluation',
+                            kuifje_results=kuifje_results)
+
+    def enqueue(self, operation_id, dossier_id, base_version, revisions, mode='new_material',
+                kuifje_results=None):
         _text(operation_id, 128)
         _text(dossier_id, 128)
         if type(base_version) is not int or base_version < 0:
             raise ValueError("Invalid base version")
-        if not isinstance(revisions, list) or not 1 <= len(revisions) <= 32:
+        if mode not in ('new_material', 'reevaluation'):
+            raise ValueError('Invalid assignment mode')
+        if not isinstance(revisions, list) or not (0 if mode == 'reevaluation' else 1) <= len(revisions) <= 32:
             raise ValueError("Expected 1..32 explicit revisions")
+        if mode == 'reevaluation' and (revisions or base_version == 0):
+            raise ValueError('Reevaluation requires existing state and zero new parts')
         for pair in revisions:
             if not isinstance(pair, list) or len(pair) != 2:
                 raise ValueError("Expected [part_id,revision]")
@@ -236,7 +246,12 @@ class LeonardoStore:
                 _id(v)
         if len({tuple(p) for p in revisions}) != len(revisions):
             raise ValueError("Duplicate revision")
-        request = canonical([dossier_id, base_version, revisions])
+        from kuifje import result_selection, selected_results
+        selections = result_selection(kuifje_results)
+        # Preserve historical enqueue receipt identity when no feedback is selected.
+        request = canonical([dossier_id, base_version, revisions] +
+                            (['reevaluation'] if mode == 'reevaluation' else []) +
+                            ([{'kuifje_results': selections}] if selections else []))
         self.store._idle()
         prior = self.db.execute(
             "SELECT job_id,request FROM leonardo_assignments WHERE operation_id=?", (operation_id,)
@@ -253,6 +268,9 @@ class LeonardoStore:
         state = self.latest(dossier_id)
         if (state["version"] if state else 0) != base_version:
             raise ValueError("Stale dossier state")
+        # Terminal immutable outcomes are resolved from exact job/attempt pairs,
+        # never from worker-supplied result text or a mutable latest pointer.
+        feedback = selected_results(self.db, dossier_id, base_version, selections)
         parts = []
         for part, revision in revisions:
             row = self.db.execute(
@@ -275,10 +293,13 @@ class LeonardoStore:
         snapshot = canonical(
             dict(
                 schema_version=1,
+                mode=mode,
+                tokenizer=TOKENIZER,
                 dossier_id=dossier_id,
                 base_version=base_version,
                 state=state,
                 parts=parts,
+                research_results=feedback,
                 role_contract=role_contract,
                 output_contract=output_contract,
             )
@@ -381,6 +402,9 @@ def commit_state(control, args, encoded):
     input_state = json.loads(snapshot)
     old_refs = set(input_state["state"]["processed_refs"]) if input_state["state"] else set()
     required = old_refs | {p["ref"] for p in input_state["parts"]}
+    if (input_state.get('mode') == 'reevaluation'
+            and state['processed_refs'] != input_state['state']['processed_refs']):
+        raise ValueError('Reevaluation must preserve exact processed reference order')
     if set(state["processed_refs"]) != required:
         raise ValueError("Output must preserve exact processed provenance")
     queues = {ref for ref in item_refs(state) if ref not in required}
@@ -416,6 +440,8 @@ def commit_state(control, args, encoded):
             _stamp(control.atomic.transaction_now),
         ),
     )
+
+    return True  # Newly committed in this savepoint, not an old state replay.
 
 
 class LeonardoProducer:

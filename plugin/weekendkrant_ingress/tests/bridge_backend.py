@@ -229,5 +229,77 @@ if(mode==='abandon'){
                         thread.join()
 
 
+from test_leonardo import LeonardoFixture
+
+
+class KuifjeBridgeSystemTests(LeonardoFixture):
+    def test_separate_mission_and_ingress_through_real_bridge_with_lost_answers(self):
+        self.now = datetime.now(timezone.utc)
+        self.enqueue()
+        self.finish(self.start())
+        self.store.reevaluate('bridge:reeval', 'dossier:reproduction', 1)
+        self.start('bridge:leo')
+        server = create_server(Config(token='fictional-system-token', db_path=self.db, port=0))
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            script = r"""
+import assert from 'node:assert/strict';
+import {callTool,DISCOVERY} from './plugin/weekendkrant_ingress/worker/index.js';
+const env={WEEKENDKRANT_INGRESS_TOKEN:'fictional-system-token'};
+let lose=false;
+const bridge=async(url,options)=>{
+ if(url===DISCOVERY)return Response.json({url:'https://fixture.trycloudflare.com/ingress'});
+ const response=await fetch(process.argv[1]+new URL(url).pathname,options);
+ if(lose){lose=false;await response.text();throw Error('lost committed answer');}
+ return response;
+};
+const call=(name,args)=>callTool(name,args,env,bridge);
+const leo=await call('get_weekendkrant_job',{executor_id:'bridge:leo'});
+assert.equal(leo.role,'Leonardo');assert.equal(leo.input.mode,'reevaluation');
+assert.deepEqual(leo.input.parts,[]);
+const state=JSON.parse(process.argv[2]);
+const finish={...leo.claim,status:'succeeded',output_refs:[leo.result_ref],leonardo_state:state,
+ kuifje_missions:[{question:'Independent replication?',rationale:'Confirmation missing',scope:'Primary reports only',refs:state.processed_refs}]};
+// Only claim fields belong to finish, not its lease metadata.
+delete finish.lease_until;
+lose=true;
+assert.equal((await call('finish_weekendkrant_job',finish)).code,'backend_unreachable');
+assert.equal((await call('finish_weekendkrant_job',finish)).job_status,'succeeded');
+const start=await call('start_weekendkrant_executor',{});
+const k=await call('get_weekendkrant_job',{executor_id:start.executor_id});
+assert.equal(k.role,'Kuifje');
+const authority={job_id:k.claim.job_id,attempt_id:k.claim.attempt_id,token:k.claim.token};
+const fiche={schema_version:1,date:'2026-10-06',topic:k.input.mission.topic,content:'Independent primary source',
+ mission_id:k.input.mission.mission_id,fiche_id:'primary:1',claim:authority};
+lose=true;
+assert.equal((await call('submit_weekendkrant_fiche',fiche)).code,'backend_unreachable');
+const published=await call('submit_weekendkrant_fiche',fiche);
+assert.equal(published.status,'success');
+assert.deepEqual(await call('submit_weekendkrant_fiche',fiche),published);
+const done={...authority,status:'succeeded',output_refs:[k.result_ref],kuifje_result:{summary:'One report',limitations:'No second independent source'}};
+lose=true;
+assert.equal((await call('finish_weekendkrant_job',done)).code,'backend_unreachable');
+assert.equal((await call('finish_weekendkrant_job',done)).job_status,'succeeded');
+console.log(published.queue_item_id);
+"""
+            with patch('ingress_api.Dispatcher', side_effect=backend_dispatcher):
+                result = subprocess.run([shutil.which('node'), '--input-type=module', '-e', script,
+                    'http://%s:%s' % server.server_address, json.dumps(self.state(2))],
+                    cwd=REPO, capture_output=True, text=True, timeout=20)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            queue_id = int(result.stdout)
+            self.assertEqual(self.conn.execute('SELECT count(*) FROM kuifje_missions').fetchone()[0], 1)
+            self.assertEqual(self.conn.execute('SELECT count(*) FROM kuifje_assignments').fetchone()[0], 1)
+            self.assertEqual(self.conn.execute('SELECT count(*) FROM kuifje_fiches').fetchone()[0], 1)
+            self.run_day()
+            self.assertEqual(self.conn.execute('SELECT status FROM ingress_queue WHERE id=?', (queue_id,)).fetchone()[0], 'processed')
+            self.assertEqual(self.conn.execute('PRAGMA foreign_key_check').fetchall(), [])
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join()
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

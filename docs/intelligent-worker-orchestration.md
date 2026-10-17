@@ -28,7 +28,7 @@ zonder een langlevend modelproces nodig te hebben.
 | Geïmplementeerde fase 8 en 8.5 | Expliciete Leonardo-dossiers/state/jobs (schema 11); Sherlock- en Leonardo-contracten onder `roles/`, immutable snapshots bij nieuwe jobs, geen automatische Leonardo-productie. |
 | Eerste fase-9-productieproef | Op 16 oktober 2026 is de eerste echte scheduled Leonardo-job succesvol afgerond: één eerdere attempt expireerde, attempt 2 schreef dossierstate v1. De immutable assignment mat lokaal 23.665 `cl100k_base`-inputtokens; de opgeslagen state 1.844 tokens. De proef bevestigde rolling state, maar maakte historische bronherlezing als ontbrekende runtimefunctie zichtbaar. |
 | Lokaal geïmplementeerde fase 9.6 | Selectieve claimgebonden historical recall, exacte reconstructie en audit per attempt (schema 12); ruime lokale technische contextfail-safe, compacte inspectie en bijgewerkt Leonardo-rolcontract. Productie-invoering en karakteriseringsruns blijven open. |
-| Nog niet geïmplementeerd | Kuifje-missies en -jobs; providerusage/kostenboekhouding; drafts, verificatie- en correctiejobs, capaciteitsbeleid en automatische eindredactie. |
+| Nog niet geïmplementeerd | Providerusage/kostenboekhouding; drafts, verificatie- en correctiejobs, capaciteitsbeleid en automatische eindredactie. |
 
 Fase 3 voegt uitsluitend lokale jobopslag en schema 7 toe, zonder plugin, actieve
 taakinstructies, cron, systemd of deployment te wijzigen. De bestaande runtimecontracten
@@ -684,17 +684,21 @@ Zie het afzonderlijke
 
 ### Fase 12 — Kuifje
 
-- [ ] Laat Leonardo een expliciet missievoorstel kunnen opleveren wanneer bestaande
+Geïmplementeerde backend-slice: [fase-12-contract](phase-12-kuifje.md), inclusief
+expliciete reevaluation, aparte immutable missies en generieke Kuifje-jobs.
+Een echte productierun en automatische dossierrouter blijven afzonderlijk.
+
+- [x] Laat Leonardo een expliciet missievoorstel kunnen opleveren wanneer bestaande
   state, nieuwe input en eventuele historical recall een concrete informatielacune
   laten zien. Dit is semantisch een opdracht van Leonardo, maar geen directe
   worker-spawn of toolcall naar Kuifje.
-- [ ] Laat Ariadne/backend zo'n voorstel atomair valideren en als duurzame missie
+- [x] Laat Ariadne/backend zo'n voorstel atomair valideren en als duurzame missie
   opslaan met `mission_id`, dossier, vraag, context/referenties, status en begrensd
   uitvoeringsbudget.
-- [ ] Maak een open gevalideerde missie beschikbaar als begrensde Kuifje-job via
+- [x] Maak een open gevalideerde missie beschikbaar als begrensde Kuifje-job via
   dezelfde generieke dispatcher. De missie ontstaat on demand uit agentwerk; haar
   uitvoering hoeft niet in dezelfde scheduled activatie plaats te vinden.
-- [ ] Routeer Kuifjes bronvaste resultaat mechanisch naar hetzelfde dossier,
+- [x] Routeer Kuifjes bronvaste resultaat mechanisch naar hetzelfde dossier,
   inclusief lege oogst/fouten. Kuifje wijzigt de Leonardo-state niet rechtstreeks;
   een volgende Leonardo-iteratie verwerkt missie + resultaat in een nieuwe state.
 

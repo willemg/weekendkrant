@@ -287,3 +287,24 @@ test('recall strict claim/ref/retry transport and compact content audit',async()
  for(const bad of [{...result,ref:'part:9:1'},{...result,token:'secret'},{...result,bytes:1},{...result,tokens:0}])
   assert.equal((await invoke('recall_weekendkrant_part',args,bad)).code,'response_invalid');
 });
+
+test('phase 12 transports separate missions, results and mission-attributed ingress',async()=>{
+ const authority={job_id:4,attempt_id:8,token:'secret'};
+ const mission={question:'Independent evidence?',rationale:'Gap',scope:'Primary reports only',refs:['queue:1']};
+ const args={...authority,status:'succeeded',output_refs:['leonardo-state:d:2'],kuifje_missions:[mission]};
+ const result={job_id:4,attempt_id:8,job_status:'succeeded'};
+ const invoke=async(name,args)=>{let n=0;return callTool(name,args,env,async(url,options)=>{
+  if(!n++)return ok({url:good});
+  assert.deepEqual(JSON.parse(options.body),args);return ok(result);
+ });};
+ assert.deepEqual(await invoke('finish_weekendkrant_job',args),{status:'success',...result});
+ assert.deepEqual(await invoke('finish_weekendkrant_job',{...authority,status:'succeeded',output_refs:['kuifje-result:kuifje:4:1'],kuifje_result:{summary:'empty',limitations:'No primary reports'}}),{status:'success',...result});
+ const payload={schema_version:1,date:'2026-10-17',topic:2,content:'source',mission_id:'kuifje:4:1',fiche_id:'report',claim:authority};
+ let n=0;
+ assert.deepEqual(await submit(payload,env,async(url,options)=>{
+  if(!n++)return ok({url:good});
+  assert.deepEqual(JSON.parse(options.body),payload);return ok({id:9});
+ }),{status:'success',queue_item_id:9});
+ for(const bad of [{...payload,run_id:1},{...payload,fiche_id:''},{...payload,claim:null}])
+  assert.equal((await submit(bad,env,()=>assert.fail('network'))).code,'invalid_payload');
+});

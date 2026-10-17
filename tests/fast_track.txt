@@ -1,2 +1,6 @@
-# Fase 11: alleen de provenancegrens; volledige regressie via CI.
-test_leonardo_provenance
+# PR 75: current-run corpus, frozen v1 en expliciete resultaatretour
+test_phase12_corrections
+test_phase12.Phase12Tests.test_zero_input_is_explicit_preserves_provenance_and_recall
+test_phase12.Phase12Tests.test_invalid_mission_and_injected_failure_roll_back_all_effects
+test_phase12.Phase12Tests.test_new_operation_cannot_append_missions_to_already_confirmed_empty_output
+test_revision_storage.RevisionStorageTests.test_v1_reconstruction_survives_replaced_current_renderer_and_tokenizer

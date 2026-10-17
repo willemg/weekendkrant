@@ -252,3 +252,13 @@ actief. Tijdelijke migratiekopieën verdwijnen binnen dezelfde atomaire transact
 een fout rolt de gehele stap terug naar schema 11. Geen permanente bronkopieën.
 `leonardo_recalls` voegt alleen append-only deliveryaudit per dossier/job/attempt/
 recall_id/ref toe. Zie [het recallcontract](leonardo-state.md#historical-recall-fase-96).
+
+
+## Schema 13: afzonderlijke Kuifje-artifacts
+
+De additieve migratie 013_kuifje.sql voegt kuifje_missions,
+kuifje_assignments, kuifje_fiches en kuifje_results toe met immutable
+update/delete/replace-triggers. Bestaande Leonardo-state en assignments worden
+niet herschreven. De missie verwijst naar haar producerende job en succesvolle
+stateversie; een unieke mission_id koppelt precies één Kuifje-assignment/job.
+Zie het [fase-12-contract](phase-12-kuifje.md) voor inhoud en transactiegrenzen.

@@ -16,7 +16,7 @@ from database import migrate
 
 DB_PATH = Path('/home/weekendkrant/weekendkrant.sqlite3')
 OUTPUT_PATH = Path('/home/weekendkrant/draden')
-TOKENIZER = 'cl100k_base'
+from ariadne_tokens import TOKENIZER, token_count
 LIMIT = 35000
 RESERVE = 5000
 logger = logging.getLogger(__name__)
@@ -27,11 +27,6 @@ def local_day(now=None):
     if now.tzinfo is None:
         raise ValueError('De klok moet een timezone bevatten.')
     return now.astimezone(ZoneInfo('Europe/Brussels')).date()
-
-
-def token_count(text):
-    import tiktoken
-    return len(tiktoken.get_encoding(TOKENIZER).encode(text, disallowed_special=()))
 
 
 @dataclass(frozen=True)
