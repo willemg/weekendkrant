@@ -85,7 +85,7 @@ for(const [name,readOnlyHint,destructiveHint,idempotentHint,openWorldHint] of an
 });
 test('descriptions identify the private workspace and bounded effects',()=>{
  const descriptions=Object.fromEntries(TOOLS.map(t=>[t.name,t.description]));
- for(const description of Object.values(descriptions))assert.match(description,/private Weekendkrant/);
+ for(const description of Object.values(descriptions))assert.match(description,/privé Weekendkrant/);
  assert.match(descriptions.submit_weekendkrant_fiche,/ingressqueue/);
  assert.match(descriptions.submit_weekendkrant_fiche,/publiceert niets publiek/);
  assert.match(descriptions.start_sherlock_run,/runstate/);
@@ -94,7 +94,7 @@ test('descriptions identify the private workspace and bounded effects',()=>{
  assert.match(descriptions.filter_sherlock_sources,/wijzigt niets/);
  assert.match(descriptions.filter_sherlock_sources,/URLs.*niet.*opgehaald.*bezocht/);
  assert.match(descriptions.record_sherlock_source,/auditmetadata/);
- assert.match(descriptions.record_sherlock_source,/inhoudelijk gereviewd/);
+ assert.match(descriptions.record_sherlock_source,/inhoudelijk beoordeeld/);
  assert.match(descriptions.record_sherlock_source,/bronidentiteit.*opgeslagen.*gecanonicaliseerd/);
  assert.match(descriptions.record_sherlock_source,/bezoekt.*URL niet/);
  assert.match(descriptions.record_sherlock_source,/verstuurt of publiceert niets.*URL.*externe partij/);
